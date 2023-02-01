@@ -1,0 +1,42 @@
+project_name: SEDVAR_PROJECT_NAME
+output_dir: SEDVAR_OUTDIR/SEDVAR_PROJECT_NAME
+cache_images: true
+modalities:
+  preIMC:
+    image_filepath: SEDVAR_PREIMC_FILE
+    image_res: SEDVAR_PREIMC_RESOLUTION
+    channel_colors: null
+    preprocessing:
+      image_type: BF
+      as_uint8: true
+      contrast_enhance: true
+      crop_to_mask_bbox: true
+      use_mask: false
+    mask: SEDVAR_PREIMC_MASK
+    output_res: null
+  IMC:
+    image_filepath: SEDVAR_IMC_AGGR_FILE
+    image_res: SEDVAR_IMC_RESOLUTION
+    channel_names:
+    - C01 - aggr
+    channel_colors: null
+    preprocessing:
+      image_type: FL
+      rot_cc: 180
+      as_uint8: true
+      crop_to_mask_bbox: false
+      use_mask: false
+    mask: null
+    output_res: null
+reg_paths:
+  reg_path_0:
+    src_modality_name: IMC
+    tgt_modality_name: preIMC
+    thru_modality: null
+    reg_params:
+    - rigid
+reg_graph_edges: null
+original_size_transforms: null
+attachment_shapes: null
+attachment_images: null
+merge_modalities: {}
