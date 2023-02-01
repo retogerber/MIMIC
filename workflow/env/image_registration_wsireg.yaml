@@ -1,0 +1,21 @@
+name: image_registration_wsireg
+channels:
+    - conda-forge
+    - defaults
+dependencies:
+  - python=3.10.0
+  - pip
+  - numpy
+  - pandas
+  - tifffile
+  - napari
+  - pyyaml
+  - click
+  - ome-types
+  - tqdm
+  - pathlib
+  - scipy
+  - pip:
+      #- cv2
+    - wsireg==0.3.8
+    - opencv-contrib-python-headless

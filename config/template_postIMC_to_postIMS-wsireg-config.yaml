@@ -1,0 +1,89 @@
+project_name: SEDVAR_PROJECT_NAME
+output_dir: SEDVAR_OUTPUT_DIR
+cache_images: true
+modalities:
+  postIMS:
+    image_filepath: SEDVAR_POSTIMS_FILE 
+    image_res: SEDVAR_MICROSCOPY_PIXELSIZE
+    channel_names:
+    - C01 - RGB
+    channel_colors: null
+    preprocessing:
+      image_type: BF
+      ch_indices:
+      - 0
+      invert_intensity: true
+      use_mask: false
+      downsampling: 2
+    mask: null
+    output_res: null
+  postIMC:
+    image_filepath: SEDVAR_POSTIMC_FILE
+    image_res: SEDVAR_MICROSCOPY_PIXELSIZE
+    channel_names:
+    - C01 - RGB
+    channel_colors: null
+    preprocessing:
+      image_type: BF
+      ch_indices:
+      - 0
+      invert_intensity: true
+      use_mask: false
+      downsampling: 2
+    mask: null
+    output_res: null
+  preIMS:
+    image_filepath: SEDVAR_PREIMS_FILE
+    image_res: SEDVAR_MICROSCOPY_PIXELSIZE
+    channel_names:
+    - C01 - RGB
+    channel_colors: null
+    preprocessing:
+      image_type: BF
+      ch_indices:
+      - 0
+      invert_intensity: true
+      use_mask: false
+      downsampling: 2
+    mask: null
+    output_res: null
+  preIMC:
+    image_filepath: SEDVAR_PREIMC_FILE
+    image_res: SEDVAR_MICROSCOPY_PIXELSIZE
+    channel_names:
+    - C01 - RGB
+    channel_colors: null
+    preprocessing:
+      image_type: BF
+      ch_indices:
+      - 0
+      invert_intensity: true
+      use_mask: false
+      downsampling: 2
+    mask: null
+    output_res: null
+reg_paths:
+  reg_path_0:
+    src_modality_name: preIMS
+    tgt_modality_name: postIMS
+    thru_modality: null
+    reg_params:
+    - rigid
+  reg_path_1:
+    src_modality_name: preIMC
+    tgt_modality_name: postIMS
+    thru_modality: preIMS
+    reg_params:
+    - rigid
+    - nl
+  reg_path_2:
+    src_modality_name: postIMC
+    tgt_modality_name: postIMS
+    thru_modality: preIMC
+    reg_params:
+    - rigid
+reg_graph_edges: null
+original_size_transforms: null
+attachment_shapes: null
+attachment_images: null
+merge_modalities: {}

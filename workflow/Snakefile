@@ -1,0 +1,459 @@
+import re
+import csv
+import os
+import glob
+import pandas as pd
+
+# working directory
+workdir: "."
+workdir_path="."
+
+# config file name
+configfile: "config/config.yaml"
+
+config["microscopy_pixel_size"]
+
+
+
+### Start of workflow.
+
+if os.path.isfile("config/sample_metadata.csv"):
+    with open('config/sample_metadata.csv', 'r') as fil:
+        df = pd.read_csv(fil)
+        print(df)
+else:
+    sys.exit("File config/sample_metadata.csv not found!")
+
+project_names=df["project_name"].tolist()
+
+# check if directory structure exists
+for project in project_names:
+    if not os.path.isdir(os.path.join(workdir_path,"results",project)):
+        sys.exit("Project directory "+os.path.join(workdir_path,"results",project)+"does not exist! Create them with 'bash workflow/scripts/setup_project_results_directory.sh -p PROJECT_NAME'")
+
+print("project_names:")
+print(project_names)
+
+#image_types=["postIMS","preIMS","HE","postIMC","preIMC"]
+image_types=["postIMS","preIMS","postIMC","preIMC"]
+
+rule all:
+    input:
+        expand("results/{project_name}/data/{image_type}/{project_name}_{image_type}.ome.tiff", project_name=project_names, image_type=image_types),
+        "results/cirrhosis_TMA/registrations/postIMC_to_postIMS/cirrhosis_TMA-wsireg-config.yaml",
+        "results/cirrhosis_TMA/registrations/postIMC_to_postIMS/cirrhosis_TMA-postIMC_to_postIMS_transformations.json",
+        "results/cirrhosis_TMA/data/preIMS/cirrhosis_TMA-preIMS_to_postIMS_registered.ome.tiff"
+
+
+
+rule prepare_register_postIMC_to_postIMS:
+    params:
+        microscopy_pixelsize=config["microscopy_pixel_size"],
+    input:
+        template_file="config/template_postIMC_to_postIMS-wsireg-config.yaml",
+        postIMS="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
+        preIMS="results/{project_name}/data/preIMS/{project_name}_preIMS.ome.tiff",
+        preIMC="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
+        postIMC="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff"
+    output:
+        wsireg_config="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-wsireg-config.yaml"
+    shell:
+        "workflow/scripts/prepare_postIMC_to_postIMS_wsireg_config.sh -p {wildcards.project_name} -a {input.postIMS} -b {input.preIMS} -c {input.preIMC} -d {input.postIMC} -s {params.microscopy_pixelsize} -t {input.template_file} -o results/{wildcards.project_name}/registrations/postIMC_to_postIMS"
+ 
+rule register_postIMC_to_postIMS:
+    input:
+        postIMS="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
+        preIMS="results/{project_name}/data/preIMS/{project_name}_preIMS.ome.tiff",
+        preIMC="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
+        postIMC="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff",
+        wsireg_config="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-wsireg-config.yaml"
+    output:
+        preIMS_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMS_to_postIMS_transformations.json",
+        preIMS_to_postIMS_image="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMS_to_postIMS_registered.ome.tiff",
+        preIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMC_to_postIMS_transformations.json",
+        preIMC_to_postIMS_image="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMC_to_postIMS_registered.ome.tiff",
+        postIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_transformations.json",
+        postIMC_to_postIMS_image="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_registered.ome.tiff",
+        imcache_dir=directory("results/{project_name}/registrations/postIMC_to_postIMS/.imcache_{project_name}"),
+        logfile="results/{project_name}/registrations/postIMC_to_postIMS/log.txt"
+    threads: 16
+    conda:
+        "env/image_registration_wsireg.yaml"
+    shell:
+        "wsireg2d {input.wsireg_config} > {output.logfile} 2>&1"
+
+rule postprocess_register_postIMC_to_postIMS:
+    input:
+        preIMS_to_postIMS_image="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMS_to_postIMS_registered.ome.tiff",
+        preIMC_to_postIMS_image="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMC_to_postIMS_registered.ome.tiff",
+        postIMC_to_postIMS_image="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_registered.ome.tiff"
+    output:
+        preIMS_image="results/{project_name}/data/preIMS/{project_name}-preIMS_to_postIMS_registered.ome.tiff",
+        preIMC_image="results/{project_name}/data/preIMC/{project_name}-preIMC_to_postIMS_registered.ome.tiff",
+        postIMC_image="results/{project_name}/data/postIMC/{project_name}-postIMC_to_postIMS_registered.ome.tiff"
+    shell:
+        "ln -s -T {input.preIMS_to_postIMS_image} {output.preIMS_image} &&"
+        " ln -s -T {input.preIMC_to_postIMS_image} {output.preIMC_image} &&"
+        " ln -s -T {input.postIMC_to_postIMS_image} {output.postIMC_image}"
+
+
+
+
+
+
+#rule extract_images_from_mcd:
+#    params:
+#        imgout="results/img"
+#    input:
+#        mcd_files="results/raw/{mcd}.mcd"
+#    output:
+#        imginfo_out="results/images_csv/{mcd}_images.csv",
+#        tmpdir=temp(directory("results/raw_tmp/{mcd}")),
+#        sumpan="results/summary_panels/{mcd}_summary.csv",
+#        img_dir=temp(directory("results/img/{mcd}"))
+#    container:
+#        steinbock_container
+#    shell:
+#        "mkdir -p {output.tmpdir} "
+#        " && cp {input.mcd_files} {output.tmpdir} "
+#        " && steinbock preprocess imc panel -o {output.sumpan} --mcd {output.tmpdir} --txt {output.tmpdir} "
+#        " && steinbock preprocess imc images --hpf 50 --mcd {output.tmpdir} --txt {output.tmpdir} --panel {output.sumpan} --imgout {output.img_dir} --infoout {output.imginfo_out} "
+#        " && mv {output.img_dir}/*.tiff {params.imgout}"
+#
+##ruleorder: create_image_csv_1 > create_image_csv_2
+#rule create_image_csv_1:
+#    input:
+#        sumpan=expand("results/images_csv/{mcd}_images.csv", mcd=mcd_files)
+#    output:
+#        imcsv="results/images.csv"
+#    shell:
+#        "first_file=$( echo {input.sumpan}  ) && first_file=( ${{first_file[0]}} ) && head -n 1 ${{first_file[0]}} > {output.imcsv} && tail -n+2 -q {input.sumpan} >> {output.imcsv}"
+#
+#rule create_samples_csv:
+#    input:
+#        imcsv="results/images.csv"
+#    output:
+#        samcsv="config/samples.csv"
+#    shell:
+#        "cat {input.imcsv} | cut -d, -f1 | sed 1d | sed 's/.tiff//g' > {output.samcsv}"
+#
+#
+#rule create_individual_summary_panels:
+#    params:
+#        nuc_channels=nuc_channels,
+#        mem_channels=mem_channels
+#    input:
+#        mcd_files=expand("results/summary_panels/{mcd}_summary.csv",mcd=mcd_files)
+#    output:
+#        summary_panels="results/summary_panels/{samples}_summary.csv"
+#    shell:
+#        "workflow/scripts/create_individual_summary_panels.sh '{input.mcd_files}' '{output.summary_panels}' '{params.nuc_channels}' '{params.mem_channels}'"
+#
+#
+#
+#rule background_subtraction:
+#    params:
+#        thres=filter_thres,
+#        subtraction_type=filter_subtraction_type
+#    input:
+#        "results/img/{sample}.tiff"
+#    output:
+#        "results/img_filt/{sample}_filt.tiff"
+#    conda:
+#        "workflow/envs/filter_hot_pixels.yaml"
+#    script:
+#        "workflow/scripts/background_subtraction.py"
+#
+#
+#def get_img_samplenames(wildcards):
+#    '''return full path tiff from wildcard'''
+#    out = []
+#    for s in wildcards:
+#        if re.match("\S+_filt",s):
+#            out.append("results/img_filt/" + s + ".tiff")
+#        else:
+#            out.append("results/img/" + s + ".tiff")
+#    return out
+#
+#rule steinbock_separate_images_for_mask:
+#    input:
+#        img_dir=expand("results/img/{mcd}",mcd=mcd_files),
+#        img_files="results/img/{sample}.tiff",
+#        files=get_img_samplenames
+#    output:
+#        output_dir = directory("results/temp_img/{sample}"),
+#        output_files = "results/temp_img/{sample}/{sample}.tiff",
+#    shell:
+#        "mkdir -p {output.output_dir} "
+#        " && ln -rs {input.files} {output.output_files} "
+#
+#
+#rule combine_panel_csv:
+#    input:
+#        "results/summary_panels/{sample}_summary.csv"
+#    output:
+#        "results/temp_summary_panels/{sample}_summary.csv"
+#    shell:
+#        "cp {input} {output}"
+#
+#rule steinbock_create_mask:
+#    params:
+#        pixelsize = image_pixelsize,
+#        postprocessing_file=mesmer_postprocessing_paramsfile
+#    input:
+#        img = "results/temp_img/{all_samples}",
+#        img_files = "results/temp_img/{all_samples}/{all_samples}.tiff",
+#        panel = "results/temp_summary_panels/{all_samples}_summary.csv"
+#    output:
+#        tmp_dir=temp(directory("results/temp_masks_init/{all_samples}")),
+#        tmp_masks=temp("results/temp_masks_init/{all_samples}/{all_samples}.tiff"),
+#        masks="results/masks/{all_samples}.tiff"
+#    container:
+#        steinbock_container
+#    threads: 8
+#    shell: 
+#        "mkdir -p {output.tmp_dir} "
+#        " && OPENBLAS_NUM_THREADS={threads} steinbock segment deepcell --minmax --zscore --pixelsize {params.pixelsize} --postprocess {params.postprocessing_file} --img {input.img} --panel {input.panel} -o {output.tmp_dir}"
+#        " && cp {output.tmp_masks} {output.masks}"
+#
+#rule steinbock_separate_masks_for_intensities:
+#    input:
+#        mask = "results/masks/{all_samples}.tiff",
+#    output:
+#        tmp_dir=directory("results/temp_masks/{all_samples}"),
+#        tmp_masks="results/temp_masks/{all_samples}/{all_samples}.tiff"
+#    shell:
+#        "mkdir -p {output.tmp_dir} "
+#        " && ln -rs {input.mask} {output.tmp_masks} "
+#
+##rule create_image_csv_2:
+##    input: 
+##        samples = expand("results/masks/{s}.tiff",s=all_samples),
+##        filename = "config/samples.csv"
+##    output:
+##        images_csv="results/images.csv"
+##    shell:
+##        "workflow/scripts/create_images_csv.sh {output.images.csv} {input.samples}"
+##
+#
+#rule steinbock_create_intensities:
+#    input:
+#        #rules.steinbock_separate_masks_for_intensities.output,
+#        img = "results/temp_img/{all_samples}",
+#        img_files = "results/temp_img/{all_samples}/{all_samples}.tiff",
+#        panel = "results/temp_summary_panels/{all_samples}_summary.csv",
+#        mask = "results/temp_masks/{all_samples}",
+#        mask_files = "results/temp_masks/{all_samples}/{all_samples}.tiff"
+#    output:
+#        output_file = "results/intensities/{all_samples}.csv",
+#        tmp_dir= temp(directory("results/temp_intensities/{all_samples}")),
+#        tmp_file=temp("results/temp_intensities/{all_samples}/{all_samples}.csv")
+#    container:
+#        steinbock_container
+#    shell: 
+#        "mkdir -p {output.tmp_dir} "
+#        " && steinbock measure intensities --aggr mean --img {input.img} --panel {input.panel} --masks {input.mask} -o {output.tmp_dir} "
+#        " && cp {output.tmp_dir}/*.csv {output.output_file}"
+#
+#
+#rule steinbock_create_regionprops:
+#    input:
+#        #rules.steinbock_separate_masks_for_intensities.output,
+#        img = "results/temp_img/{all_samples}",
+#        img_files = "results/temp_img/{all_samples}/{all_samples}.tiff",
+#        mask = "results/temp_masks/{all_samples}",
+#        mask_files = "results/temp_masks/{all_samples}/{all_samples}.tiff"
+#    output:
+#        output_file="results/regionprops/{all_samples}.csv",
+#        tmp_dir= temp(directory("results/temp_regionprops/{all_samples}")),
+#        tmp_file=temp("results/temp_regionprops/{all_samples}/{all_samples}.csv")
+#    container:
+#        steinbock_container
+#    shell: 
+#        "mkdir -p {output.tmp_dir} "
+#        " && steinbock measure regionprops "
+#        " --img {input.img} "
+#        " --masks {input.mask} "
+#        " -o {output.tmp_dir} "
+#        " area centroid major_axis_length minor_axis_length "
+#        " eccentricity euler_number orientation perimeter solidity "
+#        " && cp {output.tmp_file} {output.output_file}"
+#
+#
+#rule steinbock_create_neighbors:
+#    params:
+#        output_dir = "results/temp_neighbors"
+#    input:
+#        #rules.steinbock_separate_masks_for_intensities.output,
+#        img = "results/temp_img/{all_samples}",
+#        img_files = "results/temp_img/{all_samples}/{all_samples}.tiff",
+#        mask = "results/temp_masks/{all_samples}",
+#        mask_files = "results/temp_masks/{all_samples}/{all_samples}.tiff"
+#    output:
+#        output_file="results/neighbors/{all_samples}.csv",
+#        tmp_dir= temp(directory("results/temp_neighbors/{all_samples}")),
+#        tmp_file=temp("results/temp_neighbors/{all_samples}/{all_samples}.csv")
+#    container:
+#        steinbock_container
+#    shell: 
+#        "steinbock measure neighbors "
+#        " --masks {input.mask} "
+#        " -o {output.tmp_dir} "
+#        " --type centroids --dmax 15 "
+#        " && cp {output.tmp_file} {output.output_file}"
+#
+#
+#rule create_spe:
+#    params:
+#        steinbock_dir = "results"
+#    input:
+#        intensities = "results/intensities/{all_samples}.csv",
+#        regionpropts = "results/regionprops/{all_samples}.csv",
+#        neighbors = "results/neighbors/{all_samples}.csv",
+#        panel_file = "results/temp_summary_panels/{all_samples}_summary.csv",
+#        channel_metadata_file = channel_metadata_file
+#    output:
+#        "results/spe/raw/SPE_raw_{all_samples}.rds"
+#    container:
+#        "docker://retogerber/imcr:latest"
+#    script:
+#        "scripts/prepare_spe.R"
+#
+#rule combine_spe:
+#    input:
+#        samcsv="config/samples.csv",
+#        spes=expand("results/spe/raw/SPE_raw_{all_samples}.rds",all_samples=all_samples)
+#    output:
+#        spe="results/spe/raw/SPE_combined.rds"
+#    container:
+#        "docker://retogerber/imcr:latest"
+#    script:
+#        "scripts/combine_spe.R"
+#
+#rule filter_spe:
+#    params:
+#        min_cell_area=min_cell_area
+#    input:
+#        spe="results/spe/raw/SPE_combined.rds",
+#        masks=expand("results/masks/{all_samples}.tiff",all_samples=all_samples)
+#    output:
+#        spe="results/spe/raw/SPE_combined_markedfilt.rds"
+#    container:
+#        "docker://retogerber/imcr:latest"
+#    script:
+#        "scripts/filter_spe.R"
+#
+#rule visualize_filter_spe:
+#    params:
+#        min_cell_area=min_cell_area
+#    input:
+#        spe="results/spe/raw/SPE_combined_markedfilt.rds",
+#        masks=expand("results/masks/{all_samples}.tiff",all_samples=all_samples),
+#        images=expand("results/img/{all_samples}.tiff",all_samples=all_samples)
+#    output:
+#        html="results/html/visualize_filter_spe.html"
+#    container:
+#        "docker://retogerber/imcr:latest"
+#    script:
+#        "scripts/visualize_filter_spe.Rmd"
+#
+#
+#
+#rule batch_correction_spe:
+#    params:
+#        cols_for_batch=cols_for_batch
+#    threads: 32
+#    input:
+#        spe="results/spe/raw/SPE_combined_markedfilt.rds",
+#        sample_metadata=sample_metadata
+#    output:
+#        spe="results/spe/filt/SPE_combined_01.rds"
+#    container:
+#        "docker://retogerber/imcr:latest"
+#    script:
+#        "scripts/batch_correction_spe.R"
+#
+#
+#
+#rule visualize_batch_spe:
+#    params:
+#        cols_for_batch=cols_for_batch
+#    threads: 16
+#    input:
+#        spe="results/spe/filt/SPE_combined_01.rds"
+#    output:
+#        html="results/html/visualize_batch_spe.html"
+#    container:
+#        "docker://retogerber/imcr:latest"
+#    script:
+#        "scripts/visualize_batch_spe.Rmd"
+#
+#rule batch_evaluation_spe:
+#    threads: 32
+#    params:
+#        k=k_cms,
+#        cols_for_batch=cols_for_batch
+#    input:
+#        spe="results/spe/filt/SPE_combined_01.rds"
+#    output:
+#        spe="results/spe/filt/SPE_combined_01_cms.rds"
+#    container:
+#        "docker://retogerber/imcr:latest"
+#    script:
+#        "scripts/batch_evaluation_spe.R"
+#
+#rule visualize_batch_evaluation_spe:
+#    threads: 1
+#    params:
+#        cols_for_batch=cols_for_batch
+#    input:
+#        spe="results/spe/filt/SPE_combined_01_cms.rds"
+#    output:
+#        html="results/html/visualize_batch_evaluation_spe.html"
+#    container:
+#        "docker://retogerber/imcr:latest"
+#    script:
+#        "scripts/visualize_batch_evaluation_spe.Rmd"
+#
+#
+#
+#rule cluster_spe:
+#    threads: 16
+#    input:
+#        spe="results/spe/filt/SPE_combined_01.rds"
+#    output:
+#        spe="results/spe/filt/SPE_combined_02.rds"
+#    container:
+#        "docker://retogerber/imcr:latest"
+#    script:
+#        "scripts/cluster_spe.R"
+#
+#
+#rule visualize_cluster_spe:
+#    threads: 16
+#    input:
+#        spe="results/spe/filt/SPE_combined_02.rds"
+#    output:
+#        html="results/html/visualize_cluster_spe.html"
+#    container:
+#        "docker://retogerber/imcr:latest"
+#    script:
+#        "scripts/visualize_cluster_spe.Rmd"
+#
+#
+#rule annotate_spe:
+#    threads: 1
+#    params:
+#        clustering_used=clustering_used
+#    input:
+#        spe="results/spe/filt/SPE_combined_02.rds",
+#        clustering_annotation_file=clustering_annotation_file
+#    output:
+#        spe="results/spe/filt/SPE_combined_03.rds"
+#    container:
+#        "docker://retogerber/imcr:latest"
+#    script:
+#        "scripts/annotate_spe.R"
+#
+#
+#
