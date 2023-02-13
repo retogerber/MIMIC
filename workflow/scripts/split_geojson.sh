@@ -1,11 +1,12 @@
 #!/bin/bash
 
 
-while getopts f:s: flag
+while getopts f:s:c: flag
 do
     case "${flag}" in
         f) file=${OPTARG};;
         s) scale=${OPTARG};;
+        c) core_name=${OPTARG};;
     esac
 done
 shift "$(( OPTIND - 1 ))"
@@ -29,11 +30,17 @@ if [ -z "$scale" ]; then
     exit 1
 fi
 
+if [ -z "$core_name" ]; then
+    echo "Core name (flag -c) must be given!"
+    exit 1
+fi
+
 
 # read in objects as array
 array=($(jq '.[].properties.name'  $file))
 # loop through objects
-for ele in ${array[@]}
+#for ele in ${array[@]}
+for ele in ${core_name}
 do
     
     ele="${ele%\"}"

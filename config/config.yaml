@@ -4,6 +4,7 @@
 microscopy_pixel_size: 0.22537
 IMS_pixel_size: 30
 IMC_pixel_size: 1
+ims_shrink_factor: 0.8
 
 # name of csv file containing sample information
 sample_metadata: "config/sample_metadata.csv"

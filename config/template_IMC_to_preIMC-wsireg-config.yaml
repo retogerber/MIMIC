@@ -9,9 +9,10 @@ modalities:
     preprocessing:
       image_type: BF
       as_uint8: true
-      contrast_enhance: true
+      contrast_enhance: false
       crop_to_mask_bbox: true
       use_mask: false
+      downsampling: 1
     mask: SEDVAR_PREIMC_MASK
     output_res: null
   IMC:
@@ -24,6 +25,7 @@ modalities:
       image_type: FL
       rot_cc: 180
       as_uint8: true
+      contrast_enhance: false
       crop_to_mask_bbox: false
       use_mask: false
     mask: null

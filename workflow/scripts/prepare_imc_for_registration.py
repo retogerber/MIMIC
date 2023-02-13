@@ -24,16 +24,23 @@ im = imread(imname)
 chind = [np.where(df["name"] == ch)[0][0] for ch in channels_to_use]
 
 imsub = im[chind,:,:]
-imagg = np.max(imsub,axis=0)
-imagg_filt = medfilt2d(imagg, kernel_size=3)
+imsplit=np.split(imsub,len(chind),0)
 
-#maxval = np.quantile(imagg_filt,0.99)
-#imagg_filt[imagg_filt>maxval] = maxval
-#imagg_filt/=maxval
+for i in range(len(chind)):
+    imsplit[i]=np.squeeze(imsplit[i])
+    imsplit[i] = medfilt2d(imsplit[i], kernel_size=3)
+    imagg_tmp_nonzero=imsplit[i][imsplit[i]>0]
+    maxval = np.quantile(imagg_tmp_nonzero,0.99)
+    minval = np.quantile(imagg_tmp_nonzero,0.01)
+    imsplit[i][imsplit[i]>maxval] = maxval
+    imsplit[i][imsplit[i]<minval] = 0
+    imsplit[i]/=maxval
+imsub=np.stack(imsplit)
+imagg_filt = np.max(imsub,axis=0)
 
 imagg_filt_nonzero=imagg_filt[imagg_filt>0]
-maxval = np.quantile(imagg_filt_nonzero,0.9)
-minval = np.quantile(imagg_filt_nonzero,0.1)
+maxval = np.quantile(imagg_filt_nonzero,0.99)
+minval = np.quantile(imagg_filt_nonzero,0.01)
 imagg_filt[imagg_filt>maxval] = maxval
 imagg_filt[imagg_filt<minval] = minval
 imagg_filt-=minval
