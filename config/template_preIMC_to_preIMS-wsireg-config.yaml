@@ -1,0 +1,49 @@
+project_name: SEDVAR_PROJECT_NAME
+output_dir: SEDVAR_OUTPUT_DIR
+cache_images: true
+modalities:
+  preIMS:
+    image_filepath: SEDVAR_PREIMS_FILE
+    image_res: SEDVAR_MICROSCOPY_PIXELSIZE
+    channel_names:
+    - C01 - RGB
+    channel_colors: null
+    preprocessing:
+      image_type: BF
+      ch_indices:
+      - 0
+      invert_intensity: true
+      use_mask: false
+      crop_to_mask_bbox: true
+      downsampling: 2
+    mask: SEDVAR_PREIMS_MASK_FILE
+    output_res: null
+  preIMC:
+    image_filepath: SEDVAR_PREIMC_FILE
+    image_res: SEDVAR_MICROSCOPY_PIXELSIZE
+    channel_names:
+    - C01 - RGB
+    channel_colors: null
+    preprocessing:
+      image_type: BF
+      ch_indices:
+      - 0
+      invert_intensity: true
+      use_mask: false
+      crop_to_mask_bbox: true
+      downsampling: 2
+    mask: SEDVAR_PREIMC_MASK_FILE
+    output_res: null
+reg_paths:
+  reg_path_0:
+    src_modality_name: preIMC
+    tgt_modality_name: preIMS
+    thru_modality: null
+    reg_params:
+    - rigid
+    - nl
+reg_graph_edges: null
+original_size_transforms: null
+attachment_shapes: null
+attachment_images: null
+merge_modalities: {}

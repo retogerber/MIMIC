@@ -8,8 +8,10 @@ import pandas as pd
 from shapely import geometry, affinity
 from tqdm import tqdm
 from scipy.spatial.distance import cdist
-
+import warnings
 from wsireg.reg_shapes import RegShapes
+
+
 
 
 def px_to_box(x: Union[int, float], y: Union[int, float], px_width: Union[int, float]):
@@ -99,14 +101,16 @@ ims_shrink_factor = snakemake.params["ims_shrink_factor"]
 
 cell_indices = pickle.load(open(cell_indices_fp, "rb"))
 
-cell_overlap_df = compute_intersections(
-    cell_shapes_fp,
-    imsml_coords_fp,
-    ims_spacing,
-    micro_spacing,
-    cell_indices,
-    ims_shrink_factor=ims_shrink_factor,
-)
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    cell_overlap_df = compute_intersections(
+        cell_shapes_fp,
+        imsml_coords_fp,
+        ims_spacing,
+        micro_spacing,
+        cell_indices,
+        ims_shrink_factor=ims_shrink_factor,
+    )
 
 
 cell_overlap_df.to_csv(

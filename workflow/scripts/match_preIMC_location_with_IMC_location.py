@@ -1,0 +1,42 @@
+import json
+from shapely.geometry import shape
+import numpy as np
+import pandas as pd
+import re
+
+#preIMC_geojson_file="/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMC_location/NASH_HCC_TMA_reg_mask_on_preIMC.geojson"
+preIMC_geojson_file=snakemake.input['preIMC_location']
+preIMC_geojson = json.load(open(preIMC_geojson_file, "r"))
+
+#IMC_geojson_filebase="/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/"
+#cores = ["A1","A2","A3"]
+#IMC_geojson_files = [IMC_geojson_filebase+f'NASH_HCC_TMA_IMC_mask_on_preIMC_{core}.geojson' for core in cores]
+IMC_geojson_files=snakemake.input['IMC_location']
+IMC_geojson = [ json.load(open(e, "r")) for e in IMC_geojson_files ]
+
+# extract core names from file names
+cores = [ re.search('_IMC_mask_on_preIMC_(.+?)\.geojson', s).group(1) for s in IMC_geojson_files]
+
+#cores=snakemake.wildcards['core']
+
+# polygons from preIMC_location
+preIMC_geojson_polygons = [ shape(e['geometry']) for e in preIMC_geojson ]
+
+# polygons from IMC_location
+IMC_geojson_polygons = [ shape(e[0]['geometry']) for e in IMC_geojson]
+
+# find overlaps
+matchings=[]
+names = [ gj['properties']['name'] for gj in preIMC_geojson]
+for IMC_poly in IMC_geojson_polygons:
+    inters = IMC_poly.intersection(preIMC_geojson_polygons)
+    inters_areas = [ inter.area for inter in inters ]
+    has_large_intersection = np.array(inters_areas)>=0.99*IMC_poly.area
+    matching_name = np.array(names)[has_large_intersection]
+    if len(matching_name)==1:
+        matchings.append(matching_name[0])
+    else:
+        exit()
+
+df = pd.DataFrame({'core':cores,'preIMC_location':matchings})
+df.to_csv(snakemake.output['matching'], index=False)

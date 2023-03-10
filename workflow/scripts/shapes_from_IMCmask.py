@@ -55,10 +55,14 @@ for cell_idx in tqdm(np.unique(cell_mask)):
 
 # translate to original image space
 cell_shapes_translated=[]
-for single_shape in cell_shapes:
-    single_shape[:,0]+=ymin
-    single_shape[:,1]+=xmin
-    cell_shapes_translated.append(single_shape)
+cell_indices_translated=[]
+for i,single_shape in enumerate(cell_shapes):
+    if len(single_shape.shape)==2:
+        single_shape[:,0]+=ymin
+        single_shape[:,1]+=xmin
+        cell_shapes_translated.append(single_shape)
+        cell_indices_translated.append(cell_indices[i])
+
     
 # cell masks to RegShapes model
 rs = RegShapes(cell_shapes_translated)
@@ -67,6 +71,6 @@ rs.save_shape_data(output_fp_shapes, transformed=False)
 
 output_fp_indices=snakemake.output["cell_indices"]
 with open(output_fp_indices, "wb") as f:
-    pickle.dump(cell_indices, f)
+    pickle.dump(cell_indices_translated, f)
 
 

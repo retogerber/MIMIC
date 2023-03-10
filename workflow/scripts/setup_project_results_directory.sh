@@ -17,8 +17,8 @@ if [ -z "$project_name" ]; then
 fi
 
 mkdir -p results/${project_name}/{data,registrations}
-mkdir -p results/${project_name}/data/{IMS,postIMS,preIMS,postIMC,preIMC,IMC,IMC_mask,IMC_location,cell_overlap}
-mkdir -p results/${project_name}/registrations/{postIMC_to_postIMS,IMC_to_preIMC,IMC_to_IMS}
+mkdir -p results/${project_name}/data/{IMS,postIMS,preIMS,postIMC,preIMC,IMC,IMC_mask,IMC_location,cell_overlap,preIMS_location,preIMC_location,preIMC_location_combined,preIMS_location_combined}
+mkdir -p results/${project_name}/registrations/{postIMC_to_postIMS,IMC_to_preIMC,IMC_to_IMS,preIMC_to_preIMS}
 
 
 
