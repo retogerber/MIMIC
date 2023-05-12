@@ -63,4 +63,4 @@ h5createFile(output_hdf5)
 tmpmat <- as.matrix(iData(msi_processed))
 h5write(tmpmat, output_hdf5,"peaks")
 h5write(as.matrix(fData(msi_processed)), output_hdf5,"mzs")
-
+h5write(as.matrix(coord(msi_processed)), output_hdf5,"coord")

@@ -13,9 +13,6 @@ workdir_path="."
 # config file name
 configfile: "config/config.yaml"
 
-config["microscopy_pixel_size"]
-
-
 
 ### Start of workflow.
 
@@ -47,16 +44,24 @@ for pr in unique_project_names:
 print("unique project_names:")
 print(unique_project_names)
 
+imzml_filenames=sample_metadata_df["imzml_filename"].tolist()
+imzml_project = [imzml_filenames[i]+":"+project_names[i] for i in range(len(imzml_filenames))]
+unique_imzml_project = list(set(imzml_project))
+unique_imzml_project = [ ip.split(":") for ip in unique_imzml_project]
+unique_imzml_project = [[ e[0] for e in unique_imzml_project ],[ e[1] for e in unique_imzml_project ]]
+unique_imzml_project[0] = [ os.path.splitext(e)[0] for e in unique_imzml_project[0] ]
+
 #image_types=["postIMS","preIMS","HE","postIMC","preIMC"]
 image_types=["postIMS","preIMS","postIMC","preIMC"]
 
 rule all:
     input:
-        expand("results/{project_name}/data/{image_type}/{project_name}_{image_type}.ome.tiff", project_name=project_names, image_type=image_types),
-        expand("results/{project_name}/data/IMC/{sample}_aggr_transformed.ome.tiff",project_name=project_names,sample=sample_names),
+        #expand("results/{project_name}/data/{image_type}/{project_name}_{image_type}.ome.tiff", project_name=project_names, image_type=image_types),
+        #expand("results/{project_name}/data/IMC/{sample}_aggr_transformed.ome.tiff",project_name=project_names,sample=sample_names),
         expand("results/{project_name}/data/cell_overlap/{project_name}_{sample}_cell_overlap_IMS.csv",zip,project_name=project_names, sample=sample_names),
         expand("results/{project_name}/data/cell_overlap/{project_name}_{sample}_cell_centroids.csv",zip,project_name=project_names, sample=sample_names),
-        expand("results/{project_name}/data/IMS/{project_name}_IMS_peaks.h5",project_name=unique_project_names)
+        #expand("results/{project_name}/data/IMS/{project_name}_IMS_peaks.h5",project_name=unique_project_names)
+        expand("results/{project_name}/data/IMS/{imzml_base}_peaks.h5",zip,project_name=unique_imzml_project[1], imzml_base=unique_imzml_project[0])
 
 
 
@@ -112,44 +117,6 @@ rule postprocess_register_postIMC_to_postIMS:
         " ln -sr -T {input.preIMC_to_postIMS_image} {output.preIMC_image} &&"
         " ln -sr -T {input.postIMC_to_postIMS_image} {output.postIMC_image}"
 
-#rule invert_transform_preIMC_to_postIMS:
-#    input:
-#        preIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMC_to_postIMS_transformations.json"
-#    threads: 32
-#    output:
-#        preIMC_to_postIMS_transform_inverted="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMC_to_postIMS_transformations_inverted.pkl"
-#    threads: 16
-#    conda:
-#        "env/image_registration_wsireg.yaml"
-#    script:
-#        "scripts/invert_transform_preIMC_to_postIMS.py"
-#
-
-rule split_IMC_location_geojson:
-    params:
-        microscopy_pixelsize=config["microscopy_pixel_size"],
-    threads: 1
-    input:
-        combined_geojson_file="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC.geojson"
-    output:
-        geojson_files="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC_{core}.geojson"
-    shell:
-        "workflow/scripts/split_geojson.sh -f {input.combined_geojson_file} -s {params.microscopy_pixelsize} -c {wildcards.core}"
-
-rule transform_IMC_location_to_preIMC:
-    params:
-        microscopy_pixelsize=config["microscopy_pixel_size"],
-    threads: 16
-    input:
-        IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC_{core}.geojson",
-        postIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_transformations.json"
-    output:
-        IMC_location_on_preIMC="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_preIMC_{core}.geojson"
-    conda:
-        "env/image_registration_wsireg.yaml"
-    script:
-        "scripts/transform_postIMC_mask_to_preIMC.py"
-
 
 rule split_preIMC_location_geojson:
     params:
@@ -181,12 +148,11 @@ checkpoint create_preIMS_mask_table:
     input:
         combined_preIMC_geojson_dir="results/{project_name}/data/preIMC_location_combined",
         combined_preIMS_geojson_dir="results/{project_name}/data/preIMS_location_combined"
-        #combined_preIMC_geojson_file="results/{project_name}/data/preIMC_location/{project_name}_reg_mask_on_preIMC.geojson",
-        #combined_preIMS_geojson_file="results/{project_name}/data/preIMS_location/{project_name}_reg_mask_on_preIMS.geojson",
     output:
         table="results/{project_name}/data/preIMS_location/available_masks.csv"
     shell:
         "workflow/scripts/create_IMS_location_table.sh -c {input.combined_preIMC_geojson_dir} -s {input.combined_preIMS_geojson_dir} -o {output.table}"
+
 
 
 rule prepare_register_preIMC_to_preIMS:
@@ -203,7 +169,7 @@ rule prepare_register_preIMC_to_preIMS:
         wsireg_config="results/{project_name}/registrations/preIMC_to_preIMS/{part}/{project_name}_{part}-wsireg-config.yaml"
     shell:
         "workflow/scripts/prepare_preIMC_to_preIMS_wsireg_config.sh -p {wildcards.project_name}_{wildcards.part} -a {input.preIMS} -b {input.preIMS_mask} -c {input.preIMC} -d {input.preIMC_mask} -s {params.microscopy_pixelsize} -t {input.template_file} -o results/{wildcards.project_name}/registrations/preIMC_to_preIMS/{wildcards.part}"
-
+ 
 
 
 rule register_preIMC_to_preIMS:
@@ -226,7 +192,6 @@ rule register_preIMC_to_preIMS:
         "wsireg2d {input.wsireg_config} > {output.logfile} 2>&1"
 
 
-
 rule prepare_split_transform_preIMC_to_postIMS:
     input:
         preIMC_to_preIMS_transform="results/{project_name}/registrations/preIMC_to_preIMS/{part}/{project_name}_{part}-preIMC_to_preIMS_transformations.json",
@@ -239,6 +204,33 @@ rule prepare_split_transform_preIMC_to_postIMS:
     script:
         "scripts/prepare_transform_preIMC_to_postIMS.py"
 
+
+
+
+rule split_IMC_location_geojson:
+    params:
+        microscopy_pixelsize=config["microscopy_pixel_size"],
+    threads: 1
+    input:
+        combined_geojson_file="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC.geojson"
+    output:
+        geojson_files="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC_{core}.geojson"
+    shell:
+        "workflow/scripts/split_geojson.sh -f {input.combined_geojson_file} -s {params.microscopy_pixelsize} -c {wildcards.core}"
+
+rule transform_IMC_location_to_preIMC:
+    params:
+        microscopy_pixelsize=config["microscopy_pixel_size"],
+    threads: 16
+    input:
+        IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC_{core}.geojson",
+        postIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_transformations.json"
+    output:
+        IMC_location_on_preIMC="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_preIMC_{core}.geojson"
+    conda:
+        "env/image_registration_wsireg.yaml"
+    script:
+        "scripts/transform_postIMC_mask_to_preIMC.py"
 
 rule aggregate_IMC_file:
     params:
@@ -473,6 +465,11 @@ def get_IMS_pixel_size_from_metadata(wildcards):
     return sample_metadata_df.loc[sample_metadata_df["sample_name"] == wildcards.sample]["IMS_pixel_size"].tolist()[0]
 
 
+def get_IMS_coords_file_from_metadata(wildcards):
+    coords_file = sample_metadata_df.loc[sample_metadata_df["sample_name"] == wildcards.sample]["coords_filename"].tolist()[0]
+    return "results/" + wildcards.project_name + "/data/IMS/"+ coords_file
+
+
 rule calculate_cell_overlap_with_IMS:
     params:
         #IMS_pixel_size=config["IMS_pixel_size"],
@@ -481,7 +478,8 @@ rule calculate_cell_overlap_with_IMS:
         ims_shrink_factor=config["ims_shrink_factor"]
     threads: 1
     input:
-        imsml_coords_fp="results/{project_name}/data/IMS/{project_name}-IMSML-coords.h5",
+        #imsml_coords_fp="results/{project_name}/data/IMS/{project_name}-IMSML-coords.h5",
+        imsml_coords_fp=get_IMS_coords_file_from_metadata,
         cell_indices="results/{project_name}/data/IMC_mask/{sample}_transformed_cell_indices.pkl",
         IMCmask_transformed="results/{project_name}/data/IMC_mask/{sample}_transformed_cell_masks.geojson"
     output:
@@ -492,14 +490,26 @@ rule calculate_cell_overlap_with_IMS:
         "scripts/cell_ims_intersections.py"
 
 
+def get_imzml_base_filename(wildcards):
+    return "results/" + wildcards.project_name + "/data/IMS/" + wildcards.imzml_base
+def get_imzml_filename(wildcards):
+    return get_imzml_base_filename(wildcards) + ".imzML"
+def get_ibd_filename(wildcards):
+    return get_imzml_base_filename(wildcards) + ".ibd"
+def get_peaklist_filename(wildcards):
+    return get_imzml_base_filename(wildcards) + "_peaklist.csv"
+
 rule process_imzml:
     threads: 16
     input: 
-        imzml="results/{project_name}/data/IMS/{project_name}_IMS.imzML",
-        ibd="results/{project_name}/data/IMS/{project_name}_IMS.ibd",
-        peaklist="results/{project_name}/data/IMS/{project_name}_peaklist.csv"
+        imzml=get_imzml_filename,
+        ibd=get_ibd_filename,
+        peaklist=get_peaklist_filename
+        #imzml="results/{project_name}/data/IMS/{project_name}_IMS.imzML",
+        #ibd="results/{project_name}/data/IMS/{project_name}_IMS.ibd",
+        #peaklist="results/{project_name}/data/IMS/{project_name}_peaklist.csv"
     output:
-        peaks="results/{project_name}/data/IMS/{project_name}_IMS_peaks.h5"
+        peaks="results/{project_name}/data/IMS/{imzml_base}_peaks.h5"
     container:
         "docker://retogerber/imcr:1.0"
     script:

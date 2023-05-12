@@ -6,7 +6,6 @@ import h5py
 import numpy as np
 import pandas as pd
 from shapely import geometry, affinity
-from tqdm import tqdm
 from scipy.spatial.distance import cdist
 import warnings
 from wsireg.reg_shapes import RegShapes
@@ -37,12 +36,18 @@ def compute_intersections(
     resolution_factor = ims_spacing / micro_spacing
 
     with h5py.File(imsml_coords_fp, "r") as f:
-        padded = f["xy_padded"][:]
+        # if in imsmicrolink IMS was the target
+        if "xy_micro_physical" in [key for key, val in f.items()]:
+            xy_micro_physical = f["xy_micro_physical"][:]
 
-    # half pixel correction factor is because napari canvas is "center-pixel" oriented
-    # rather than top-left corner
-    micro_x = (padded[:, 0] * resolution_factor) - 0.5 * resolution_factor
-    micro_y = (padded[:, 1] * resolution_factor) - 0.5 * resolution_factor
+            micro_x = xy_micro_physical[:,0]
+            micro_y = xy_micro_physical[:,1]
+        # if the microscopy image was the target
+        else:
+            padded = f["xy_padded"][:]
+            
+            micro_x = (padded[:, 0] * resolution_factor)
+            micro_y = (padded[:, 1] * resolution_factor)
 
     cell_polygons = [geometry.Polygon(r["array"]) for r in rs.shape_data]
     assert len(cell_polygons) == len(cell_indices)
@@ -57,7 +62,7 @@ def compute_intersections(
     centroids = np.squeeze(centroids)
 
     cell_overlaps = []
-    for idx, cell in enumerate(tqdm(cell_polygons)):
+    for idx, cell in enumerate(cell_polygons):
         cell_centroid = np.asarray(cell.centroid.xy).transpose()
         dist_from_cell = cdist(cell_centroid, centroids)
         close_pixels = dist_from_cell < 100
@@ -68,10 +73,10 @@ def compute_intersections(
                 if cell.is_valid:
                     inter_area = cell.intersection(pixel_boxes[close]).area / cell.area
                     if inter_area > 0:
-                        cell_overlaps.append((cell_idx, close, inter_area))
+                        cell_overlaps.append((cell_idx, close, inter_area, cell.area))
 
     cell_overlap_df = pd.DataFrame(
-        cell_overlaps, columns=["cell_idx", "ims_idx", "overlap"]
+        cell_overlaps, columns=["cell_idx", "ims_idx", "overlap", "cell_area"]
     )
 
     cell_overlap_df.sort_values("cell_idx", inplace=True)

@@ -29,6 +29,8 @@ imsplit=np.split(imsub,len(chind),0)
 for i in range(len(chind)):
     imsplit[i]=np.squeeze(imsplit[i])
     imsplit[i] = medfilt2d(imsplit[i], kernel_size=3)
+    if np.sum(imsplit[i]>0) == 0:
+        continue
     imagg_tmp_nonzero=imsplit[i][imsplit[i]>0]
     maxval = np.quantile(imagg_tmp_nonzero,0.99)
     minval = np.quantile(imagg_tmp_nonzero,0.01)
