@@ -1,4 +1,7 @@
-project_name,core_name,sample_name,reg_type,IMS_pixel_size,IMC_pixel_size
-cirrhosis_TMA,D1,Cirrhosis-TMA-5_New_Detector_004,precise,30,1
-cirrhosis_TMA,A2,Cirrhosis-TMA-5_New_Detector_006,precise,30,1
-
+sample_name,project_name,core_name,reg_type,IMS_pixel_size,IMS_shrink_factor,IMC_pixel_size,microscopy_pixel_size,coords_filename,imzml_filename
+Cirrhosis-TMA-5_New_Detector_001,test_combined,A1,precise,30,0.8,1,0.22537,postIMS_to_IMS_test_combined-IMSML-coords.h5,IMS_test_combined.imzML
+Cirrhosis-TMA-5_New_Detector_002,test_combined,B1,precise,30,0.8,1,0.22537,postIMS_to_IMS_test_combined-IMSML-coords.h5,IMS_test_combined.imzML
+Cirrhosis-TMA-5_New_Detector_001,test_split_ims,A1,precise,30,0.8,1,0.22537,postIMS_to_IMS_test_split_ims_2-IMSML-coords.h5,IMS_test_split_ims_2.imzML
+Cirrhosis-TMA-5_New_Detector_002,test_split_ims,B1,precise,30,0.8,1,0.22537,postIMS_to_IMS_test_split_ims_1-IMSML-coords.h5,IMS_test_split_ims_1.imzML
+Cirrhosis-TMA-5_New_Detector_001,test_split_pre,A1,precise,30,0.8,1,0.22537,postIMS_to_IMS_test_split_pre-IMSML-coords.h5,IMS_test_split_pre.imzML
+Cirrhosis-TMA-5_New_Detector_002,test_split_pre,B1,precise,30,0.8,1,0.22537,postIMS_to_IMS_test_split_pre-IMSML-coords.h5,IMS_test_split_pre.imzML

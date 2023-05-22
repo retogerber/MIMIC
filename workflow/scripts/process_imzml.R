@@ -1,3 +1,9 @@
+# logging
+stdlog <- file(snakemake@log[["stdout"]], open="wt")
+sink(stdlog, type = "output")
+stderr <- file(snakemake@log[["stderr"]], open="wt")
+sink(stderr, type = "message")
+
 suppressPackageStartupMessages({
   library(Cardinal)
   library(rhdf5)

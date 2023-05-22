@@ -1,0 +1,5 @@
+*.ibd filter=lfs diff=lfs merge=lfs -text
+*.imzML filter=lfs diff=lfs merge=lfs -text
+*.h5 filter=lfs diff=lfs merge=lfs -text
+*.ome.tiff filter=lfs diff=lfs merge=lfs -text
+*.tiff filter=lfs diff=lfs merge=lfs -text
