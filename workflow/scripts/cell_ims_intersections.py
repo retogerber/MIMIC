@@ -97,8 +97,8 @@ output_csv = snakemake.output["cell_overlaps"]
 
 
 # data specific settings
-ims_spacing = snakemake.params["IMS_pixel_size"]
-micro_spacing = snakemake.params["IMC_pixel_size"]
+ims_spacing = snakemake.params["IMS_pixelsize"]
+micro_spacing = snakemake.params["IMC_pixelsize"]
 ims_shrink_factor = snakemake.params["IMS_shrink_factor"]
 
 

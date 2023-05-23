@@ -18,7 +18,7 @@ imaggrname = snakemake.output["IMC_aggr"]
 channels_to_use = snakemake.params["IMC_channels_for_aggr"]
 
 df = read_csv(dfname)
-im = imread(imname)
+im = imread(imname).astype(np.float64)
 
 
 chind = [np.where(df["name"] == ch)[0][0] for ch in channels_to_use]

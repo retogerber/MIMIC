@@ -12,7 +12,6 @@ from tifffile import imread
 from tifffile import imwrite
 import sys
 import json
-from tqdm import tqdm
 import cv2
 import pickle
 from pathlib import Path
@@ -39,7 +38,7 @@ cell_mask_sub = cell_mask.copy()[xmin:(xmax+1),ymin:(ymax+1)]
 # convert cell mask raster data to polygons for transformation
 cell_shapes = []
 cell_indices = []
-for cell_idx in tqdm(np.unique(cell_mask)):
+for cell_idx in np.unique(cell_mask):
     if cell_idx != 0:
         cell_mask_thresh = cell_mask_sub.copy()
         cell_mask_thresh[cell_mask_thresh < cell_idx] = 0
