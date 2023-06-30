@@ -11,7 +11,7 @@ dependencies:
   - napari >= 0.4.17
   - pyyaml >= 6.0
   - click >= 8.1.3
-  - ome-types >= 0.3.4
+  - ome-types >= 0.3.3
   - scipy >= 1.7.2
   - h5py >= 3.8.0
   - shapely=2.0.1

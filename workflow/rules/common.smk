@@ -95,5 +95,21 @@ def choose_preIMC_to_postIMS_transform(wildcards):
 
 
 
+def choose_postIMC_to_postIMS_transform(wildcards):
+    use_direct = decide_use_direct_preIMC_to_postIMS_transform(wildcards)
+    if use_direct:
+        outfile = f'results/{wildcards.project_name}/registrations/postIMC_to_postIMS/{wildcards.project_name}-postIMC_to_postIMS_transformations.json'
+        return outfile
+    else:
+        match_preIMC_location_with_IMC_location_file = checkpoints.match_preIMC_location_with_IMC_location.get(project_name=wildcards.project_name).output['matching']
+        with match_preIMC_location_with_IMC_location_file.open() as f:
+            df = pd.read_csv(f) 
+            #core=core_name_from_sample_name(wildcards)
+            core = get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "core_name", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
+            part=df.loc[df["core"] == core]["preIMC_location"].tolist()[0]
+            outfile = f'results/{wildcards.project_name}/registrations/postIMC_to_postIMS/{part}/{wildcards.project_name}_{part}-postIMC_to_postIMS_transformations.json'
+            return outfile
+
+
 
 
