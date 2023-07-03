@@ -18,7 +18,7 @@ fi
 
 mkdir -p results/Misc
 mkdir -p results/${project_name}/{data,registrations}
-mkdir -p results/${project_name}/data/{IMS,postIMS,preIMS,postIMC,preIMC,IMC,IMC_mask,IMC_summary_panel,IMC_location,cell_overlap,preIMS_location,preIMC_location,preIMC_location_combined,preIMS_location_combined, registration_metric}
+mkdir -p results/${project_name}/data/{IMS,postIMS,preIMS,postIMC,preIMC,IMC,IMC_mask,IMC_summary_panel,IMC_location,cell_overlap,preIMS_location,preIMC_location,preIMC_location_combined,preIMS_location_combined,registration_metric}
 mkdir -p results/${project_name}/registrations/{postIMC_to_postIMS,IMC_to_preIMC,IMC_to_IMS,preIMC_to_preIMS}
 
 

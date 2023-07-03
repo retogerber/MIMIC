@@ -28,7 +28,7 @@ setCardinalBPPARAM(BiocParallel::MulticoreParam(workers = snakemake@threads) )
 
 # read peaklist
 ref_mzvals_df <- read.csv(filename_peaklist,header=TRUE)
-ref_mzvals_vals <- ref_mzvals_df[order(ref_mzvals_df$mz),]
+ref_mzvals_df <- ref_mzvals_df[order(ref_mzvals_df$mz),]
 ref_mzvals <- ref_mzvals_df[["mz"]]
 internal_standard_mzval <- ref_mzvals_df[["mz"]][ref_mzvals_df[["is_internal_standard"]]==1]
 
