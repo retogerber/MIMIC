@@ -291,7 +291,7 @@ rule split_IMC_location_geojson:
 rule transform_IMC_location_to_preIMC:
     params:
         microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "microscopy_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"]))
-    threads: 16
+    threads: 4
     input:
         IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC_{core}.geojson",
         postIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_transformations.json"
@@ -412,7 +412,7 @@ rule precise_register_IMC_to_preIMC:
         "scripts/register_precise_IMC_to_preIMC.py"
 
 rule transform_IMCaggr_to_postIMS:
-    threads: 32
+    threads: 4
     input:
         IMC_to_preIMC_transform=IMC_to_preIMC_transform_pkl_core_name_from_sample_name,
         preIMC_orig_size_transform=preIMC_orig_size_transform_core_name_from_sample_name,
@@ -433,7 +433,7 @@ rule transform_IMCaggr_to_postIMS:
 
 
 rule transform_IMCmask_to_postIMS:
-    threads: 32
+    threads: 4
     input:
         IMC_to_preIMC_transform=IMC_to_preIMC_transform_pkl_core_name_from_sample_name,
         preIMC_orig_size_transform=preIMC_orig_size_transform_core_name_from_sample_name,
@@ -453,7 +453,7 @@ rule transform_IMCmask_to_postIMS:
         "scripts/transform_IMC_to_postIMS.py"
 
 rule transform_postIMC_to_postIMS:
-    threads: 32
+    threads: 4
     params:
         microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "microscopy_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"]))
     input:
@@ -474,7 +474,7 @@ rule transform_postIMC_to_postIMS:
         "scripts/transform_postIMC_to_postIMS.py"
 
 rule downscale_postIMS:
-    threads: 32
+    threads: 4
     params:
         microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "microscopy_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
         IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMC_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
@@ -500,8 +500,8 @@ use rule downscale_postIMS as downscale_preIMS with:
 rule download_sam_weights:
     output:
         "results/Misc/sam_vit_h_4b8939.pth"
-    container:
-        config["container"]
+    #container:
+    #    config["container"]
     shell:
         "cd results/Misc && wget https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth"
         
@@ -538,7 +538,7 @@ rule combine_image_registration_evaluation_results:
 
 
 rule transformed_IMCmask_to_shape:
-    threads: 16
+    threads: 4
     input:
         IMCmask="results/{project_name}/data/IMC_mask/{sample}_transformed.ome.tiff"
     output:
@@ -599,7 +599,7 @@ rule calculate_cell_overlap_with_IMS:
 rule transform_IMC_location_to_postIMS:
     params:
         microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "microscopy_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"]))
-    threads: 16
+    threads: 4
     input:
         IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC_{core}.geojson",
         postIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_transformations.json"

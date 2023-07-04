@@ -25,10 +25,12 @@ stopifnot(grepl("\\.imzML$",basename(filename_imzml)))
 stopifnot(grepl("\\.ibd$",basename(filename_ibd)))
 
 setCardinalBPPARAM(BiocParallel::MulticoreParam(workers = snakemake@threads) )
+setCardinalNumBlocks(n=ifelse(snakemake@threads>10,snakemake@threads,20))
+setCardinalVerbose(verbose=TRUE)
 
 # read peaklist
 ref_mzvals_df <- read.csv(filename_peaklist,header=TRUE)
-ref_mzvals_vals <- ref_mzvals_df[order(ref_mzvals_df$mz),]
+ref_mzvals_df <- ref_mzvals_df[order(ref_mzvals_df$mz),]
 ref_mzvals <- ref_mzvals_df[["mz"]]
 internal_standard_mzval <- ref_mzvals_df[["mz"]][ref_mzvals_df[["is_internal_standard"]]==1]
 
