@@ -45,6 +45,7 @@ output_df = snakemake.output["registration_metrics"]
 logging.info("Setup rembg model")
 # prepare model for rembg
 model_name = "isnet-general-use"
+os.environ["OMP_NUM_THREADS"] = str(snakemake.threads)
 rembg_session = new_session(model_name)
 
 logging.info("Setup sam model")
