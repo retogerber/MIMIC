@@ -147,8 +147,8 @@ postIMCw = readimage_crop(postIMC_file, bb1)
 postIMCw = prepare_image_for_sam(postIMCw, rescale)
 postIMC = np.stack([postIMCw, postIMCw, postIMCw], axis=2)
 postIMCr = remove(postIMC, only_mask=True, session=rembg_session)
-postIMCmasks = np.stack([postIMCr>127])
-
+postIMCmasks = postIMCr>127
+postIMCmasks = np.stack([skimage.morphology.remove_small_holes(postIMCmasks,1500**2*np.pi*rescale)])
 
 logging.info("preIMS mask extraction")
 # preIMS
@@ -156,7 +156,8 @@ preIMSw = readimage_crop(preIMS_file, bb1)
 preIMSw = prepare_image_for_sam(preIMSw, rescale)
 preIMS = np.stack([preIMSw, preIMSw, preIMSw], axis=2)
 preIMSr = remove(preIMS, only_mask=True, session=rembg_session)
-preIMSmasks = np.stack([preIMSr>127])
+preIMSmasks = preIMSr>127
+preIMSmasks = np.stack([skimage.morphology.remove_small_holes(preIMSmasks,1500**2*np.pi*rescale)])
 
 logging.info("postIMS mask extraction")
 # postIMS
