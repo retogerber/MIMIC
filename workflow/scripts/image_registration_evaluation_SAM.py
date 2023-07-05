@@ -1,6 +1,5 @@
 import pandas as pd
-import os
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from segment_anything import sam_model_registry, SamPredictor
 import torch
 from rembg import remove, new_session
@@ -9,17 +8,33 @@ import numpy as np
 import tifffile
 import zarr
 from wsireg.utils.im_utils import grayscale
+import sys,os
+import logging, traceback
+logging.basicConfig(filename=snakemake.log["stdout"],
+                    level=logging.INFO,
+                    format='%(asctime)s [%(levelname)s] %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    )
+from logging_utils import handle_exception, StreamToLogger
+sys.excepthook = handle_exception
+sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
+sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+
+logging.info("Start")
 
 # image_file1 ="/home/retger/Downloads/QuPath-0.4.1-Linux/Projects/cirrhosis_TMA/cirrhosis_TMA-postIMS_registered.ome.tiff"
 # postIMS_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMS/test_split_pre_postIMS_reduced.ome.tiff"
+# postIMS_file = "/home/retger/Downloads/sherborne/results/Lipid_TMA_3781/data/postIMS/Lipid_TMA_3781_postIMS_reduced.ome.tiff"
 postIMS_file = snakemake.input["postIMS_downscaled"]
 # image_file2 ="/home/retger/Downloads/QuPath-0.4.1-Linux/Projects/cirrhosis_TMA/cirrhosis_TMA-postIMC_to_postIMS_registered.ome.tiff"
 # postIMC_file="/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/Cirrhosis-TMA-5_New_Detector_001_transformed.ome.tiff"
+# postIMC_file = "/home/retger/Downloads/sherborne/results/Lipid_TMA_3781/data/postIMC/Lipid_TMA_37819_009_transformed.ome.tiff"
 postIMC_file = snakemake.input["postIMC_transformed"]
 # imc_mask1 ="/home/retger/Downloads/QuPath-0.4.1-Linux/Projects/cirrhosis_TMA/Cirrhosis_TMA_5_01262022_004_aggr_transformed.ome.tiff"
 # imc_mask1="/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed.ome.tiff"
 # imc_mask2 ="/home/retger/Downloads/QuPath-0.4.1-Linux/Projects/cirrhosis_TMA/Cirrhosis_TMA_5_01262022_003_aggr_transformed.ome.tiff"
-preIMS_file =  "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre-preIMS_to_postIMS_registered_reduced.ome.tiff"
+# preIMS_file = "/home/retger/Downloads/sherborne/results/Lipid_TMA_3781/data/preIMS/Lipid_TMA_3781-preIMS_to_postIMS_registered_reduced.ome.tiff"
+# preIMS_file =  "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre-preIMS_to_postIMS_registered_reduced.ome.tiff"
 preIMS_file = snakemake.input["preIMS_downscaled"]
 # resize factor to speedup computations
 # rescale = 1
@@ -27,10 +42,12 @@ rescale = snakemake.params["downscale"]
 
 output_df = snakemake.output["registration_metrics"]
 
+logging.info("Setup rembg model")
 # prepare model for rembg
 model_name = "isnet-general-use"
 rembg_session = new_session(model_name)
 
+logging.info("Setup sam model")
 # prepare SAM
 # DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 DEVICE = 'cpu'
@@ -39,6 +56,7 @@ MODEL_TYPE = "vit_h"
 
 # download model from: https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth
 # CHECKPOINT_PATH = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/Misc/sam_vit_h_4b8939.pth"
+# CHECKPOINT_PATH = "/home/retger/Downloads/sherborne/results/Misc/sam_vit_h_4b8939.pth"
 CHECKPOINT_PATH = snakemake.input["sam_weights"]
 
 sam = sam_model_registry[MODEL_TYPE](checkpoint=CHECKPOINT_PATH)
@@ -70,7 +88,7 @@ def apply_filter(image: np.ndarray):
     return img
 
 
-def preprocess_mask(mask: np.ndarray, image_resolution):
+def preprocess_mask(mask: np.ndarray, image_resolution, opening_size=5):
     mask1tmp = skimage.morphology.isotropic_opening(mask, np.ceil(image_resolution*5))
     mask1tmp, count = skimage.measure.label(mask1tmp, connectivity=2, return_num=True)
     counts = np.unique(mask1tmp, return_counts = True)
@@ -116,34 +134,13 @@ def get_max_dice_score(masks1, masks2):
 
     return mask_image1, mask_image2, dice_scores[indices[0][0],indices[1][0]]
 
+logging.info("postIMC bounding box extraction")
 # read IMC to get bounding box (image was cropped in previous step)
 postIMC = skimage.io.imread(postIMC_file)
 rp = skimage.measure.regionprops((np.max(postIMC, axis=2)>0).astype(np.uint8))
 bb1 = rp[0].bbox
 
-
-# postIMS
-postIMSw = readimage_crop(postIMS_file, bb1)
-postIMSw = prepare_image_for_sam(postIMSw, rescale)
-postIMS = apply_filter(postIMSw)
-postIMSmasks, scores1 = sam_core(postIMS, sam)
-postIMSmasks = np.stack([preprocess_mask(msk,rescale) for msk in postIMSmasks ])
-
-# preIMS
-preIMSw = readimage_crop(preIMS_file, bb1)
-preIMSw = prepare_image_for_sam(preIMSw, rescale)
-preIMS = np.stack([preIMSw, preIMSw, preIMSw], axis=2)
-preIMSr = remove(preIMS, only_mask=True, session=rembg_session)
-preIMSmasks = np.stack([preIMSr>127])
-
-# fig, ax = plt.subplots(nrows=1, ncols=2)
-# ax[0].imshow(img3)
-# ax[0].set_title("postIMS")
-# ax[1].imshow(masks3[0,:,:], cmap='gray')
-# ax[1].set_title("postIMS mask")
-# plt.show()
-
-
+logging.info("postIMC mask extraction")
 # postIMC
 postIMCw = readimage_crop(postIMC_file, bb1)
 postIMCw = prepare_image_for_sam(postIMCw, rescale)
@@ -151,31 +148,71 @@ postIMC = np.stack([postIMCw, postIMCw, postIMCw], axis=2)
 postIMCr = remove(postIMC, only_mask=True, session=rembg_session)
 postIMCmasks = np.stack([postIMCr>127])
 
+
+logging.info("preIMS mask extraction")
+# preIMS
+preIMSw = readimage_crop(preIMS_file, bb1)
+preIMSw = prepare_image_for_sam(preIMSw, rescale)
+preIMS = np.stack([preIMSw, preIMSw, preIMSw], axis=2)
+preIMSr = remove(preIMS, only_mask=True, session=rembg_session)
+preIMSmasks = np.stack([preIMSr>127])
+
+logging.info("postIMS mask extraction")
+# postIMS
+postIMSw = readimage_crop(postIMS_file, bb1)
+postIMSw = prepare_image_for_sam(postIMSw, rescale)
+postIMS = postIMSw.copy()
+tmpmask = skimage.morphology.isotropic_dilation(preIMSmasks[0], np.ceil(rescale*100))
+postIMS[np.logical_not(tmpmask)] = 0
+postIMS = skimage.filters.median(postIMS, skimage.morphology.disk(rescale * 5))
+postIMS = normalize_image(postIMS)*255
+postIMS = postIMS.astype(np.uint8)
+postIMS = np.stack([postIMS, postIMS, postIMS], axis=2)
+postIMSmasks, scores1 = sam_core(postIMS, sam)
+postIMSmasks = np.stack([preprocess_mask(msk,rescale) for msk in postIMSmasks ])
+
+# fig, ax = plt.subplots(nrows=1, ncols=2)
+# ax[0].imshow(postIMS[1000:1500,2000:2500])
+# ax[0].set_title("postIMS")
+# ax[1].imshow(postIMSmasks[0,1000:1500,2000:2500], cmap='gray')
+# ax[1].set_title("postIMS mask")
+# plt.show()
+
+
+logging.info("Calculate overlap between preIMS and postIMS")
 # get best overlap of masks
 preIMSmask_to_postIMS, postIMSmask_to_preIMS, dice_score_postIMC_preIMS = get_max_dice_score(preIMSmasks, postIMSmasks)
 
 
-tmppostIMSmask = np.logical_not(postIMSmask_to_preIMS)
-tmppostIMSmask = skimage.morphology.isotropic_erosion(tmppostIMSmask,100)
-postIMSwr = postIMSw.copy()
-postIMSwr[tmppostIMSmask[:,:,0]] = 0
-filt_realx, filt_imag = skimage.filters.gabor(postIMSwr, frequency=0.49)
-filt_realy, filt_imag = skimage.filters.gabor(postIMSwr, frequency=0.49, theta = np.pi/2)
-gabc = np.maximum(filt_realy,filt_realx)
-gabc = skimage.filters.median(gabc, skimage.morphology.disk(2))
-gabc = skimage.util.invert(gabc)
-postIMSgabc = np.stack([gabc.copy(), gabc.copy(), gabc.copy()], axis=2)
-postIMSmasks, scores1 = sam_core(postIMSgabc, sam)
+# logging.info("second iteration postIMS mask extraction")
+# tmppostIMSmask = np.logical_not(postIMSmask_to_preIMS)
+# tmppostIMSmask = skimage.morphology.isotropic_erosion(tmppostIMSmask,100)
+# postIMSwr = postIMSw.copy()
+# postIMSwr[tmppostIMSmask[:,:,0]] = 0
+# filt_realx, filt_imag = skimage.filters.gabor(postIMSwr, frequency=0.49)
+# filt_realy, filt_imag = skimage.filters.gabor(postIMSwr, frequency=0.49, theta = np.pi/2)
+# gabc = np.maximum(filt_realy,filt_realx)
+# gabc = skimage.filters.median(gabc, skimage.morphology.disk(2))
+# gabc = skimage.util.invert(gabc)
+# postIMSgabc = np.stack([gabc.copy(), gabc.copy(), gabc.copy()], axis=2)
+# si(postIMSwr)
+# postIMSmasks, scores1 = sam_core(postIMSgabc, sam)
 
+logging.info("Calculate dice coefficients")
 preIMSmask, postIMSmask, dice_score_preIMS_postIMS = get_max_dice_score(preIMSmasks, postIMSmasks)
 postIMCmask, preIMSmask, dice_score_postIMC_preIMS = get_max_dice_score(postIMCmasks, preIMSmasks)
 postIMCmask, postIMSmask, dice_score_postIMC_postIMS = get_max_dice_score(postIMCmasks, postIMSmasks)
 
+logging.info("Calculate Areas")
 preIMSmask_area = np.sum(preIMSmask)*rescale
 postIMCmask_area = np.sum(postIMCmask)*rescale
 postIMSmask_area = np.sum(postIMSmask)*rescale
 
+logging.info("Calculate ratio area")
+postIMS_to_preIMS_area_ratio = postIMSmask_area/preIMSmask_area
+preIMS_to_postIMC_area_ratio = preIMSmask_area/postIMCmask_area
 
+logging.info("Calculate Proportions overlap")
 # proportion non overlap postIMS
 prop_postIMS_notin_postIMC = np.sum(np.logical_and(postIMSmask, np.logical_not(postIMCmask)))/np.sum(postIMSmask)
 # proportion non overlap postIMC
@@ -186,8 +223,8 @@ prop_postIMC_notin_preIMS = np.sum(np.logical_and(postIMCmask, np.logical_not(pr
 prop_preIMS_notin_postIMS = np.sum(np.logical_and(preIMSmask, np.logical_not(postIMSmask)))/np.sum(preIMSmask)
 
 
-# proportion_ratio = prop_postIMS_notin_postIMC / prop_postIMC_notin_postIMS
 
+logging.info("Calculate Centroids")
 postIMScent = skimage.measure.regionprops(postIMSmask.astype(np.uint8))[0].centroid
 postIMCcent = skimage.measure.regionprops(postIMCmask.astype(np.uint8))[0].centroid
 preIMScent = skimage.measure.regionprops(preIMSmask.astype(np.uint8))[0].centroid
@@ -196,6 +233,7 @@ def dist_centroids(cent1, cent2, rescale):
     euclid_dist = euclid_dist_pixel*rescale
     return euclid_dist
 
+logging.info("Calculate Mean error of centroids")
 postIMS_to_preIMS_dist = dist_centroids(postIMScent, preIMScent, rescale)
 postIMS_to_postIMC_dist = dist_centroids(postIMScent, postIMCcent, rescale)
 preIMS_to_postIMC_dist = dist_centroids(preIMScent, postIMCcent, rescale)
@@ -218,8 +256,8 @@ preIMS_to_postIMC_dist = dist_centroids(preIMScent, postIMCcent, rescale)
 # ax[1].set_title("postIMC")
 # plt.show()
 
+logging.info("Create and save csv")
 samplename = os.path.basename(postIMC_file).replace("_transformed.ome.tiff","")
-
 df = pd.DataFrame(data = {
     'sample': samplename,
     'dice_score_postIMC_preIMS': dice_score_postIMC_preIMS,
@@ -228,6 +266,8 @@ df = pd.DataFrame(data = {
     'postIMS_mask_area': postIMSmask_area, 
     'postIMC_mask_area': postIMCmask_area, 
     'preIMS_mask_area': preIMSmask_area, 
+    'postIMS_to_preIMS_area_ratio': postIMS_to_preIMS_area_ratio,
+    'preIMS_to_postIMC_area_ratio': preIMS_to_postIMC_area_ratio,
     'euclidean_distance_centroids_postIMS_to_preIMS': postIMS_to_preIMS_dist,
     'euclidean_distance_centroids_postIMS_to_postIMC': postIMS_to_postIMC_dist,
     'euclidean_distance_centroids_preIMS_to_postIMC': preIMS_to_postIMC_dist,
@@ -236,9 +276,10 @@ df = pd.DataFrame(data = {
     'proportion_postIMC_mask_in_postIMS': prop_postIMC_notin_postIMS,
     'proportion_postIMC_mask_in_preIMS': prop_postIMC_notin_preIMS,
     }, index = [0])
-df.to_csv(output_df)
+df.to_csv(output_df, index=False)
 
 
+logging.info("Create and save images")
 tifffile.imwrite(snakemake.output['postIMS_postIMSmask'],np.stack([postIMSw,postIMSmask[:,:,0].astype(np.uint8)*255],axis=0))
 tifffile.imwrite(snakemake.output['postIMC_postIMCmask'],np.stack([postIMCw,postIMCmask[:,:,0].astype(np.uint8)*255],axis=0))
 tifffile.imwrite(snakemake.output['preIMS_preIMSmask'],np.stack([preIMSw,preIMSmask[:,:,0].astype(np.uint8)*255],axis=0))
@@ -276,3 +317,5 @@ tifffile.imwrite(snakemake.output['preIMS_preIMSmask'],np.stack([preIMSw,preIMSm
 # ax[3].set_title("3")
 # plt.show()
 
+
+logging.info("Finished")

@@ -412,7 +412,7 @@ rule precise_register_IMC_to_preIMC:
         "scripts/register_precise_IMC_to_preIMC.py"
 
 rule transform_IMCaggr_to_postIMS:
-    threads: 4
+    threads: 16
     input:
         IMC_to_preIMC_transform=IMC_to_preIMC_transform_pkl_core_name_from_sample_name,
         preIMC_orig_size_transform=preIMC_orig_size_transform_core_name_from_sample_name,
@@ -433,7 +433,7 @@ rule transform_IMCaggr_to_postIMS:
 
 
 rule transform_IMCmask_to_postIMS:
-    threads: 4
+    threads: 16
     input:
         IMC_to_preIMC_transform=IMC_to_preIMC_transform_pkl_core_name_from_sample_name,
         preIMC_orig_size_transform=preIMC_orig_size_transform_core_name_from_sample_name,
@@ -453,7 +453,7 @@ rule transform_IMCmask_to_postIMS:
         "scripts/transform_IMC_to_postIMS.py"
 
 rule transform_postIMC_to_postIMS:
-    threads: 4
+    threads: 16
     params:
         microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "microscopy_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"]))
     input:
@@ -483,6 +483,8 @@ rule downscale_postIMS:
         IMC_transformed=lambda wildcards: expand("results/{{project_name}}/data/IMC_mask/{sample}_transformed.ome.tiff",sample=get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all = True))
     output:
         postIMS_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced.ome.tiff",
+    log:
+        stdout="logs/downscale_postIMS/{project_name}.stdout",
     container:
         config["container"]
     script:
@@ -500,10 +502,13 @@ use rule downscale_postIMS as downscale_preIMS with:
 rule download_sam_weights:
     output:
         "results/Misc/sam_vit_h_4b8939.pth"
+    log:
+        stdout="logs/download_sam_weights/log.stdout",
+        stderr="logs/download_sam_weights/log.stderr"
     #container:
     #    config["container"]
     shell:
-        "cd results/Misc && wget https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth"
+        "cd results/Misc && wget https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth > {log.stdout} 2> {log.stderr}"
         
 
 rule image_registration_evaluation:
@@ -520,17 +525,35 @@ rule image_registration_evaluation:
         postIMS_postIMSmask= "results/{project_name}/data/registration_metric/{sample}_postIMS_reg_metrics.tiff",
         preIMS_preIMSmask= "results/{project_name}/data/registration_metric/{sample}_preIMS_reg_metrics.tiff",
         postIMC_postIMCmask= "results/{project_name}/data/registration_metric/{sample}_postIMC_reg_metrics.tiff"
+    log:
+        stdout="logs/image_registration_evaluation/{project_name}_{sample}.stdout",
     conda:
         "env/image_registration_qc.yaml"
     script:
         "scripts/image_registration_evaluation_SAM.py"
         
 
+rule image_registration_evaluation_IMS_to_postIMS:
+    input:
+        imsmicrolink_meta=lambda wildcards: os.path.join("results",wildcards.project_name, "data","IMS", get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"])).replace("-coords.h5","-meta.json")),
+    output: 
+        IMS_to_postIMS_error="results/{project_name}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics.json"
+    log:
+        stdout="logs/image_registration_evaluation_IMS_to_postIMS/{project_name}_{sample}.stdout",
+    container:
+        config["container"]
+    script:
+        "scripts/image_registration_evaluation_microlink.py"
+    
+
 rule combine_image_registration_evaluation_results:
     input:
-        registration_metrics=lambda wildcards: expand("results/{{project_name}}/data/registration_metric/{sample}_reg_metrics.csv",sample=get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all = True))
+        registration_metrics=lambda wildcards: expand("results/{{project_name}}/data/registration_metric/{sample}_reg_metrics.csv",sample=get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all = True)),
+        IMS_to_postIMS_error=lambda wildcards: expand("results/{{project_name}}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics.json",sample=get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all = True))
     output:
         registration_metrics_combined="results/{project_name}/data/registration_metric/{project_name}_reg_metrics_combined.csv"
+    log:
+        stdout="logs/combine_image_registration_evaluation_results/{project_name}.stdout",
     container:
         config["container"]
     script:
