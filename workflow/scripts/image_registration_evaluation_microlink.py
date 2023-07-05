@@ -26,8 +26,7 @@ t2 = np.asarray(j0["Inverse Affine transformation matrix (xy,microns)"])
 
 def mean_error(A, B, T):
     A_trans = np.matmul(A, T[:2,:2]) + T[:2,2]
-    dists = [ np.linalg.norm(A_trans[i,:]-B[i,:]) for i in range(A.shape[0])]
-    return np.mean(dists)
+    return np.mean(np.sqrt(np.sum((A_trans-B)**2,axis=1)))
 
 logging.info("Apply transformations and calculate error")
 e1 = mean_error(IMS, postIMS, t1)
