@@ -508,7 +508,7 @@ rule download_sam_weights:
     #container:
     #    config["container"]
     shell:
-        "cd results/Misc && wget https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth > {log.stdout} 2> {log.stderr}"
+        "cd results/Misc && wget https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth > ../../{log.stdout} 2> ../../{log.stderr}"
         
 
 rule image_registration_evaluation:
