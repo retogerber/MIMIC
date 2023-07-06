@@ -148,7 +148,7 @@ postIMCw = prepare_image_for_sam(postIMCw, rescale)
 postIMC = np.stack([postIMCw, postIMCw, postIMCw], axis=2)
 postIMCr = remove(postIMC, only_mask=True, session=rembg_session)
 postIMCmasks = postIMCr>127
-postIMCmasks = np.stack([skimage.morphology.remove_small_holes(postIMCmasks,1500**2*np.pi*rescale)])
+postIMCmasks = np.stack([skimage.morphology.remove_small_holes(postIMCmasks,100**2*np.pi*rescale)])
 
 logging.info("preIMS mask extraction")
 # preIMS
@@ -157,7 +157,7 @@ preIMSw = prepare_image_for_sam(preIMSw, rescale)
 preIMS = np.stack([preIMSw, preIMSw, preIMSw], axis=2)
 preIMSr = remove(preIMS, only_mask=True, session=rembg_session)
 preIMSmasks = preIMSr>127
-preIMSmasks = np.stack([skimage.morphology.remove_small_holes(preIMSmasks,1500**2*np.pi*rescale)])
+preIMSmasks = np.stack([skimage.morphology.remove_small_holes(preIMSmasks,100**2*np.pi*rescale)])
 
 logging.info("postIMS mask extraction")
 # postIMS
@@ -227,9 +227,45 @@ prop_preIMS_notin_postIMS = np.sum(np.logical_and(preIMSmask, np.logical_not(pos
 
 
 logging.info("Calculate Centroids")
-postIMScent = skimage.measure.regionprops(postIMSmask.astype(np.uint8))[0].centroid
-postIMCcent = skimage.measure.regionprops(postIMCmask.astype(np.uint8))[0].centroid
-preIMScent = skimage.measure.regionprops(preIMSmask.astype(np.uint8))[0].centroid
+
+# import matplotlib.pyplot as plt
+# fig, ax = plt.subplots(nrows=1, ncols=2)
+# ax[0].imshow(postIMSmask[:,:,0])
+# ax[0].set_title("postIMS")
+# ax[1].imshow(postIMSmaskm)
+# ax[1].set_title("postIMC")
+# plt.show()
+
+def smooth_mask(mask, disklen):
+    tmmask = np.zeros((mask.shape[0]+2*disklen+10,mask.shape[1]+2*disklen+10,1))
+    tmmask[disklen:(mask.shape[0]+disklen),disklen:(mask.shape[1]+disklen),:] = mask
+    tmmaskm = skimage.filters.rank.mean(tmmask[:,:,0].astype(np.uint8)*255, footprint=skimage.morphology.disk(disklen))
+    maskm = np.stack([tmmaskm[disklen:(mask.shape[0]+disklen),disklen:(mask.shape[1]+disklen)]],axis=2)
+    maskm = maskm.astype(np.double)
+    maskm[np.logical_not(mask[:,:,0])] = np.nan
+    maskm = normalize_image(maskm)*255
+    maskm = maskm.astype(np.uint8)
+    return maskm
+
+disklen = 200
+postIMSmaskm = smooth_mask(postIMSmask, disklen)
+regpoppostIMS = skimage.measure.regionprops(postIMSmask.astype(np.uint8)[:,:,0],postIMSmaskm)
+postIMScentw = regpoppostIMS[0].centroid_weighted
+postIMScentw = (postIMScentw[0][0],postIMScentw[1][0])
+postIMScent = regpoppostIMS[0].centroid
+
+postIMCmaskm = smooth_mask(postIMCmask, disklen)
+regpoppostIMC = skimage.measure.regionprops(postIMCmask.astype(np.uint8)[:,:,0],postIMCmaskm)
+postIMCcentw = regpoppostIMC[0].centroid_weighted
+postIMCcentw = (postIMCcentw[0][0],postIMCcentw[1][0])
+postIMCcent = regpoppostIMC[0].centroid
+
+preIMSmaskm = smooth_mask(preIMSmask, disklen)
+regpoppreIMS = skimage.measure.regionprops(preIMSmask.astype(np.uint8)[:,:,0],preIMSmaskm)
+preIMScentw = regpoppreIMS[0].centroid_weighted
+preIMScentw = (preIMScentw[0][0],preIMScentw[1][0])
+preIMScent = regpoppreIMS[0].centroid
+
 def dist_centroids(cent1, cent2, rescale):
     euclid_dist_pixel = ((cent1[0]-cent2[0])**2 + (cent1[1]-cent2[1])**2)**0.5
     euclid_dist = euclid_dist_pixel*rescale
@@ -240,7 +276,9 @@ postIMS_to_preIMS_dist = dist_centroids(postIMScent, preIMScent, rescale)
 postIMS_to_postIMC_dist = dist_centroids(postIMScent, postIMCcent, rescale)
 preIMS_to_postIMC_dist = dist_centroids(preIMScent, postIMCcent, rescale)
 
-
+postIMS_to_preIMS_dist_weighted = dist_centroids(postIMScentw, preIMScentw, rescale)
+postIMS_to_postIMC_dist_weighted = dist_centroids(postIMScentw, postIMCcentw, rescale)
+preIMS_to_postIMC_dist_weighted = dist_centroids(preIMScentw, postIMCcentw, rescale)
 # t1 = np.logical_and(mask_image1, np.logical_not(mask_image2))
 # t2 = np.logical_and(mask_image2, np.logical_not(mask_image1))
 
@@ -271,8 +309,11 @@ df = pd.DataFrame(data = {
     'postIMS_to_preIMS_area_ratio': postIMS_to_preIMS_area_ratio,
     'preIMS_to_postIMC_area_ratio': preIMS_to_postIMC_area_ratio,
     'euclidean_distance_centroids_postIMS_to_preIMS': postIMS_to_preIMS_dist,
+    'euclidean_distance_centroids_weighted_postIMS_to_preIMS': postIMS_to_preIMS_dist_weighted,
     'euclidean_distance_centroids_postIMS_to_postIMC': postIMS_to_postIMC_dist,
+    'euclidean_distance_centroids_weighted_postIMS_to_postIMC': postIMS_to_postIMC_dist_weighted,
     'euclidean_distance_centroids_preIMS_to_postIMC': preIMS_to_postIMC_dist,
+    'euclidean_distance_centroids_weighted_preIMS_to_postIMC': preIMS_to_postIMC_dist_weighted,
     'proportion_postIMS_mask_in_postIMC': prop_postIMS_notin_postIMC,
     'proportion_preIMS_mask_in_postIMS': prop_preIMS_notin_postIMS,
     'proportion_postIMC_mask_in_postIMS': prop_postIMC_notin_postIMS,
