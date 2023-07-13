@@ -50,7 +50,8 @@ unique_imzml_project[0] = [ os.path.splitext(e)[0] for e in unique_imzml_project
 
 #image_types=["postIMS","preIMS","HE","postIMC","preIMC"]
 image_types=["postIMS","preIMS","postIMC","preIMC"]
-
+#coordsfiles = [ os.path.join("results",project_names[i], "data","IMS", get_column_entry_from_metadata_two_conditions(sample_names[i], project_names[i], "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))) for i in range(len(sample_names))]
+#imzml_base = [get_column_entry_from_metadata_two_conditions(sample_names[i], project_names[i], "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"])).replace("-IMSML-coords.h5","").replace("postIMS_to_IMS_","") for i in range(len(sample_names))]
 rule all:
     input:
         #expand("results/{project_name}/data/{image_type}/{project_name}_{image_type}.ome.tiff", project_name=project_names, image_type=image_types),
@@ -63,7 +64,9 @@ rule all:
         #expand("results/{project_name}/data/postIMC/{sample}_transformed.ome.tiff",zip,project_name=project_names[4:], sample=sample_names[4:]),
         #expand("results/{project_name}/data/postIMS/{project_name}_postIMS_reduced.ome.tiff", project_name=project_names[4:]),
         #expand("results/{project_name}/data/registration_metric/{sample}_reg_metrics.csv",zip,project_name=project_names[4:], sample=sample_names[4:]),
-        expand("results/{project_name}/data/registration_metric/{project_name}_reg_metrics_combined.csv", project_name=project_names)
+        expand("results/{project_name}/data/registration_metric/{project_name}_reg_metrics_combined.csv", project_name=project_names),
+        #expand("results/{project_name}/data/IMS/{project_name}_{imzml_base}_IMS_to_postIMS_matches.csv",zip, project_name=project_names, imzml_base = imzml_base),
+        #expand("results/{project_name}/data/IMS/postIMS_to_IMS_{project_name}_{sample}-IMSML-coords.h5",zip, project_name=project_names, sample=sample_names)
         
 
 
@@ -497,6 +500,70 @@ use rule downscale_postIMS as downscale_preIMS with:
     output:
         postIMS_downscaled="results/{project_name}/data/preIMS/{project_name}-preIMS_to_postIMS_registered_reduced.ome.tiff"
     
+rule extract_core_mask_from_postIMS:
+    threads: 4
+    params:
+        IMS_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMS_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
+        IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMC_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
+        IMS_shrink_factor=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMS_shrink_factor", "project_name", read_sample_metadata(config["sample_metadata"]))
+    input:
+        postIMS_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced.ome.tiff"
+    output:
+        postIMSmask_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced_mask.ome.tiff"
+    log:
+        stdout="logs/extract_core_mask_from_postIMS/{project_name}.stdout"
+    conda:
+        "env/image_registration_qc.yaml"
+    script:
+        "scripts/image_registration_IMS_to_preIMS_0.py"
+
+
+rule register_IMS_to_postIMS:
+    params:
+        IMS_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMS_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
+        IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMC_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
+        IMS_shrink_factor=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMS_shrink_factor", "project_name", read_sample_metadata(config["sample_metadata"])),
+        IMS_rotation_angle=lambda wildcards: get_column_entry_from_metadata_two_conditions(wildcards.project_name, "IMS_"+wildcards.imzml_base+".imzML", "IMS_rotation_angle", "project_name", "imzml_filename", read_sample_metadata(config["sample_metadata"]))
+    input:
+        postIMSmask_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced_mask.ome.tiff",
+        imzml=lambda wildcards: os.path.join("results",wildcards.project_name,"data","IMS", f"IMS_{wildcards.imzml_base}.imzML"),
+        sample_metadata=config["sample_metadata"],
+        IMCmask=lambda wildcards: expand("results/{{project_name}}/data/IMC_mask/{sample}_transformed.ome.tiff",sample=get_column_entry_from_metadata_two_conditions("IMS_"+wildcards.imzml_base+".imzML", wildcards.project_name, "sample_name", "imzml_filename", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True))
+    output:
+        IMS_to_postIMS_matches="results/{project_name}/data/IMS/{project_name}_{imzml_base}_IMS_to_postIMS_matches.csv"
+    log:
+        stdout="logs/register_IMS_to_postIMS/{project_name}_{imzml_base}.stdout",
+    conda:
+        "env/image_registration_qc.yaml"
+    script:
+        "scripts/image_registration_IMS_to_preIMS_1.py"
+
+
+rule register_IMS_to_postIMS_single_core:
+    params:
+        IMS_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMS_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
+        IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMC_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
+        IMS_shrink_factor=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMS_shrink_factor", "project_name", read_sample_metadata(config["sample_metadata"])),
+        IMS_rotation_angle=lambda wildcards: get_column_entry_from_metadata_two_conditions(wildcards.project_name,wildcards.sample, "IMS_rotation_angle", "project_name", "sample_name", read_sample_metadata(config["sample_metadata"]))
+    input:
+        postIMS_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced.ome.tiff",
+        postIMSmask_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced_mask.ome.tiff",
+        imzml=lambda wildcards:  os.path.join("results",wildcards.project_name,"data","IMS", get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "imzml_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))),
+        IMCmask="results/{project_name}/data/IMC_mask/{sample}_transformed.ome.tiff",
+        IMS_to_postIMS_matches=lambda wildcards: f'results/{wildcards.project_name}/data/IMS/{wildcards.project_name}_{get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "imzml_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"])).replace("IMS_","").replace(".imzML","")}_IMS_to_postIMS_matches.csv', 
+    output:
+        IMS_to_postIMS_error="results/{project_name}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics_auto.json",
+        IMS_to_postIMS_error_image="results/{project_name}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics_auto.png",
+        imsml_coords_fp="results/{project_name}/data/IMS/postIMS_to_IMS_{project_name}_{sample}-IMSML-coords.h5"
+    log:
+        stdout="logs/register_IMS_to_postIMS_single_core/{project_name}_{sample}.stdout",
+    conda:
+        "env/image_registration_qc.yaml"
+    script:
+        "scripts/image_registration_IMS_to_preIMS_2.py"
+
+
+
 
 
 rule download_sam_weights:
@@ -549,7 +616,7 @@ rule image_registration_evaluation_IMS_to_postIMS:
 rule combine_image_registration_evaluation_results:
     input:
         registration_metrics=lambda wildcards: expand("results/{{project_name}}/data/registration_metric/{sample}_reg_metrics.csv",sample=get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all = True)),
-        IMS_to_postIMS_error=lambda wildcards: expand("results/{{project_name}}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics.json",sample=get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all = True))
+        IMS_to_postIMS_error=lambda wildcards: expand("results/{{project_name}}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics_auto.json",sample=get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all = True))
     output:
         registration_metrics_combined="results/{project_name}/data/registration_metric/{project_name}_reg_metrics_combined.csv"
     log:
@@ -603,7 +670,9 @@ rule calculate_cell_overlap_with_IMS:
         IMS_shrink_factor=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMS_shrink_factor", "project_name", read_sample_metadata(config["sample_metadata"]))
     threads: 1
     input:
-        imsml_coords_fp=lambda wildcards: os.path.join("results",wildcards.project_name, "data","IMS", get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))),
+        imsml_coords_fp = choose_imsml_coordsfile,
+        #imsml_coords_fp=lambda wildcards: os.path.join("results",wildcards.project_name, "data","IMS", get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))),
+        #imsml_coords_fp="results/{project_name}/data/IMS/postIMS_to_IMS_{project_name}_{sample}-IMSML-coords.h5",
         cell_indices="results/{project_name}/data/IMC_mask/{sample}_transformed_cell_indices.pkl",
         IMCmask_transformed="results/{project_name}/data/IMC_mask/{sample}_transformed_cell_masks.geojson"
     output:

@@ -2,8 +2,27 @@ from tifffile import imread
 from tifffile import imwrite
 from pandas import read_csv
 import numpy as np
-import sys
 from scipy.signal import medfilt2d
+import sys,os
+import logging, traceback
+logging.basicConfig(filename=snakemake.log["stdout"],
+                    level=logging.INFO,
+                    format='%(asctime)s [%(levelname)s] %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    )
+import logging, traceback
+logging.basicConfig(filename=snakemake.log["stdout"],
+                    level=logging.INFO,
+                    format='%(asctime)s [%(levelname)s] %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    )
+from logging_utils import handle_exception, StreamToLogger
+sys.excepthook = handle_exception
+sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
+sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+
+logging.info("Start")
+
 
 #imname = sys.argv[1] 
 imname = snakemake.input["IMC"]
@@ -17,10 +36,13 @@ imaggrname = snakemake.output["IMC_aggr"]
 #channels_to_use = ["E-cadherin","ST6GAL1","Collagen-1","HepPar1","Seg1","Seg2","Seg3"]
 channels_to_use = snakemake.params["IMC_channels_for_aggr"]
 
+logging.info("Read csv")
 df = read_csv(dfname)
+logging.info("Read Image")
 im = imread(imname).astype(np.float64)
 
 
+logging.info("Process Image")
 chind = [np.where(df["name"] == ch)[0][0] for ch in channels_to_use]
 
 imsub = im[chind,:,:]
@@ -51,4 +73,7 @@ imagg_filt/=(maxval-minval)
 imagg_filt*=(2**8-1)
 imagg_filt=imagg_filt.astype(np.uint8)
 
+logging.info("Save Image")
 imwrite(imaggrname, imagg_filt)
+
+logging.info("Finished")

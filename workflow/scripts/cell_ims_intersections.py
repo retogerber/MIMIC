@@ -9,8 +9,19 @@ from shapely import geometry, affinity
 from scipy.spatial.distance import cdist
 import warnings
 from wsireg.reg_shapes import RegShapes
+import sys,os
+import logging, traceback
+logging.basicConfig(filename=snakemake.log["stdout"],
+                    level=logging.INFO,
+                    format='%(asctime)s [%(levelname)s] %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    )
+from logging_utils import handle_exception, StreamToLogger
+sys.excepthook = handle_exception
+sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
+sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 
-
+logging.info("Start")
 
 
 def px_to_box(x: Union[int, float], y: Union[int, float], px_width: Union[int, float]):
@@ -29,12 +40,14 @@ def compute_intersections(
 ):
     """Compute intersections in multi-scale spatial domain using polygons"""
 
+    logging.info("Read cells to shapes")
     rs = RegShapes(cells_fp)
     # rs.shape_data.pop(0)
     # rs.shape_data_gj.pop(0)
 
     resolution_factor = ims_spacing / micro_spacing
 
+    logging.info("Read h5 coords file")
     with h5py.File(imsml_coords_fp, "r") as f:
         # if in imsmicrolink IMS was the target
         if "xy_micro_physical" in [key for key, val in f.items()]:
@@ -49,8 +62,10 @@ def compute_intersections(
             micro_x = (padded[:, 0] * resolution_factor)
             micro_y = (padded[:, 1] * resolution_factor)
 
+    logging.info("Create cell polygons")
     cell_polygons = [geometry.Polygon(r["array"]) for r in rs.shape_data]
     assert len(cell_polygons) == len(cell_indices)
+    logging.info("Create IMS pixel polygons")
     pixel_boxes = [px_to_box(x, y, resolution_factor) for x, y in zip(micro_x, micro_y)]
     if ims_shrink_factor:
         pixel_boxes = [
@@ -58,9 +73,11 @@ def compute_intersections(
             for px in pixel_boxes
         ]
 
+    logging.info("Calculate centroids")
     centroids = np.stack([np.asarray(p.centroid.xy).transpose() for p in pixel_boxes])
     centroids = np.squeeze(centroids)
 
+    logging.info("Calculate overlaps")
     cell_overlaps = []
     for idx, cell in enumerate(cell_polygons):
         cell_centroid = np.asarray(cell.centroid.xy).transpose()
@@ -104,10 +121,12 @@ ims_shrink_factor = snakemake.params["IMS_shrink_factor"]
 
 
 
+logging.info("Read pickle")
 cell_indices = pickle.load(open(cell_indices_fp, "rb"))
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
+    logging.info("Compute intersections")
     cell_overlap_df = compute_intersections(
         cell_shapes_fp,
         imsml_coords_fp,
@@ -118,7 +137,10 @@ with warnings.catch_warnings():
     )
 
 
+logging.info("Save to csv")
 cell_overlap_df.to_csv(
     output_csv,
     index=False,
 )
+
+logging.info("Finished")

@@ -3,10 +3,27 @@ from wsireg.reg_transforms.reg_transform_seq import RegTransformSeq
 from wsireg.reg_images.loader import reg_image_loader
 import numpy as np
 from tifffile import imread
-import os
 from shapely.geometry import shape
 import json
+import sys,os
+import logging, traceback
+logging.basicConfig(filename=snakemake.log["stdout"],
+                    level=logging.INFO,
+                    format='%(asctime)s [%(levelname)s] %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    )
+import logging, traceback
+logging.basicConfig(filename=snakemake.log["stdout"],
+                    level=logging.INFO,
+                    format='%(asctime)s [%(levelname)s] %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    )
+from logging_utils import handle_exception, StreamToLogger
+sys.excepthook = handle_exception
+sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
+sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 
+logging.info("Start")
 
 # microscopy_pixelsize = 0.22537
 microscopy_pixelsize = snakemake.params["microscopy_pixelsize"]
@@ -26,12 +43,15 @@ img_out = snakemake.output["postIMC_transformed"]
 img_basename = os.path.basename(img_out).split(".")[0]
 img_dirname = os.path.dirname(img_out)
 
+logging.info("Read Image")
 # read image
 img=imread(img_file)
 
+logging.info("Read json and create shape")
 # get info of IMC location
 IMC_geojson = json.load(open(IMC_geojson_file, "r"))
 IMC_geojson_polygon = shape(IMC_geojson['geometry'])
+logging.info("Create bounding box")
 # bounding box
 bb1 = IMC_geojson_polygon.bounds
 # reorder axis
@@ -52,16 +72,21 @@ if bbn[2]>img.shape[0]/microscopy_pixelsize:
 if bbn[3]>img.shape[1]/microscopy_pixelsize:
     bbn[3] = img.shape[1]/microscopy_pixelsize
 
+logging.info("Create new image")
 # create empty image and fill in core
 imgnew = img*0
 imgnew[bbn[0]:bbn[2],bbn[1]:bbn[3]] = img[bbn[0]:bbn[2],bbn[1]:bbn[3]]
 
+logging.info("Setup transformation")
 # setup transformation sequence
 rtsn=RegTransformSeq(transform_file_postIMC_to_postIMS)
 rtsn.set_output_spacing((microscopy_pixelsize,microscopy_pixelsize))
 rtsn.set_output_spacing((1.0,1.0))
 
+logging.info("Transform and save image")
 # transform and save image
 ri = reg_image_loader(imgnew, microscopy_pixelsize)
 writer = OmeTiffWriter(ri, reg_transform_seq=rtsn)
 writer.write_image_by_plane(img_basename, output_dir=img_dirname, tile_size=1024)
+
+logging.info("Finished")

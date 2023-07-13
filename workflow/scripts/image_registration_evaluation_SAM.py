@@ -8,6 +8,7 @@ import numpy as np
 import tifffile
 import zarr
 from wsireg.utils.im_utils import grayscale
+from image_registration_IMS_to_preIMS_utils import normalize_image, readimage_crop, prepare_image_for_sam, apply_filter, preprocess_mask, get_max_dice_score, smooth_mask, dist_centroids,sam_core
 import sys,os
 import logging, traceback
 logging.basicConfig(filename=snakemake.log["stdout"],
@@ -62,79 +63,6 @@ CHECKPOINT_PATH = snakemake.input["sam_weights"]
 
 sam = sam_model_registry[MODEL_TYPE](checkpoint=CHECKPOINT_PATH)
 sam.to(device=DEVICE)
-
-def normalize_image(image):
-    return (image-np.nanmin(image))/(np.nanmax(image)- np.nanmin(image))
-
-def readimage_crop(image: str, bbox: list[int]):
-    store = tifffile.imread(image, aszarr=True)
-    z = zarr.open(store, mode='r')
-    image_crop = z[0][bbox[0]:bbox[2],bbox[1]:bbox[3],:]
-    return image_crop
-
-def prepare_image_for_sam(image: np.ndarray, scale): 
-    img = grayscale(image, True)
-    img = skimage.transform.rescale(img, scale, preserve_range = True)   
-    img = (img-np.nanmin(img))/(np.nanmax(img)- np.nanmin(img))
-    img = skimage.exposure.equalize_adapthist(img)
-    img = normalize_image(img)*255
-    img = img.astype(np.uint8)
-    return img
-
-def apply_filter(image: np.ndarray):
-    img = skimage.filters.sobel(image)
-    img = normalize_image(img)*255
-    img = img.astype(np.uint8)
-    img = np.stack([img, img, img], axis=2)
-    return img
-
-
-def preprocess_mask(mask: np.ndarray, image_resolution, opening_size=5):
-    mask1tmp = skimage.morphology.isotropic_opening(mask, np.ceil(image_resolution*5))
-    mask1tmp, count = skimage.measure.label(mask1tmp, connectivity=2, return_num=True)
-    counts = np.unique(mask1tmp, return_counts = True)
-    countsred = counts[1][counts[0] > 0]
-    indsred = counts[0][counts[0] > 0]
-    maxind = indsred[countsred == np.max(countsred)][0]
-    mask1tmp = mask1tmp == maxind
-    return mask1tmp
-
-
-def sam_core(img: np.ndarray, sam):
-    predictor = SamPredictor(sam)
-    predictor.set_image(img)
-
-    input_points = np.array([
-        [img.shape[0]//2,img.shape[1]//2]
-        ])
-    input_labels = np.array([1])
-
-    masks, scores, logits = predictor.predict(
-        point_coords=input_points,
-        point_labels=input_labels,
-        multimask_output=True,
-    )
-    return masks, scores
-
-def get_max_dice_score(masks1, masks2):
-    dice_scores = np.zeros((masks1.shape[0],masks2.shape[1]))
-    for i in range(masks1.shape[0]):
-        for j in range(masks2.shape[0]):
-            mask_image1 = masks1[i,:,:]
-            mask_image2 = masks2[j,:,:]
-
-            union = np.logical_and(mask_image1,mask_image2)
-            dice_score = (2*np.sum(union))/(np.sum(mask_image1)+np.sum(mask_image2))
-            dice_scores[i,j] = dice_score
-
-    indices = np.where(dice_scores == dice_scores.max())
-    h, w = masks1.shape[-2:]
-    mask_image1 = masks1[indices[0][0]].reshape(h,w,1)
-    h, w = masks2.shape[-2:]
-    mask_image2 = masks2[indices[1][0]].reshape(h,w,1)
-
-    return mask_image1, mask_image2, dice_scores[indices[0][0],indices[1][0]]
-
 logging.info("postIMC bounding box extraction")
 # read IMC to get bounding box (image was cropped in previous step)
 postIMC = skimage.io.imread(postIMC_file)
@@ -236,17 +164,6 @@ logging.info("Calculate Centroids")
 # ax[1].set_title("postIMC")
 # plt.show()
 
-def smooth_mask(mask, disklen):
-    tmmask = np.zeros((mask.shape[0]+2*disklen+10,mask.shape[1]+2*disklen+10,1))
-    tmmask[disklen:(mask.shape[0]+disklen),disklen:(mask.shape[1]+disklen),:] = mask
-    tmmaskm = skimage.filters.rank.mean(tmmask[:,:,0].astype(np.uint8)*255, footprint=skimage.morphology.disk(disklen))
-    maskm = np.stack([tmmaskm[disklen:(mask.shape[0]+disklen),disklen:(mask.shape[1]+disklen)]],axis=2)
-    maskm = maskm.astype(np.double)
-    maskm[np.logical_not(mask[:,:,0])] = np.nan
-    maskm = normalize_image(maskm)*255
-    maskm = maskm.astype(np.uint8)
-    return maskm
-
 disklen = 200
 postIMSmaskm = smooth_mask(postIMSmask, disklen)
 regpoppostIMS = skimage.measure.regionprops(postIMSmask.astype(np.uint8)[:,:,0],postIMSmaskm)
@@ -265,11 +182,6 @@ regpoppreIMS = skimage.measure.regionprops(preIMSmask.astype(np.uint8)[:,:,0],pr
 preIMScentw = regpoppreIMS[0].centroid_weighted
 preIMScentw = (preIMScentw[0][0],preIMScentw[1][0])
 preIMScent = regpoppreIMS[0].centroid
-
-def dist_centroids(cent1, cent2, rescale):
-    euclid_dist_pixel = ((cent1[0]-cent2[0])**2 + (cent1[1]-cent2[1])**2)**0.5
-    euclid_dist = euclid_dist_pixel*rescale
-    return euclid_dist
 
 logging.info("Calculate Mean error of centroids")
 postIMS_to_preIMS_dist = dist_centroids(postIMScent, preIMScent, rescale)

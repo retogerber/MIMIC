@@ -6,6 +6,27 @@ from shapely import geometry
 import numpy as np
 import pandas as pd
 
+import sys,os
+import logging, traceback
+logging.basicConfig(filename=snakemake.log["stdout"],
+                    level=logging.INFO,
+                    format='%(asctime)s [%(levelname)s] %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    )
+import logging, traceback
+logging.basicConfig(filename=snakemake.log["stdout"],
+                    level=logging.INFO,
+                    format='%(asctime)s [%(levelname)s] %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    )
+from logging_utils import handle_exception, StreamToLogger
+sys.excepthook = handle_exception
+sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
+sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+
+logging.info("Start")
+
+
 def compute_cell_centroids(
     cells_fp: Union[Path, str],
     cell_indices: List[int],
@@ -37,12 +58,17 @@ cell_indices_fp = snakemake.input["cell_indices"]
 
 output_csv = snakemake.output["cell_centroids"]
 
+logging.info("Read pickle")
 cell_indices = pickle.load(open(cell_indices_fp, "rb"))
+logging.info("Compute centroids")
 cell_centroids_df = compute_cell_centroids(
     cell_shapes_fp,
     cell_indices
 )
+logging.info("Save centroids")
 cell_centroids_df.to_csv(
     output_csv,
     index=False,
 )
+
+logging.info("Finished")

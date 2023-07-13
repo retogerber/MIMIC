@@ -111,5 +111,13 @@ def choose_postIMC_to_postIMS_transform(wildcards):
             return outfile
 
 
+def choose_imsml_coordsfile(wildcards):
+        filename = get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
+        filename = str(filename)
+        if filename.strip() == "":
+            filename_out = f"results/{wildcards.project_name}/data/IMS/postIMS_to_IMS_{wildcards.project_name}_{wildcards.sample}-IMSML-coords.h5"
+        else:
+            filename_out = filename
+        return filename_out
 
 
