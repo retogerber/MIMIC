@@ -1,4 +1,6 @@
 import pandas as pd
+from sklearn.neighbors import KDTree
+import pycpd
 import SimpleITK as sitk
 import napari_imsmicrolink
 import skimage
@@ -21,25 +23,32 @@ sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 logging.info("Start")
 
 # parameters
-# stepsize = 30
+stepsize = 30
 stepsize = float(snakemake.params["IMS_pixelsize"])
-# pixelsize = 24
+pixelsize = 24
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
-# resolution = 1
+resolution = 1
 resolution = float(snakemake.params["IMC_pixelsize"])
 rotation_imz = 180
 rotation_imz = float(snakemake.params["IMS_rotation_angle"])
 assert(rotation_imz in [-270,-180,-90,0,90,180,270])
 
 # postIMSr_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/postIMS/test_split_ims_postIMS_reduced_mask.ome.tiff"
+# postIMSr_file = "/home/retger/Downloads/cirrhosis_TMA_postIMS_reduced_mask.ome.tiff"
 postIMSr_file = snakemake.input["postIMSmask_downscaled"]
 # imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/IMS_test_split_ims_2.imzML"
+# imzmlfile = "/home/retger/Downloads/cirrhosis_TMA_IMS.imzML"
 imzmlfile = snakemake.input["imzml"]
 # imc_mask_files = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
+# imc_mask_files = [f"/home/retger/Downloads/Cirrhosis-TMA-5_New_Detector_0{i}_transformed.ome.tiff" for i in ["01","02","03","04","05","06","07","08","09","11","12","13","14","15","16"]]
+# imc_mask_files = imc_mask_files + [f"/home/retger/Downloads/Cirrhosis-TMA-5_01062022_0{i}_transformed.ome.tiff" for i in ["05","06","07","08","09"]]
+# imc_mask_files = imc_mask_files + [f"/home/retger/Downloads/Cirrhosis_TMA_5_01262022_0{i}_transformed.ome.tiff" for i in ["01","02","03","04","05"]]
+
 imc_mask_files = snakemake.input["IMCmask"]
 if isinstance(imc_mask_files, str):
     imc_mask_files = [imc_mask_files]
 # sample_metadata = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/config/sample_metadata.csv"
+# sample_metadata = "/home/retger/Downloads/sample_metadata.csv"
 sample_metadata = snakemake.input["sample_metadata"]
 
 # output_table = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/IMS_to_postIMS_matches.csv"
@@ -57,6 +66,7 @@ for imcmaskfile in imc_mask_files:
     imcbboxls.append(skimage.measure.regionprops(imc)[0].bbox)
 
 imc_samplenames = [ os.path.splitext(os.path.splitext(os.path.split(f)[1])[0])[0].replace("_transformed","") for f in imc_mask_files]
+# imc_projects = ["cirrhosis_TMA"]*len(imc_samplenames)
 imc_projects = [ os.path.split(os.path.split(os.path.split(os.path.split(f)[0])[0])[0])[1] for f in imc_mask_files]
 
 
@@ -70,13 +80,24 @@ for i in range(len(imc_samplenames)):
     core_names.append(df_sub["core_name"].tolist()[0])
 
 
+
 logging.info("Read postIMS mask")
 postIMSr = skimage.io.imread(postIMSr_file)
 
 # expand mask
-outermask = skimage.morphology.isotropic_dilation(postIMSr, (1/resolution)*stepsize*2)
-# measure regions
-postIMSregin = skimage.measure.label(outermask.astype(np.uint8))
+# # outermask = skimage.morphology.isotropic_dilation(postIMSr, (1/resolution)*stepsize*2)
+# postIMSlbs = skimage.measure.label(postIMSr.astype(np.uint8))
+# postIMSlbs = postIMSlbs.astype(np.uint8)
+# # outermask = skimage.morphology.dilation(postIMSlbs, skimage.morphology.disk((1/resolution)*stepsize*2))
+# # rank maximum filter instead of dilation for speedup
+# outermask = skimage.filters.rank.maximum(postIMSlbs, skimage.morphology.disk((1/resolution)*stepsize*2))
+# import matplotlib.pyplot as plt
+# plt.imshow(outermask)
+# plt.show()
+# # measure regions
+# postIMSregin = skimage.measure.label(outermask.astype(np.uint8))
+
+postIMSregin = skimage.measure.label(postIMSr.astype(np.uint8))
 
 logging.info("Find IMC to postIMS overlap")
 postIMSregions = list()
@@ -85,10 +106,12 @@ for bb in imcbboxls:
     tmpuqs = tmpuqs[tmpuqs>0]
     assert(len(tmpuqs)==1)
     postIMSregions.append(tmpuqs[0])
+del tmpuqs
 
 regpops = skimage.measure.regionprops(postIMSregin)
 postIMS_pre_bbox = [r.bbox for r in regpops]
 postIMS_pre_labels = [r.label for r in regpops]
+del regpops
 
 logging.info("Find global bounding box of cores")
 tmpbool = np.array([p in np.array(postIMSregions) for p in postIMS_pre_labels])
@@ -100,6 +123,7 @@ global_bbox = [
     np.max([p[2] for p in postIMS_pre_bbox]),
     np.max([p[3] for p in postIMS_pre_bbox]),
 ]
+del tmpbool
 
 
 logging.info("Read imzML file")
@@ -113,11 +137,20 @@ imzimg = imz._make_pixel_map_at_ims(randomize=False, map_type="minimized")
 imzimgres = skimage.transform.rescale(imzimg, stepsize*resolution, preserve_range = True)   
 imzimgres[imzimgres>0] = 255 
 
+# create imz region image
+y_extent, x_extent, y_coords, x_coords = imz._get_xy_extents_coords(map_type="minimized")
+imzregions = np.zeros((y_extent, x_extent), dtype=np.uint8)
+imzregions[y_coords, x_coords] = imz.regions
+imzregions = skimage.transform.rotate(imzregions,rotation_imz, preserve_range=True)
+imzregions = np.round(imzregions)
+imzuqregs = np.unique(imz.regions)
+del imz
+
 logging.info("Apply rotation")
 # rotate 180 degrees
 imzimg = skimage.transform.rotate(imzimg,rotation_imz, preserve_range=True)
-imzimgres = skimage.transform.rotate(imzimgres,rotation_imz, preserve_range=True)
-
+imzimgres = skimage.transform.rotate(imzimgres,rotation_imz, preserve_range=True).astype(np.uint8)
+imzimgres[imzimgres>0] = 255
 
 logging.info("Cut postIMS mask to global bounding box")
 postIMSrcut = postIMSr[global_bbox[0]:global_bbox[2],global_bbox[1]:global_bbox[3]]
@@ -128,7 +161,69 @@ boolimgls = list()
 for region in postIMSregions:
     boolimgls.append(postIMSregincut == region)
 boolimg = np.sum(np.stack(boolimgls),axis=0).astype(bool)
+del boolimgls
 postIMSrcut[np.logical_not(boolimg)] = 0
+
+# get centroids of imz regions
+imzrps = skimage.measure.regionprops(skimage.measure.label(imzimgres))
+imzarea = np.array([rp.area for rp in imzrps])
+too_small = imzarea < np.mean(imzarea) - 3*np.std(imzarea)
+imzrps = np.array(imzrps)[np.logical_not(too_small)]
+imzcents = np.array([[rp.centroid[0],rp.centroid[1]] for rp in imzrps])
+del imzrps, imzarea, too_small
+
+# get centroids of postIMS regions
+tmpi = postIMSregincut
+tmpi[np.logical_not(boolimg)] = 0
+pirps = skimage.measure.regionprops(tmpi)
+picents = np.array([[rp.centroid[0]+global_bbox[0],rp.centroid[1]+global_bbox[1]] for rp in pirps])
+del tmpi, pirps
+
+# find good initial translation for registration:
+# loop through different x and y shifts
+# for each find nearest neighboring centroid from other modality
+# register point clouds and get maximum distance to nearest neighbor
+# the lowest maximum distance should be a good starting point for registration
+max_dists = list()
+xrange = imzimgres.shape[0]-postIMSregincut.shape[0]
+if xrange<0:
+    xrange=1
+yrange = imzimgres.shape[1]-postIMSregincut.shape[1]
+if yrange<0:
+    yrange=1
+xshifts = list(range(0,xrange,np.round(5/resolution).astype(np.uint))) + [xrange]
+yshifts = list(range(0,yrange,np.round(5/resolution).astype(np.uint))) + [yrange]
+combs = np.array(np.meshgrid(np.array(xshifts),np.array(yshifts))).T.reshape(-1,2)
+for i in range(combs.shape[0]):
+    kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
+    distances, indices = kdt.query(picents+np.array(combs[i,:]), k=1, return_distance=True)
+    indices = [ni[0] for ni in indices]
+    max_dists.append(np.max(distances))
+
+# do precise registration of points only on 200 combinations with lowest max distances
+ind = np.argpartition(max_dists, -200)[-200:]
+combs_red = combs[ind,:]
+max_dists_red = list()
+for i in range(combs_red.shape[0]):
+    kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
+    distances, indices = kdt.query(picents+np.array(combs_red[i,:]), k=1, return_distance=True)
+    indices = [ni[0] for ni in indices]
+    reg = pycpd.RigidRegistration(X=imzcents[indices,:], Y=picents, w=0)
+    TY, (s_reg, R_reg, t_reg) = reg.register()
+    kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
+    distances, indices = kdt.query(TY, k=1, return_distance=True)
+    max_dists_red.append(np.max(distances))
+
+
+xy_init_shift = combs_red[np.array(max_dists_red) == np.min(max_dists_red),:][0,:]
+kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
+distances, indices = kdt.query(picents+xy_init_shift, k=1, return_distance=True)
+indices = [ni[0] for ni in indices]
+reg = pycpd.RigidRegistration(X=imzcents[indices,:], Y=picents, w=0)
+TY, (s_reg, R_reg, t_reg) = reg.register()
+
+# actual initial transform for registration
+init_trans = np.round(t_reg+np.array([global_bbox[0],global_bbox[1]])).astype(int)
 
 logging.info("Register postIMS to imz")
 # function used in registration
@@ -140,16 +235,26 @@ def command_iteration(method):
     )
 # setup sitk images
 fixed_np = imzimgres.astype(np.float32)
-moving_np = postIMSrcut.astype(np.float32)*255
+moving_np = postIMSrcut.astype(np.float32)
+
+# import matplotlib.pyplot as plt
+# fig, ax = plt.subplots(nrows=1, ncols=2)
+# ax[0].imshow(fixed_np)
+# ax[0].set_title("IMS")
+# ax[1].imshow(moving_np)
+# ax[1].set_title("postIMS")
+# plt.show()
+
+
+
+# def register_postIMS_to_IMS(ims: np.ndarray, postIMS: np.ndarray):
 fixed = sitk.GetImageFromArray(fixed_np)
 moving = sitk.GetImageFromArray(moving_np)
+del fixed_np,moving_np
 
 # initial transformation
-init_transform = sitk.CenteredTransformInitializer(
-        fixed, 
-        moving, 
-        sitk.AffineTransform(2), 
-        sitk.CenteredTransformInitializerFilter.GEOMETRY)
+init_transform = sitk.AffineTransform(2)
+init_transform.SetTranslation(-init_trans[[1,0]].astype(np.double))
 
 # setup registration
 R = sitk.ImageRegistrationMethod()
@@ -157,8 +262,8 @@ R.SetMetricAsCorrelation()
 R.SetMetricSamplingStrategy(R.RANDOM)
 R.SetMetricSamplingPercentage(0.01)
 R.SetInterpolator(sitk.sitkLinear)
-R.SetOptimizerAsGradientDescent(
-    learningRate=1.0, numberOfIterations=1000
+R.SetOptimizerAsRegularStepGradientDescent(
+    minStep=1, learningRate=1.0, numberOfIterations=1000
 )
 R.SetOptimizerScalesFromPhysicalShift()
 R.SetInitialTransform(init_transform)
@@ -176,35 +281,35 @@ resampler.SetReferenceImage(fixed)
 resampler.SetInterpolator(sitk.sitkNearestNeighbor)
 tmp1 = resampler.Execute(sitk.GetImageFromArray(postIMSregincut))
 postIMSro_trans = sitk.GetArrayFromImage(tmp1)
+del tmp1, resampler
 
-
-# create imz region image
-y_extent, x_extent, y_coords, x_coords = imz._get_xy_extents_coords(map_type="minimized")
-imzregions = np.zeros((y_extent, x_extent), dtype=np.uint8)
-imzregions[y_coords, x_coords] = imz.regions
-imzregions = skimage.transform.rotate(imzregions,rotation_imz, preserve_range=True)
-imzregions = np.round(imzregions)
-imzuqregs = np.unique(imz.regions)
-
+# plt.imshow((postIMSro_trans>0).astype(int)-(imzimgres>0).astype(int))
+# plt.show()
 
 logging.info("Find matching regions between postIMS and imz")
+postIMSro_trans_downscaled = skimage.transform.resize(postIMSro_trans, imzregions.shape, preserve_range=True, anti_aliasing=False).astype(np.uint8)
 observedpostIMSregion_match = list()
 # for imz region 1 get matching postIMS core
 for regionimz in imzuqregs:
     t1=imzregions==regionimz
-    t1 = skimage.transform.rescale(t1, stepsize*resolution, preserve_range = True)   
-    overlaps = np.unique(postIMSro_trans.astype(np.uint8)[t1], return_counts=True)
+    overlaps = np.unique(postIMSro_trans_downscaled[t1], return_counts=True)
     overlaps = (overlaps[0][overlaps[0]!=0],overlaps[1][overlaps[0]!=0])
-    observedpostIMSregion_match.append(overlaps[0][overlaps[1] == np.max(overlaps[1])][0])
-observedpostIMSregion_match = np.array(observedpostIMSregion_match)
+    if len(overlaps[0])>0:
+        observedpostIMSregion_match.append(overlaps[0][overlaps[1] == np.max(overlaps[1])][0])
+    else:
+        observedpostIMSregion_match.append(np.nan)
 
+observedpostIMSregion_match = np.array(observedpostIMSregion_match)
+is_nan = np.isnan(observedpostIMSregion_match)
+imzuqregs = imzuqregs[np.logical_not(is_nan)]
+observedpostIMSregion_match = observedpostIMSregion_match[np.logical_not(is_nan)]
 
 logging.info("Create bounding boxes for all cores")
 postIMS_bboxls = list()
+postIMSregpops = skimage.measure.regionprops(postIMSregin)
+regpopslabs = np.asarray([t.label for t in postIMSregpops])
 for i in range(len(observedpostIMSregion_match)):
     # select subset region for postIMS
-    postIMSregpops = skimage.measure.regionprops(postIMSregin)
-    regpopslabs = np.asarray([t.label for t in postIMSregpops])
     tmpind = np.asarray(list(range(len(regpopslabs))))[regpopslabs==observedpostIMSregion_match[i]][0]
     postIMS_bboxls.append(postIMSregpops[tmpind].bbox)
 
