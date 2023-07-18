@@ -53,7 +53,7 @@ postIMSr_file = snakemake.input["postIMSmask_downscaled"]
 # imzmlfile = "/home/retger/Downloads/cirrhosis_TMA_IMS.imzML"
 imzmlfile = snakemake.input["imzml"]
 # imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
-# imc_mask_file = "/home/retger/Downloads/Cirrhosis-TMA-5_New_Detector_013_transformed.ome.tiff"
+# imc_mask_file = "/home/retger/Downloads/Cirrhosis-TMA-5_New_Detector_008_transformed.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 # output_table = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/IMS_to_postIMS_matches.csv"
 # output_table = "/home/retger/Downloads/cirrhosis_TMA_cirrhosis_TMA_IMS_IMS_to_postIMS_matches.csv"
@@ -94,7 +94,7 @@ logging.info("Read postIMS region bounding box")
 # read crop bbox
 dfmeta = pd.read_csv(output_table)
 imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed","")
-imc_project = "cirrhosis_TMA"
+# imc_project = "cirrhosis_TMA"
 imc_project = os.path.split(os.path.split(os.path.split(os.path.split(imc_mask_file)[0])[0])[0])[1]
 
 project_name = "postIMS_to_IMS_"+imc_project+"_"+imc_samplename
@@ -233,11 +233,12 @@ for i in range(imzcoords.shape[0]):
 in_ref = np.array(in_ref)
 imzcoords = imzcoords[in_ref,:]
 
+init_translation = -np.min(imzcoords,axis=0).astype(int)
 logging.info("Register Points")
 # register points using coherent point drift
 # target/fixed: postIMS
 # source/moving: IMS
-reg = pycpd.RigidRegistration(X=centsred, Y=imzcoords, w=0.001)
+reg = pycpd.RigidRegistration(X=centsred, Y=imzcoords+init_translation, w=0.001)
 TY, (s_reg, R_reg, t_reg) = reg.register()
 
 logging.info("Find matching points")
@@ -254,8 +255,9 @@ imzcoordsfilt = imzcoords[imz_has_match,:]
 
 logging.info("Register points with matching points only")
 # rerun with matching points only
-reg = pycpd.RigidRegistration(X=centsredfilt, Y=imzcoordsfilt, w=0.001)
+reg = pycpd.RigidRegistration(X=centsredfilt, Y=imzcoordsfilt+init_translation, w=0.001)
 TY, (s_reg, R_reg, t_reg) = reg.register()
+
 # TY # transformed points
 # R_reg # Rotation
 # t_reg # translation
@@ -273,10 +275,18 @@ imzcoordsfilt = imzcoordsfilt[imz_has_match,:]
 
 logging.info("Register points with matching points only")
 # rerun with matching points only
-reg = pycpd.RigidRegistration(X=centsredfilt, Y=imzcoordsfilt, w=0.001)
+reg = pycpd.RigidRegistration(X=centsredfilt, Y=imzcoordsfilt+init_translation, w=0.001)
 TY, (s_reg, R_reg, t_reg) = reg.register()
 
+logging.info("Final pycpd registration:")
+logging.info(f"Number of points IMS: {imzcoordsfilt.shape[0]}")
+logging.info(f"Number of points postIMS: {centsredfilt.shape[0]}")
+logging.info(f"Scaling: {s_reg}")
+logging.info(f"Translation: {t_reg}")
+logging.info(f"Rotation: {R_reg}")
 
+t_reg = t_reg + init_translation
+logging.info(f"Translation plus init translation: {t_reg}")
 # plt.scatter(TY[:,0]*stepsize, TY[:,1]*stepsize,color="blue")
 # plt.scatter(centsredfilt[:,0]*stepsize, centsredfilt[:,1]*stepsize,color="red")
 # plt.imshow(postIMSm.T)
