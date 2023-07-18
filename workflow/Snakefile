@@ -514,8 +514,10 @@ rule extract_core_mask_from_postIMS:
         postIMSmask_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced_mask.ome.tiff"
     log:
         stdout="logs/extract_core_mask_from_postIMS/{project_name}.stdout"
-    conda:
-        "env/image_registration_qc.yaml"
+    #conda:
+    #    "env/image_registration_qc.yaml"
+    container:
+        config["container"]
     script:
         "scripts/image_registration_IMS_to_preIMS_0.py"
 
@@ -533,11 +535,13 @@ rule register_IMS_to_postIMS:
         IMCmask=lambda wildcards: expand("results/{{project_name}}/data/IMC_mask/{sample}_transformed.ome.tiff",sample=get_column_entry_from_metadata_two_conditions(wildcards.imzml_base+".imzML", wildcards.project_name, "sample_name", "imzml_filename", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True))
     output:
         IMS_to_postIMS_matches="results/{project_name}/data/IMS/{project_name}_{imzml_base}_IMS_to_postIMS_matches.csv",
-        IMS_to_postIMS_matches_image="results/{project_name}/data/IMS/{project_name}_{imzml_base}_IMS_to_postIMS_matches_image.tiff"
+        IMS_to_postIMS_matches_image="results/{project_name}/data/IMS/{project_name}_{imzml_base}_IMS_to_postIMS_matches_image.ome.tiff"
     log:
         stdout="logs/register_IMS_to_postIMS/{project_name}_{imzml_base}.stdout",
-    conda:
-        "env/image_registration_qc.yaml"
+    #conda:
+    #    "env/image_registration_qc.yaml"
+    container:
+        config["container"]
     script:
         "scripts/image_registration_IMS_to_preIMS_1.py"
 
@@ -560,8 +564,10 @@ rule register_IMS_to_postIMS_single_core:
         imsml_coords_fp="results/{project_name}/data/IMS/postIMS_to_IMS_{project_name}_{sample}-IMSML-coords.h5"
     log:
         stdout="logs/register_IMS_to_postIMS_single_core/{project_name}_{sample}.stdout",
-    conda:
-        "env/image_registration_qc.yaml"
+    #conda:
+    #    "env/image_registration_qc.yaml"
+    container:
+        config["container"]
     script:
         "scripts/image_registration_IMS_to_preIMS_2.py"
 
@@ -597,8 +603,10 @@ rule image_registration_evaluation:
         postIMC_postIMCmask= "results/{project_name}/data/registration_metric/{sample}_postIMC_reg_metrics.tiff"
     log:
         stdout="logs/image_registration_evaluation/{project_name}_{sample}.stdout",
-    conda:
-        "env/image_registration_qc.yaml"
+    #conda:
+    #    "env/image_registration_qc.yaml"
+    container:
+        config["container"]
     script:
         "scripts/image_registration_evaluation_SAM.py"
         
