@@ -65,8 +65,10 @@ rule all:
         #expand("results/{project_name}/data/postIMS/{project_name}_postIMS_reduced.ome.tiff", project_name=project_names[4:]),
         #expand("results/{project_name}/data/registration_metric/{sample}_reg_metrics.csv",zip,project_name=project_names[4:], sample=sample_names[4:]),
         expand("results/{project_name}/data/registration_metric/{project_name}_reg_metrics_combined.csv", project_name=project_names),
+        expand("results/{project_name}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics_auto.json",zip, project_name=project_names,sample=sample_names),
         #expand("results/{project_name}/data/IMS/{project_name}_{imzml_base}_IMS_to_postIMS_matches.csv",zip, project_name=project_names, imzml_base = imzml_base),
         #expand("results/{project_name}/data/IMS/postIMS_to_IMS_{project_name}_{sample}-IMSML-coords.h5",zip, project_name=project_names, sample=sample_names)
+        expand("results/{project_name}/data/cell_overlap/{project_name}_{sample}_cell_overlap_IMS.csv",zip,project_name=project_names, sample=sample_names)
         
 
 
@@ -523,14 +525,15 @@ rule register_IMS_to_postIMS:
         IMS_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMS_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
         IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMC_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
         IMS_shrink_factor=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMS_shrink_factor", "project_name", read_sample_metadata(config["sample_metadata"])),
-        IMS_rotation_angle=lambda wildcards: get_column_entry_from_metadata_two_conditions(wildcards.project_name, "IMS_"+wildcards.imzml_base+".imzML", "IMS_rotation_angle", "project_name", "imzml_filename", read_sample_metadata(config["sample_metadata"]))
+        IMS_rotation_angle=lambda wildcards: get_column_entry_from_metadata_two_conditions(wildcards.project_name, wildcards.imzml_base+".imzML", "IMS_rotation_angle", "project_name", "imzml_filename", read_sample_metadata(config["sample_metadata"]))
     input:
         postIMSmask_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced_mask.ome.tiff",
-        imzml=lambda wildcards: os.path.join("results",wildcards.project_name,"data","IMS", f"IMS_{wildcards.imzml_base}.imzML"),
+        imzml=lambda wildcards: os.path.join("results",wildcards.project_name,"data","IMS", f"{wildcards.imzml_base}.imzML"),
         sample_metadata=config["sample_metadata"],
-        IMCmask=lambda wildcards: expand("results/{{project_name}}/data/IMC_mask/{sample}_transformed.ome.tiff",sample=get_column_entry_from_metadata_two_conditions("IMS_"+wildcards.imzml_base+".imzML", wildcards.project_name, "sample_name", "imzml_filename", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True))
+        IMCmask=lambda wildcards: expand("results/{{project_name}}/data/IMC_mask/{sample}_transformed.ome.tiff",sample=get_column_entry_from_metadata_two_conditions(wildcards.imzml_base+".imzML", wildcards.project_name, "sample_name", "imzml_filename", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True))
     output:
-        IMS_to_postIMS_matches="results/{project_name}/data/IMS/{project_name}_{imzml_base}_IMS_to_postIMS_matches.csv"
+        IMS_to_postIMS_matches="results/{project_name}/data/IMS/{project_name}_{imzml_base}_IMS_to_postIMS_matches.csv",
+        IMS_to_postIMS_matches_image="results/{project_name}/data/IMS/{project_name}_{imzml_base}_IMS_to_postIMS_matches_image.tiff"
     log:
         stdout="logs/register_IMS_to_postIMS/{project_name}_{imzml_base}.stdout",
     conda:
@@ -553,7 +556,7 @@ rule register_IMS_to_postIMS_single_core:
         IMS_to_postIMS_matches=lambda wildcards: f'results/{wildcards.project_name}/data/IMS/{wildcards.project_name}_{get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "imzml_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"])).replace("IMS_","").replace(".imzML","")}_IMS_to_postIMS_matches.csv', 
     output:
         IMS_to_postIMS_error="results/{project_name}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics_auto.json",
-        IMS_to_postIMS_error_image="results/{project_name}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics_auto.png",
+        IMS_to_postIMS_error_image="results/{project_name}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics_auto.ome.tiff",
         imsml_coords_fp="results/{project_name}/data/IMS/postIMS_to_IMS_{project_name}_{sample}-IMSML-coords.h5"
     log:
         stdout="logs/register_IMS_to_postIMS_single_core/{project_name}_{sample}.stdout",

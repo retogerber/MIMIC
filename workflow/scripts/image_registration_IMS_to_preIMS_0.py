@@ -1,7 +1,7 @@
-from wsireg.writers.ome_tiff_writer import OmeTiffWriter
-from wsireg.reg_transforms.reg_transform_seq import RegTransform, RegTransformSeq
-from wsireg.parameter_maps.transformations import BASE_RIG_TFORM
-from wsireg.reg_images.loader import reg_image_loader
+# from wsireg.writers.ome_tiff_writer import OmeTiffWriter
+# from wsireg.reg_transforms.reg_transform_seq import RegTransform, RegTransformSeq
+# from wsireg.parameter_maps.transformations import BASE_RIG_TFORM
+# from wsireg.reg_images.loader import reg_image_loader
 from rembg import remove, new_session
 import skimage
 import numpy as np
@@ -66,16 +66,17 @@ for i in range(len(rps)):
 
 logging.info("Save mask")
 
-empty_transform = BASE_RIG_TFORM
-empty_transform['Spacing'] = (str(resolution),str(resolution))
-empty_transform['Size'] = (cvi.shape[1], cvi.shape[0])
-rt = RegTransform(empty_transform)
-rts = RegTransformSeq(rt,[0])
-ri = reg_image_loader(cvi.astype(np.uint8), resolution)
-writer = OmeTiffWriter(ri, reg_transform_seq=rts)
-img_basename = os.path.basename(postIMSr_file).split(".")[0]
-img_dirname = os.path.dirname(postIMSr_file)
-writer.write_image_by_plane(img_basename, output_dir=img_dirname, tile_size=1024)
+saveimage_tile(cvi, postIMSr_file, resolution)
+# empty_transform = BASE_RIG_TFORM
+# empty_transform['Spacing'] = (str(resolution),str(resolution))
+# empty_transform['Size'] = (cvi.shape[1], cvi.shape[0])
+# rt = RegTransform(empty_transform)
+# rts = RegTransformSeq(rt,[0])
+# ri = reg_image_loader(cvi.astype(np.uint8), resolution)
+# writer = OmeTiffWriter(ri, reg_transform_seq=rts)
+# img_basename = os.path.basename(postIMSr_file).split(".")[0]
+# img_dirname = os.path.dirname(postIMSr_file)
+# writer.write_image_by_plane(img_basename, output_dir=img_dirname, tile_size=1024)
 
 
 logging.info("Finished")

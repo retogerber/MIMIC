@@ -2,6 +2,11 @@ import numpy as np
 import skimage
 from segment_anything import SamPredictor
 from wsireg.utils.im_utils import grayscale
+from wsireg.writers.ome_tiff_writer import OmeTiffWriter
+from wsireg.reg_transforms.reg_transform_seq import RegTransform, RegTransformSeq
+from wsireg.parameter_maps.transformations import BASE_RIG_TFORM
+from wsireg.reg_images.loader import reg_image_loader
+import os.path
 import SimpleITK as sitk
 import tifffile
 import zarr
@@ -17,10 +22,25 @@ def readimage_crop(image: str, bbox: list[int]):
     store = tifffile.imread(image, aszarr=True)
     z = zarr.open(store, mode='r')
     if isinstance(z, zarr.hierarchy.Group): 
-        image_crop = z[0][bbox[0]:bbox[2],bbox[1]:bbox[3],:]
+        if z[0].ndim == 3:
+            image_crop = z[0][bbox[0]:bbox[2],bbox[1]:bbox[3],:]
+        else:
+            image_crop = z[0][bbox[0]:bbox[2],bbox[1]:bbox[3]]
     elif isinstance(z, zarr.core.Array): 
         image_crop = z[bbox[0]:bbox[2],bbox[1]:bbox[3]]
     return image_crop
+
+def saveimage_tile(image: np.ndarray, filename: str, resolution: float):
+    empty_transform = BASE_RIG_TFORM
+    empty_transform['Spacing'] = (str(resolution),str(resolution))
+    empty_transform['Size'] = (image.shape[1], image.shape[0])
+    rt = RegTransform(empty_transform)
+    rts = RegTransformSeq(rt,[0])
+    ri = reg_image_loader(image.astype(np.uint8), resolution)
+    writer = OmeTiffWriter(ri, reg_transform_seq=rts)
+    img_basename = os.path.basename(filename).split(".")[0]
+    img_dirname = os.path.dirname(filename)
+    writer.write_image_by_plane(img_basename, output_dir=img_dirname, tile_size=1024)
 
 
 

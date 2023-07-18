@@ -179,6 +179,7 @@ pirps = skimage.measure.regionprops(tmpi)
 picents = np.array([[rp.centroid[0]+global_bbox[0],rp.centroid[1]+global_bbox[1]] for rp in pirps])
 del tmpi, pirps
 
+
 # find good initial translation for registration:
 # loop through different x and y shifts
 # for each find nearest neighboring centroid from other modality
@@ -201,7 +202,7 @@ for i in range(combs.shape[0]):
     max_dists.append(np.max(distances))
 
 # do precise registration of points only on 200 combinations with lowest max distances
-ind = np.argpartition(max_dists, -200)[-200:]
+ind = np.argpartition(max_dists, -200)[:200]
 combs_red = combs[ind,:]
 max_dists_red = list()
 for i in range(combs_red.shape[0]):
@@ -213,7 +214,6 @@ for i in range(combs_red.shape[0]):
     kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
     distances, indices = kdt.query(TY, k=1, return_distance=True)
     max_dists_red.append(np.max(distances))
-
 
 xy_init_shift = combs_red[np.array(max_dists_red) == np.min(max_dists_red),:][0,:]
 kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
@@ -283,8 +283,8 @@ tmp1 = resampler.Execute(sitk.GetImageFromArray(postIMSregincut))
 postIMSro_trans = sitk.GetArrayFromImage(tmp1)
 del tmp1, resampler
 
-# plt.imshow((postIMSro_trans>0).astype(int)-(imzimgres>0).astype(int))
-# plt.show()
+# save matches image
+saveimage_tile((normalize_image(((postIMSro_trans>0).astype(int)-(imzimgres>0).astype(int))+1)*255).astype(np.uint8), snakemake.output["IMS_to_postIMS_matches_image"], 1)
 
 logging.info("Find matching regions between postIMS and imz")
 postIMSro_trans_downscaled = skimage.transform.resize(postIMSro_trans, imzregions.shape, preserve_range=True, anti_aliasing=False).astype(np.uint8)

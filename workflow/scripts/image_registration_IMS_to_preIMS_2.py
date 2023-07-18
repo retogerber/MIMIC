@@ -7,7 +7,7 @@ from napari_imsmicrolink.utils.json import NpEncoder
 import skimage
 import numpy as np
 import json
-from image_registration_IMS_to_preIMS_utils import readimage_crop, prepare_image_for_sam, create_ring_mask, composite2affine
+from image_registration_IMS_to_preIMS_utils import readimage_crop, prepare_image_for_sam, create_ring_mask, composite2affine, saveimage_tile
 import sys,os
 import logging, traceback
 logging.basicConfig(filename=snakemake.log["stdout"],
@@ -44,14 +44,19 @@ logging.info("Microscopy pixelsize: "+str(resolution))
 # output_table = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/test_split_ims_IMS_to_postIMS_matches.csv"
 # output_table="/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/test_split_ims_test_split_ims_2_IMS_to_postIMS_matches.csv"
 # postIMS_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMS/test_split_pre_postIMS_reduced.ome.tiff"
+# postIMS_file = "/home/retger/Downloads/cirrhosis_TMA_postIMS_reduced.ome.tiff"
 postIMS_file = snakemake.input["postIMS_downscaled"]
 # postIMSr_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMS/test_split_pre_postIMS_reduced_mask.ome.tiff"
+# postIMSr_file = "/home/retger/Downloads/cirrhosis_TMA_postIMS_reduced_mask.ome.tiff"
 postIMSr_file = snakemake.input["postIMSmask_downscaled"]
 # imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/IMS_test_split_pre.imzML"
+# imzmlfile = "/home/retger/Downloads/cirrhosis_TMA_IMS.imzML"
 imzmlfile = snakemake.input["imzml"]
 # imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
+# imc_mask_file = "/home/retger/Downloads/Cirrhosis-TMA-5_New_Detector_013_transformed.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 # output_table = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/IMS_to_postIMS_matches.csv"
+# output_table = "/home/retger/Downloads/cirrhosis_TMA_cirrhosis_TMA_IMS_IMS_to_postIMS_matches.csv"
 output_table = snakemake.input["IMS_to_postIMS_matches"]
 
 # ims_to_postIMS_regerror = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_001_IMS_to_postIMS_reg_auto_metrics.json"
@@ -89,6 +94,7 @@ logging.info("Read postIMS region bounding box")
 # read crop bbox
 dfmeta = pd.read_csv(output_table)
 imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed","")
+imc_project = "cirrhosis_TMA"
 imc_project = os.path.split(os.path.split(os.path.split(os.path.split(imc_mask_file)[0])[0])[0])[1]
 
 project_name = "postIMS_to_IMS_"+imc_project+"_"+imc_samplename
@@ -187,11 +193,11 @@ logging.info("Create IMS coordinates")
 indmatx = np.zeros(imzimg.shape)
 for i in range(imzimg.shape[0]):
     indmatx[i,:] = list(range(imzimg.shape[1]))
-indmatx = indmatx.astype(np.uint8)
+indmatx = indmatx.astype(np.uint32)
 indmaty = np.zeros(imzimg.shape)
 for i in range(imzimg.shape[1]):
     indmaty[:,i] = list(range(imzimg.shape[0]))
-indmaty = indmaty.astype(np.uint8)
+indmaty = indmaty.astype(np.uint32)
 
 # subset region for IMS
 xminimz, yminimz, xmaximz, ymaximz = skimage.measure.regionprops((imzregions == regionimz).astype(np.uint8))[0].bbox
@@ -442,7 +448,9 @@ for i in [-1,0,1]:
         postIMS[np.array(pmap_coord_data["y_micro_physical"].to_list()).astype(int)+i,np.array(pmap_coord_data["x_micro_physical"].to_list()).astype(int)+j,:] = [0,0,255]
 
 image_crop = postIMS[xmin:xmax,ymin:ymax]
-skimage.io.imsave(ims_to_postIMS_regerror_image, image_crop)
+
+saveimage_tile(image_crop, ims_to_postIMS_regerror_image, resolution)
+# skimage.io.imsave(ims_to_postIMS_regerror_image, image_crop)
 
 
 # plt.imshow(image_crop)
