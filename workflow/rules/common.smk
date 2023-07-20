@@ -117,7 +117,7 @@ def choose_imsml_coordsfile(wildcards):
         if filename.strip() == "":
             filename_out = f"results/{wildcards.project_name}/data/IMS/postIMS_to_IMS_{wildcards.project_name}_{wildcards.sample}-IMSML-coords.h5"
         else:
-            filename_out = filename
+            filename_out = f"results/{wildcards.project_name}/data/IMS/{filename}"
         return filename_out
 
 
