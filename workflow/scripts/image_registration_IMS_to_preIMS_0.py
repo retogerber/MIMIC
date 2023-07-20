@@ -135,7 +135,8 @@ if np.sum(IMC_filled)<len(IMC_filled):
         ymax = int(imcbboxls[i][3]+1500/resolution)
         ymax = ymax if ymax<=postIMS2r.shape[1] else postIMS2r.shape[1]
         print(f"i: {i}, {os.path.basename(imc_mask_files[i])}, coords:[{xmin}:{xmax},{ymin}:{ymax}]")
-        postIMSmasks, scores1 = sam_core(postIMS2r[xmin:xmax,ymin:ymax], sam)
+        saminp = np.stack([postIMS2r[xmin:xmax,ymin:ymax],postIMS2r[xmin:xmax,ymin:ymax],postIMS2r[xmin:xmax,ymin:ymax]], axis=2)
+        postIMSmasks, scores1 = sam_core(saminp, sam)
         postIMSmasks = np.stack([preprocess_mask(msk,1) for msk in postIMSmasks ])
         tmpareas = np.array([np.sum(im) for im in postIMSmasks])
         imcarea = (imcbboxls[i][2]-imcbboxls[i][0])*(imcbboxls[i][2]-imcbboxls[i][1])
