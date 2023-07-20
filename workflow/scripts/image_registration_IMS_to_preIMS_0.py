@@ -73,41 +73,22 @@ logging.info(f"Median filter postIMS with radius: {med_radius}px")
 postIMS2r = skimage.filters.median(postIMS, skimage.morphology.disk(med_radius))
 # postIMS2r = np.stack([postIMS2r, postIMS2r, postIMS2r], axis=2)
 
-
-logging.info("Remove background individually for each IMC location")
-postIMSstitch = postIMS2r[:,:]*0
-postIMSmask = postIMS2r[:,:]*0
-for i in range(len(imcbboxls)):
-    #for expand in [750,1000,1250,1500,1750]:
-    for expand in [int(r/resolution) for r in [1500]]:
-        xmin = int(imcbboxls[i][0]-expand)
-        xmin = xmin if xmin>=0 else 0
-        ymin = int(imcbboxls[i][1]-expand)
-        ymin = ymin if ymin>=0 else 0
-        xmax = int(imcbboxls[i][2]+expand)
-        xmax = xmax if xmax<=postIMS2r.shape[0] else postIMS2r.shape[0]
-        ymax = int(imcbboxls[i][3]+expand)
-        ymax = ymax if ymax<=postIMS2r.shape[1] else postIMS2r.shape[1]
-        print(f"i: {i}, {os.path.basename(imc_mask_files[i])}, coords:[{xmin}:{xmax},{ymin}:{ymax}]")
-        postIMSmask[(xmin+expand):(xmax-expand),(ymin+expand):(ymax-expand)] = 255
-        tmpimg = remove(postIMS2r[xmin:xmax,ymin:ymax], only_mask=True, session=rembg_session,post_process_mask=True)
-        tmpimg2 = np.zeros(np.array(list(tmpimg.shape))+20, dtype=np.uint8)
-        tmpimg2[10:(tmpimg2.shape[0]-10),10:(tmpimg2.shape[1]-10)] = tmpimg.astype(np.uint8)
-        tmpimg2 = skimage.morphology.convex_hull_image(tmpimg2>127)
-        tmpimg = tmpimg2[10:(tmpimg2.shape[0]-10),10:(tmpimg2.shape[1]-10)]
-        tmpimg = preprocess_mask(tmpimg,1) 
-        tmpimg = tmpimg.astype(np.uint8)*255
-        postIMSstitch[xmin:xmax,ymin:ymax] = np.max(np.stack([postIMSstitch[xmin:xmax,ymin:ymax],tmpimg], axis=0),axis=0)
-
-postIMSr = postIMSstitch>127
+logging.info("Remove background")
+# remove background, i.e. detect cores
+postIMSr = remove(postIMS2r, only_mask=True, session=rembg_session,post_process_mask=True)
+postIMSr = postIMSr>127
 # import matplotlib.pyplot as plt
 # fig, ax = plt.subplots(nrows=1, ncols=2)
-# ax[0].imshow(postIMSstitch, cmap='gray')
+# ax[0].imshow(postIMS2r, cmap='gray')
 # ax[0].set_title("postIMS")
-# ax[1].imshow(postIMSmask, cmap='gray')
+# ax[1].imshow(postIMSr, cmap='gray')
 # ax[1].set_title("postIMSmask")
 # plt.show()
 
+
+# fill holes in tissue mask
+logging.info("Fill holes in mask")
+postIMSr = skimage.morphology.remove_small_holes(postIMSr,1000**2*np.pi*(1/resolution))
 
 logging.info("Check mask")
 IMC_filled = list()
@@ -117,43 +98,109 @@ for i in range(len(imcbboxls)):
     xmax = int(imcbboxls[i][2])
     ymax = int(imcbboxls[i][3])
     IMC_filled.append(np.min(postIMSr[xmin:xmax,ymin:ymax]) == 1)
-IMC_filled
+# IMC_filled
 
 if np.sum(IMC_filled)<len(IMC_filled):
-    inds = np.array(list(range(len(imcbboxls))))[np.logical_not(np.array(IMC_filled))]
-    logging.info(f"Number of incomplete masks found: {len(inds)}")
-    logging.info("Run segment anything model on missing masks")
-    sam = sam_model_registry[MODEL_TYPE](checkpoint=CHECKPOINT_PATH)
-    sam.to(device=DEVICE)
-    for i in inds:
-        xmin = int(imcbboxls[i][0]-1500/resolution)
-        xmin = xmin if xmin>=0 else 0
-        ymin = int(imcbboxls[i][1]-1500/resolution)
-        ymin = ymin if ymin>=0 else 0
-        xmax = int(imcbboxls[i][2]+1500/resolution)
-        xmax = xmax if xmax<=postIMS2r.shape[0] else postIMS2r.shape[0]
-        ymax = int(imcbboxls[i][3]+1500/resolution)
-        ymax = ymax if ymax<=postIMS2r.shape[1] else postIMS2r.shape[1]
-        print(f"i: {i}, {os.path.basename(imc_mask_files[i])}, coords:[{xmin}:{xmax},{ymin}:{ymax}]")
-        saminp = np.stack([postIMS2r[xmin:xmax,ymin:ymax],postIMS2r[xmin:xmax,ymin:ymax],postIMS2r[xmin:xmax,ymin:ymax]], axis=2)
-        postIMSmasks, scores1 = sam_core(saminp, sam)
-        postIMSmasks = np.stack([preprocess_mask(msk,1) for msk in postIMSmasks ])
-        tmpareas = np.array([np.sum(im) for im in postIMSmasks])
-        imcarea = (imcbboxls[i][2]-imcbboxls[i][0])*(imcbboxls[i][2]-imcbboxls[i][1])
-        tmpinds = np.array(list(range(3)))
-        tmpinds = tmpinds[tmpareas > imcarea*1.02]
-        tmpind = tmpinds[tmpareas[tmpinds]==np.min(tmpareas[tmpinds])]
-        tmpimg = postIMSmasks[tmpind,:,:][0,:,:].astype(np.uint8)*255
-        postIMSstitch[xmin:xmax,ymin:ymax] = np.max(np.stack([postIMSstitch[xmin:xmax,ymin:ymax],tmpimg], axis=0),axis=0)
+    logging.info("Mask detection doesn't contain all IMC regions")
+    logging.info("Remove background individually for each IMC location")
+    postIMSstitch = postIMS2r[:,:]*0
+    postIMSmask = postIMS2r[:,:]*0
+    img_ls = []
+    for i in range(len(imcbboxls)):
+        #for expand in [750,1000,1250,1500,1750]:
+        for expand in [int(r/resolution) for r in [1500]]:
+            xmin = int(imcbboxls[i][0]-expand)
+            xmin = xmin if xmin>=0 else 0
+            ymin = int(imcbboxls[i][1]-expand)
+            ymin = ymin if ymin>=0 else 0
+            xmax = int(imcbboxls[i][2]+expand)
+            xmax = xmax if xmax<=postIMS2r.shape[0] else postIMS2r.shape[0]
+            ymax = int(imcbboxls[i][3]+expand)
+            ymax = ymax if ymax<=postIMS2r.shape[1] else postIMS2r.shape[1]
+            print(f"i: {i}, {os.path.basename(imc_mask_files[i])}, coords:[{xmin}:{xmax},{ymin}:{ymax}]")
+            postIMSmask[(xmin+expand):(xmax-expand),(ymin+expand):(ymax-expand)] = 255
+            tmpimg = remove(postIMS2r[xmin:xmax,ymin:ymax], only_mask=True, session=rembg_session,post_process_mask=True)
+            # plt.imshow(tmpimg)
+            # plt.show()
+            tmpimg = skimage.morphology.remove_small_holes(tmpimg,1000**2*np.pi*(1/resolution))
+            tmpimg = tmpimg.astype(np.uint8)*255
+            tmpimg = preprocess_mask(tmpimg,1)
+            tmpimg = tmpimg.astype(np.uint8)*255
+            tmpimg2 = np.zeros(np.array(list(tmpimg.shape))+20, dtype=np.uint8)
+            tmpimg2[10:(tmpimg2.shape[0]-10),10:(tmpimg2.shape[1]-10)] = tmpimg.astype(np.uint8)
+            tmpimg2 = skimage.morphology.convex_hull_image(tmpimg2>127)
+            tmpimg2 = tmpimg2.astype(np.uint8)*255
+            tmpimg = tmpimg2[10:(tmpimg2.shape[0]-10),10:(tmpimg2.shape[1]-10)]
+            img_ls.append(tmpimg)
+            # TODO: check if touches border
+            # max_border_value = np.max([np.max(tmpimg[0,:]),np.max(tmpimg[-1,:]),np.max(tmpimg[:,0]),np.max(tmpimg[:,-1])])
+            # if max_border_value == 0:
+            postIMSstitch[xmin:xmax,ymin:ymax] = np.max(np.stack([postIMSstitch[xmin:xmax,ymin:ymax],tmpimg], axis=0),axis=0)
+    # import matplotlib.pyplot as plt
+    # ind = 0
+    # fig, ax = plt.subplots(nrows=3, ncols=3)
+    # for i in range(3):
+    #     for j in range(3):
+    #         ax[i,j].imshow(img_ls[ind], cmap='gray')
+    #         ax[i,j].set_title(f"{ind}")
+    #         ind+=1
+    # plt.show()
 
-postIMSr = postIMSstitch>127
-# import matplotlib.pyplot as plt
-# fig, ax = plt.subplots(nrows=1, ncols=2)
-# ax[0].imshow(postIMSstitch, cmap='gray')
-# ax[0].set_title("postIMS")
-# ax[1].imshow(postIMSmask, cmap='gray')
-# ax[1].set_title("postIMSmask")
-# plt.show()
+    postIMSr = postIMSstitch>0
+    # import matplotlib.pyplot as plt
+    # fig, ax = plt.subplots(nrows=1, ncols=2)
+    # ax[0].imshow(postIMSstitch, cmap='gray')
+    # ax[0].set_title("postIMS")
+    # ax[1].imshow(postIMSmask, cmap='gray')
+    # ax[1].set_title("postIMSmask")
+    # plt.show()
+
+
+    logging.info("Check mask")
+    IMC_filled = list()
+    for i in range(len(imcbboxls)):
+        xmin = int(imcbboxls[i][0])
+        ymin = int(imcbboxls[i][1])
+        xmax = int(imcbboxls[i][2])
+        ymax = int(imcbboxls[i][3])
+        IMC_filled.append(np.min(postIMSr[xmin:xmax,ymin:ymax]) == 1)
+    # IMC_filled
+
+    if np.sum(IMC_filled)<len(IMC_filled):
+        inds = np.array(list(range(len(imcbboxls))))[np.logical_not(np.array(IMC_filled))]
+        logging.info(f"Number of incomplete masks found: {len(inds)}")
+        logging.info("Run segment anything model on missing masks")
+        sam = sam_model_registry[MODEL_TYPE](checkpoint=CHECKPOINT_PATH)
+        sam.to(device=DEVICE)
+        for i in inds:
+            xmin = int(imcbboxls[i][0]-1500/resolution)
+            xmin = xmin if xmin>=0 else 0
+            ymin = int(imcbboxls[i][1]-1500/resolution)
+            ymin = ymin if ymin>=0 else 0
+            xmax = int(imcbboxls[i][2]+1500/resolution)
+            xmax = xmax if xmax<=postIMS2r.shape[0] else postIMS2r.shape[0]
+            ymax = int(imcbboxls[i][3]+1500/resolution)
+            ymax = ymax if ymax<=postIMS2r.shape[1] else postIMS2r.shape[1]
+            print(f"i: {i}, {os.path.basename(imc_mask_files[i])}, coords:[{xmin}:{xmax},{ymin}:{ymax}]")
+            saminp = np.stack([postIMS2r[xmin:xmax,ymin:ymax],postIMS2r[xmin:xmax,ymin:ymax],postIMS2r[xmin:xmax,ymin:ymax]], axis=2)
+            postIMSmasks, scores1 = sam_core(saminp, sam)
+            postIMSmasks = np.stack([preprocess_mask(msk,1) for msk in postIMSmasks ])
+            tmpareas = np.array([np.sum(im) for im in postIMSmasks])
+            imcarea = (imcbboxls[i][2]-imcbboxls[i][0])*(imcbboxls[i][2]-imcbboxls[i][1])
+            tmpinds = np.array(list(range(3)))
+            tmpinds = tmpinds[tmpareas > imcarea*1.02]
+            tmpind = tmpinds[tmpareas[tmpinds]==np.min(tmpareas[tmpinds])]
+            tmpimg = postIMSmasks[tmpind,:,:][0,:,:].astype(np.uint8)*255
+            postIMSstitch[xmin:xmax,ymin:ymax] = np.max(np.stack([postIMSstitch[xmin:xmax,ymin:ymax],tmpimg], axis=0),axis=0)
+
+    postIMSr = postIMSstitch>0
+    # import matplotlib.pyplot as plt
+    # fig, ax = plt.subplots(nrows=1, ncols=2)
+    # ax[0].imshow(postIMSr, cmap='gray')
+    # ax[0].set_title("postIMS")
+    # ax[1].imshow(postIMSmask, cmap='gray')
+    # ax[1].set_title("postIMSmask")
+    # plt.show()
 
 logging.info(f"Get convex hull")
 lbs = skimage.measure.label(postIMSr)
