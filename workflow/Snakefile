@@ -65,10 +65,9 @@ rule all:
         #expand("results/{project_name}/data/postIMS/{project_name}_postIMS_reduced.ome.tiff", project_name=project_names[4:]),
         #expand("results/{project_name}/data/registration_metric/{sample}_reg_metrics.csv",zip,project_name=project_names[4:], sample=sample_names[4:]),
         expand("results/{project_name}/data/registration_metric/{project_name}_reg_metrics_combined.csv", project_name=project_names),
-        expand("results/{project_name}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics_auto.json",zip, project_name=project_names,sample=sample_names),
+        #expand("results/{project_name}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics_auto.json",zip, project_name=project_names,sample=sample_names),
         #expand("results/{project_name}/data/IMS/{project_name}_{imzml_base}_IMS_to_postIMS_matches.csv",zip, project_name=project_names, imzml_base = imzml_base),
         #expand("results/{project_name}/data/IMS/postIMS_to_IMS_{project_name}_{sample}-IMSML-coords.h5",zip, project_name=project_names, sample=sample_names)
-        expand("results/{project_name}/data/cell_overlap/{project_name}_{sample}_cell_overlap_IMS.csv",zip,project_name=project_names, sample=sample_names)
         
 
 
@@ -629,7 +628,7 @@ rule image_registration_evaluation_IMS_to_postIMS:
 rule combine_image_registration_evaluation_results:
     input:
         registration_metrics=lambda wildcards: expand("results/{{project_name}}/data/registration_metric/{sample}_reg_metrics.csv",sample=get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all = True)),
-        IMS_to_postIMS_error=lambda wildcards: expand("results/{{project_name}}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics_auto.json",sample=get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all = True))
+        IMS_to_postIMS_error=lambda wildcards: expand("results/{{project_name}}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics{auto_or_not}.json",zip,sample=get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all = True), auto_or_not = decide_IMS_to_postIMS_reg_metrics_auto_or_not(wildcards))
     output:
         registration_metrics_combined="results/{project_name}/data/registration_metric/{project_name}_reg_metrics_combined.csv"
     log:

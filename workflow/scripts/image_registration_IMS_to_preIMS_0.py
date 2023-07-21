@@ -34,11 +34,11 @@ MODEL_TYPE = "vit_h"
 torch.set_num_threads(snakemake.threads)
 
 # parameters
-stepsize = 30
+#stepsize = 30
 stepsize = float(snakemake.params["IMS_pixelsize"])
-pixelsize = 24
+#pixelsize = 24
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
-resolution = 1
+#resolution = 1
 resolution = float(snakemake.params["IMC_pixelsize"])
 
 # postIMS_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMS/test_split_pre_postIMS_reduced.ome.tiff"
@@ -68,7 +68,7 @@ for imcmaskfile in imc_mask_files:
     imc = imc.astype(np.uint8)
     imcbboxls.append(skimage.measure.regionprops(imc)[0].bbox)
 
-med_radius = int((1/resolution) * (stepsize/4))
+med_radius = int((1/resolution) * (stepsize/2))
 logging.info(f"Median filter postIMS with radius: {med_radius}px")
 postIMS2r = skimage.filters.median(postIMS, skimage.morphology.disk(med_radius))
 # postIMS2r = np.stack([postIMS2r, postIMS2r, postIMS2r], axis=2)

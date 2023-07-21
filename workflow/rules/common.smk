@@ -17,6 +17,7 @@ def get_column_entry_from_metadata(
     sample_metadata_df = read_sample_metadata(),
     return_all=False):
     """filter metadata df according to entry and column"""
+    sample_metadata_df = sample_metadata_df.fillna('')
     df_sub = sample_metadata_df.loc[sample_metadata_df[cond_column] == cond_name]
     if return_all:
         return df_sub[column_out].tolist()
@@ -33,6 +34,7 @@ def get_column_entry_from_metadata_two_conditions(
     sample_metadata_df = read_sample_metadata(),
     return_all=False):
     """filter metadata df according to entry and column"""
+    sample_metadata_df = sample_metadata_df.fillna('')
     inds_arr = np.logical_and(sample_metadata_df[cond_column_1] == cond_name_1, sample_metadata_df[cond_column_2] == cond_name_2)
     df_sub = sample_metadata_df.loc[inds_arr]
     if return_all:
@@ -113,11 +115,17 @@ def choose_postIMC_to_postIMS_transform(wildcards):
 
 def choose_imsml_coordsfile(wildcards):
         filename = get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
-        filename = str(filename)
-        if filename.strip() == "":
+        filename = str(filename).strip()
+        if filename == "":
             filename_out = f"results/{wildcards.project_name}/data/IMS/postIMS_to_IMS_{wildcards.project_name}_{wildcards.sample}-IMSML-coords.h5"
         else:
             filename_out = f"results/{wildcards.project_name}/data/IMS/{filename}"
         return filename_out
 
+def decide_IMS_to_postIMS_reg_metrics_auto_or_not(wildcards):
+        samples=get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all = True)
+        filename = [get_column_entry_from_metadata_two_conditions(s, wildcards.project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"])) for s in samples]
+        filename = [str(f).strip() for f in filename]
+        out = ["_auto" if f == ""  else "" for f in filename]
+        return out
 
