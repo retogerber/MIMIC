@@ -213,8 +213,8 @@ def find_approx_init_translation(imzcents, picents):
     max_dists = list()
     xrange = np.abs(imzimgres.shape[0]-postIMSregin.shape[0])
     yrange = np.abs(imzimgres.shape[1]-postIMSregin.shape[1])
-    xshifts = list(range(-xrange,xrange,np.round(100/resolution).astype(np.uint))) + [xrange]
-    yshifts = list(range(-yrange,yrange,np.round(100/resolution).astype(np.uint))) + [yrange]
+    xshifts = list(range(-xrange,xrange,np.round(50/resolution).astype(np.uint))) + [xrange]
+    yshifts = list(range(-yrange,yrange,np.round(50/resolution).astype(np.uint))) + [yrange]
     combs = np.array(np.meshgrid(np.array(xshifts),np.array(yshifts))).T.reshape(-1,2)
     for i in range(combs.shape[0]):
         kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
@@ -223,7 +223,8 @@ def find_approx_init_translation(imzcents, picents):
         max_dists.append(np.max(distances))
 
     # do precise registration of points only on 200 combinations with lowest max distances
-    ind = np.argpartition(max_dists, -200)[:200]
+    topn = 200 if combs.shape[0]>200 else combs.shape[0]
+    ind = np.argpartition(max_dists, -topn)[:topn]
     combs_red = combs[ind,:]
     max_dists_red = list()
     for i in range(combs_red.shape[0]):
