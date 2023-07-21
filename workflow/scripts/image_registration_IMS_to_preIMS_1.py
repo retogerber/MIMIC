@@ -23,13 +23,13 @@ sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 logging.info("Start")
 
 # parameters
-# stepsize = 30
+# stepsize = 10
 stepsize = float(snakemake.params["IMS_pixelsize"])
-# pixelsize = 24
+# pixelsize = 8 
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
 # resolution = 1
 resolution = float(snakemake.params["IMC_pixelsize"])
-# rotation_imz = 180
+# rotation_imz = 0
 rotation_imz = float(snakemake.params["IMS_rotation_angle"])
 assert(rotation_imz in [-270,-180,-90,0,90,180,270])
 
@@ -39,13 +39,14 @@ assert(rotation_imz in [-270,-180,-90,0,90,180,270])
 postIMSr_file = snakemake.input["postIMSmask_downscaled"]
 # imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/IMS_test_split_ims_2.imzML"
 # imzmlfile = "/home/retger/Downloads/cirrhosis_TMA_IMS.imzML"
-# imzmlfile = "/home/retger/Downloads/pos_mode_lipids_tma_02022023_imzml.imzML"
+# imzmlfile = "/home/retger/Downloads/pos_mode_lipids_tma_02032023_imzml.imzML"
 imzmlfile = snakemake.input["imzml"]
 # imc_mask_files = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
 # imc_mask_files = [f"/home/retger/Downloads/Cirrhosis-TMA-5_New_Detector_0{i}_transformed.ome.tiff" for i in ["01","02","03","04","05","06","07","08","09","11","12","13","14","15","16"]]
 # imc_mask_files = imc_mask_files + [f"/home/retger/Downloads/Cirrhosis-TMA-5_01062022_0{i}_transformed.ome.tiff" for i in ["05","06","07","08","09"]]
 # imc_mask_files = imc_mask_files + [f""/home/retger/Downloads/Cirrhosis_TMA_5_01262022_0{i}_transformed.ome.tiff" for i in ["01","02","03","04","05"]]
 # imc_mask_files = ["/home/retger/Downloads/Lipid_TMA_37819_009_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_025_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_027_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_029_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_031_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_033_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_035_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_037_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_039_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_041_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_043_transformed.ome.tiff"]
+# imc_mask_files = ["/home/retger/Downloads/Lipid_TMA_37819_012_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_015_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_017_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_019_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_021_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_023_transformed.ome.tiff"]
 imc_mask_files = snakemake.input["IMCmask"]
 if isinstance(imc_mask_files, str):
     imc_mask_files = [imc_mask_files]
@@ -208,37 +209,55 @@ del tmpi, pirps
 # for each find nearest neighboring centroid from other modality
 # register point clouds and get maximum distance to nearest neighbor
 # the lowest maximum distance should be a good starting point for registration
-max_dists = list()
-xrange = imzimgres.shape[0]-postIMSregincut.shape[0]
-if xrange<0:
-    xrange=1
-yrange = imzimgres.shape[1]-postIMSregincut.shape[1]
-if yrange<0:
-    yrange=1
-xshifts = list(range(0,xrange,np.round(5/resolution).astype(np.uint))) + [xrange]
-yshifts = list(range(0,yrange,np.round(5/resolution).astype(np.uint))) + [yrange]
-combs = np.array(np.meshgrid(np.array(xshifts),np.array(yshifts))).T.reshape(-1,2)
-for i in range(combs.shape[0]):
-    kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
-    distances, indices = kdt.query(picents+np.array(combs[i,:]), k=1, return_distance=True)
-    indices = [ni[0] for ni in indices]
-    max_dists.append(np.max(distances))
+def find_approx_init_translation(imzcents, picents):
+    max_dists = list()
+    xrange = np.abs(imzimgres.shape[0]-postIMSregin.shape[0])
+    yrange = np.abs(imzimgres.shape[1]-postIMSregin.shape[1])
+    xshifts = list(range(-xrange,xrange,np.round(100/resolution).astype(np.uint))) + [xrange]
+    yshifts = list(range(-yrange,yrange,np.round(100/resolution).astype(np.uint))) + [yrange]
+    combs = np.array(np.meshgrid(np.array(xshifts),np.array(yshifts))).T.reshape(-1,2)
+    for i in range(combs.shape[0]):
+        kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
+        distances, indices = kdt.query(picents+np.array(combs[i,:]), k=1, return_distance=True)
+        indices = [ni[0] for ni in indices]
+        max_dists.append(np.max(distances))
 
-# do precise registration of points only on 200 combinations with lowest max distances
-ind = np.argpartition(max_dists, -200)[:200]
-combs_red = combs[ind,:]
-max_dists_red = list()
-for i in range(combs_red.shape[0]):
-    kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
-    distances, indices = kdt.query(picents+np.array(combs_red[i,:]), k=1, return_distance=True)
-    indices = [ni[0] for ni in indices]
-    reg = pycpd.RigidRegistration(X=imzcents[indices,:], Y=picents, w=0)
-    TY, (s_reg, R_reg, t_reg) = reg.register()
-    kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
-    distances, indices = kdt.query(TY, k=1, return_distance=True)
-    max_dists_red.append(np.max(distances))
+    # do precise registration of points only on 200 combinations with lowest max distances
+    ind = np.argpartition(max_dists, -200)[:200]
+    combs_red = combs[ind,:]
+    max_dists_red = list()
+    for i in range(combs_red.shape[0]):
+        kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
+        distances, indices = kdt.query(picents+np.array(combs_red[i,:]), k=1, return_distance=True)
+        indices = [ni[0] for ni in indices]
+        reg = pycpd.RigidRegistration(X=imzcents[indices,:], Y=picents, w=0)
+        TY, (s_reg, R_reg, t_reg) = reg.register()
+        kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
+        distances, indices = kdt.query(TY, k=1, return_distance=True)
+        max_dists_red.append(np.max(distances))
 
-xy_init_shift = combs_red[np.array(max_dists_red) == np.min(max_dists_red),:][0,:]
+    xy_init_shift = combs_red[np.array(max_dists_red) == np.min(max_dists_red),:][0,:]
+    return xy_init_shift, np.min(max_dists_red)
+
+xy_init_shift, max_dist = find_approx_init_translation(imzcents, picents)
+
+# kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
+# distances, indices = kdt.query(imzcents, k=2, return_distance=True)
+# if max_dist > np.min(distances[:,1])/2:
+#     inds = np.linspace(0,imzcents.shape[0]-1,imzcents.shape[0]).astype(int)
+#     ndiff = imzcents.shape[0]-picents.shape[0]
+#     outls = list()
+#     for i in inds:
+#         tmp_xy_init_shift, tmp_max_dist = find_approx_init_translation(imzcents[inds[inds!=i],:], picents)
+#         outls.append([i, tmp_max_dist, tmp_xy_init_shift])
+#     max_dists = [o[1] for o in outls]
+
+# plt.scatter(picents[:,1], picents[:,0])
+# plt.scatter(imzcents[inds[inds!=i],1], imzcents[inds[inds!=i],0], color="red")
+# plt.show()
+
+
+
 kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
 distances, indices = kdt.query(picents+xy_init_shift, k=1, return_distance=True)
 indices = [ni[0] for ni in indices]
@@ -246,6 +265,14 @@ reg = pycpd.RigidRegistration(X=imzcents[indices,:], Y=picents, w=0)
 TY, (s_reg, R_reg, t_reg) = reg.register()
 # actual initial transform for registration
 init_trans = np.round(t_reg+np.array([global_bbox[0],global_bbox[1]])).astype(int)
+
+# import matplotlib.pyplot as plt
+# plt.scatter(picents[:,1]+xy_init_shift[1], picents[:,0]+xy_init_shift[0])
+# plt.scatter(TY[:,1], TY[:,0])
+# plt.scatter(imzcents[:,1], imzcents[:,0], color="red")
+# plt.show()
+
+
 
 logging.info("Register postIMS to imz")
 # function used in registration
