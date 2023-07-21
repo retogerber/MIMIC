@@ -24,13 +24,13 @@ sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 logging.info("Start")
 
 # parameters
-stepsize = 30
+# stepsize = 30
 stepsize = float(snakemake.params["IMS_pixelsize"])
-pixelsize = 24
+# pixelsize = 24
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
-resolution = 1
+# resolution = 1
 resolution = float(snakemake.params["IMC_pixelsize"])
-rotation_imz = 180
+# rotation_imz = 180
 rotation_imz = float(snakemake.params["IMS_rotation_angle"])
 assert(rotation_imz in [-270,-180,-90,0,90,180,270])
 logging.info("Rotation angle: "+str(rotation_imz))
@@ -43,19 +43,21 @@ logging.info("Microscopy pixelsize: "+str(resolution))
 # imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed.ome.tiff" 
 # output_table = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/test_split_ims_IMS_to_postIMS_matches.csv"
 # output_table="/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/test_split_ims_test_split_ims_2_IMS_to_postIMS_matches.csv"
-# postIMS_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMS/test_split_pre_postIMS_reduced.ome.tiff"
+# postIMS_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/postIMS/test_split_ims_postIMS_reduced.ome.tiff"
 # postIMS_file = "/home/retger/Downloads/cirrhosis_TMA_postIMS_reduced.ome.tiff"
+# postIMS_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS_reduced.ome.tiff"
 postIMS_file = snakemake.input["postIMS_downscaled"]
-# postIMSr_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMS/test_split_pre_postIMS_reduced_mask.ome.tiff"
+# postIMSr_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/postIMS/test_split_ims_postIMS_reduced_mask.ome.tiff"
 # postIMSr_file = "/home/retger/Downloads/cirrhosis_TMA_postIMS_reduced_mask.ome.tiff"
+# postIMSr_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS_reduced_mask.ome.tiff"
 postIMSr_file = snakemake.input["postIMSmask_downscaled"]
-# imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/IMS_test_split_pre.imzML"
+# imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/IMS_test_split_ims_1.imzML"
 # imzmlfile = "/home/retger/Downloads/cirrhosis_TMA_IMS.imzML"
 imzmlfile = snakemake.input["imzml"]
-# imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
+# imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/Cirrhosis-TMA-5_New_Detector_008_transformed.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
-# output_table = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/IMS_to_postIMS_matches.csv"
+# output_table = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/test_split_ims_test_split_ims_1_IMS_to_postIMS_matches.csv"
 # output_table = "/home/retger/Downloads/cirrhosis_TMA_cirrhosis_TMA_IMS_IMS_to_postIMS_matches.csv"
 output_table = snakemake.input["IMS_to_postIMS_matches"]
 
@@ -95,6 +97,7 @@ logging.info("Read postIMS region bounding box")
 dfmeta = pd.read_csv(output_table)
 imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed","")
 # imc_project = "cirrhosis_TMA"
+# imc_project="test_split_ims"
 imc_project = os.path.split(os.path.split(os.path.split(os.path.split(imc_mask_file)[0])[0])[0])[1]
 
 project_name = "postIMS_to_IMS_"+imc_project+"_"+imc_samplename
@@ -110,6 +113,10 @@ regionimz = dfmeta[inds_arr]["imzregion"].tolist()[0]
 
 
 logging.info("Read cropped postIMS")
+# xmin = postIMSxmins[0]
+# ymin = postIMSymins[0]
+# xmax = postIMSxmaxs[0]
+# ymax = postIMSymaxs[0]
 # subset mask
 postIMScut = readimage_crop(postIMS_file, [xmin, ymin, xmax, ymax])
 postIMScut = prepare_image_for_sam(postIMScut, resolution)
@@ -121,8 +128,31 @@ postIMSringmask = create_ring_mask(postIMSrcut, (1/resolution)*stepsize*2, (1/re
 postIMSoutermask = skimage.morphology.isotropic_dilation(postIMSrcut, (1/resolution)*stepsize*2)
 
 # subset and filter postIMS image
-postIMSm = postIMSmpre.copy()
+# postIMSm = postIMSmpre.copy()
+# postIMSm[np.logical_not(postIMSringmask)] = 0
+
+kersize = int(stepsize/2)
+kersize = kersize-1 if kersize%2==0 else kersize
+kernel = np.zeros((kersize,kersize))
+kernel[int((kersize-1)/2),:]=1
+kernel[:,int((kersize-1)/2)]=1
+
+tmp1 = skimage.filters.rank.threshold(postIMSmpre, skimage.morphology.disk(kersize))
+tmp2 = skimage.filters.rank.mean(tmp1*255, kernel)
+
+# import matplotlib.pyplot as plt
+# fig, ax = plt.subplots(nrows=1, ncols=3)
+# ax[0].imshow(postIMScut[250:500,250:500],cmap='gray')
+# ax[0].set_title("postIMS")
+# ax[1].imshow(tmp1[250:500,250:500],cmap='gray')
+# ax[1].set_title("Filtered")
+# ax[2].imshow(tmp2[250:500,250:500],cmap='gray')
+# ax[2].set_title("Filtered")
+# plt.show()
+
+postIMSm = tmp2.copy()
 postIMSm[np.logical_not(postIMSringmask)] = 0
+
 
 
 logging.info("Find best threshold for IMS laser ablation marks detection")
@@ -142,9 +172,18 @@ def points_from_mask(
     inran = np.logical_and(areas > area_range[0], areas < area_range[1])
     regsred = np.asarray(regs)[inran]
     cents = np.asarray([r.centroid for r in regsred])
+
+    axis_ratio = np.asarray([c.axis_major_length/c.axis_minor_length for c in regsred])
+    inran2 = axis_ratio < 2
+    regsred = np.asarray(regsred)[inran2]
+    if not isinstance(regsred, np.ndarray) or len(regsred)<6:
+        return np.zeros((0,2))
+    cents = np.asarray([r.centroid for r in regsred])
+
     # to IMS scale
     centsred = cents/((1/resolution)*stepsize)
-
+    if centsred.shape[0]<6:
+        return centsred
     # filter according to distance to nearest neighbors,
     # expected for a grid are distances close to 1
     kdt = KDTree(centsred, leaf_size=30, metric='euclidean')
@@ -187,7 +226,9 @@ logging.info("Corresponding threshold: "+str(threshold))
 logging.info("Apply threshold")
 postIMSmb = postIMSm>threshold
 centsred = points_from_mask(postIMSmb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize)
-
+# plt.imshow(postIMSmb)
+# plt.scatter(centsred[:,1]*stepsize,centsred[:,0]*stepsize)
+# plt.show()
 logging.info("Create IMS coordinates")
 # create coordsmatrices for IMS
 indmatx = np.zeros(imzimg.shape)
