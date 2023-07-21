@@ -23,27 +23,29 @@ sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 logging.info("Start")
 
 # parameters
-stepsize = 30
+# stepsize = 30
 stepsize = float(snakemake.params["IMS_pixelsize"])
-pixelsize = 24
+# pixelsize = 24
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
-resolution = 1
+# resolution = 1
 resolution = float(snakemake.params["IMC_pixelsize"])
-rotation_imz = 180
+# rotation_imz = 180
 rotation_imz = float(snakemake.params["IMS_rotation_angle"])
 assert(rotation_imz in [-270,-180,-90,0,90,180,270])
 
 # postIMSr_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/postIMS/test_split_ims_postIMS_reduced_mask.ome.tiff"
 # postIMSr_file = "/home/retger/Downloads/cirrhosis_TMA_postIMS_reduced_mask.ome.tiff"
+# postIMSr_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS_reduced_mask.ome.tiff"
 postIMSr_file = snakemake.input["postIMSmask_downscaled"]
 # imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/IMS_test_split_ims_2.imzML"
 # imzmlfile = "/home/retger/Downloads/cirrhosis_TMA_IMS.imzML"
+# imzmlfile = "/home/retger/Downloads/pos_mode_lipids_tma_02022023_imzml.imzML"
 imzmlfile = snakemake.input["imzml"]
 # imc_mask_files = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
 # imc_mask_files = [f"/home/retger/Downloads/Cirrhosis-TMA-5_New_Detector_0{i}_transformed.ome.tiff" for i in ["01","02","03","04","05","06","07","08","09","11","12","13","14","15","16"]]
 # imc_mask_files = imc_mask_files + [f"/home/retger/Downloads/Cirrhosis-TMA-5_01062022_0{i}_transformed.ome.tiff" for i in ["05","06","07","08","09"]]
-# imc_mask_files = imc_mask_files + [f"/home/retger/Downloads/Cirrhosis_TMA_5_01262022_0{i}_transformed.ome.tiff" for i in ["01","02","03","04","05"]]
-
+# imc_mask_files = imc_mask_files + [f""/home/retger/Downloads/Cirrhosis_TMA_5_01262022_0{i}_transformed.ome.tiff" for i in ["01","02","03","04","05"]]
+# imc_mask_files = ["/home/retger/Downloads/Lipid_TMA_37819_009_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_025_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_027_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_029_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_031_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_033_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_035_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_037_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_039_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_041_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_043_transformed.ome.tiff"]
 imc_mask_files = snakemake.input["IMCmask"]
 if isinstance(imc_mask_files, str):
     imc_mask_files = [imc_mask_files]
@@ -111,12 +113,14 @@ del tmpuqs
 regpops = skimage.measure.regionprops(postIMSregin)
 postIMS_pre_bbox = [r.bbox for r in regpops]
 postIMS_pre_labels = [r.label for r in regpops]
+postIMS_pre_areas = [r.area for r in regpops]
 del regpops
 
 logging.info("Find global bounding box of cores")
 tmpbool = np.array([p in np.array(postIMSregions) for p in postIMS_pre_labels])
 postIMS_pre_bbox = np.array(postIMS_pre_bbox)[tmpbool]
 postIMS_pre_labels = np.array(postIMS_pre_labels)[tmpbool]
+postIMS_pre_areas = np.array(postIMS_pre_areas)[tmpbool]
 global_bbox = [
     np.min([p[0] for p in postIMS_pre_bbox]),
     np.min([p[1] for p in postIMS_pre_bbox]),
@@ -133,9 +137,10 @@ imz = napari_imsmicrolink.data.ims_pixel_map.PixelMapIMS(imzmlfile)
 imz.ims_res = stepsize
 # create image mask
 imzimg = imz._make_pixel_map_at_ims(randomize=False, map_type="minimized")
-# rescale to postIMS resolution
-imzimgres = skimage.transform.rescale(imzimg, stepsize*resolution, preserve_range = True)   
-imzimgres[imzimgres>0] = 255 
+
+logging.info("Apply rotation")
+# rotate 180 degrees
+imzimg = skimage.transform.rotate(imzimg,rotation_imz, preserve_range=True)
 
 # create imz region image
 y_extent, x_extent, y_coords, x_coords = imz._get_xy_extents_coords(map_type="minimized")
@@ -143,13 +148,23 @@ imzregions = np.zeros((y_extent, x_extent), dtype=np.uint8)
 imzregions[y_coords, x_coords] = imz.regions
 imzregions = skimage.transform.rotate(imzregions,rotation_imz, preserve_range=True)
 imzregions = np.round(imzregions)
-imzuqregs = np.unique(imz.regions)
+imzregions = imzregions.astype(np.uint8)
+# remove imz areas that are clearly too small to match
+imzregpop = skimage.measure.regionprops(imzregions)
+imzlabels = np.array([r.label for r in imzregpop])
+imzareas = np.array([r.area for r in imzregpop]) * (stepsize*resolution)**2
+to_remove = imzareas < np.min(postIMS_pre_areas)*0.5
+labs_to_remove = imzlabels[to_remove]
+for lab in labs_to_remove:
+    imzimg[imzregions == lab]=0
+
+imzuqregs = np.unique(imzregions)[1:]
+# rescale to postIMS resolution
+imzimgres = skimage.transform.rescale(imzimg, stepsize*resolution, preserve_range = True)   
+imzimgres[imzimgres>0] = 255 
 del imz
 
-logging.info("Apply rotation")
-# rotate 180 degrees
-imzimg = skimage.transform.rotate(imzimg,rotation_imz, preserve_range=True)
-imzimgres = skimage.transform.rotate(imzimgres,rotation_imz, preserve_range=True).astype(np.uint8)
+# imzimgres = skimage.transform.rotate(imzimgres,rotation_imz, preserve_range=True).astype(np.uint8)
 imzimgres[imzimgres>0] = 255
 
 logging.info("Cut postIMS mask to global bounding box")
@@ -167,7 +182,7 @@ postIMSrcut[np.logical_not(boolimg)] = 0
 # get centroids of imz regions
 imzrps = skimage.measure.regionprops(skimage.measure.label(imzimgres))
 imzarea = np.array([rp.area for rp in imzrps])
-too_small = imzarea < np.mean(imzarea) - 3*np.std(imzarea)
+too_small = imzarea < np.mean(imzarea) - 5*np.std(imzarea)
 imzrps = np.array(imzrps)[np.logical_not(too_small)]
 imzcents = np.array([[rp.centroid[0],rp.centroid[1]] for rp in imzrps])
 del imzrps, imzarea, too_small
@@ -178,6 +193,14 @@ tmpi[np.logical_not(boolimg)] = 0
 pirps = skimage.measure.regionprops(tmpi)
 picents = np.array([[rp.centroid[0]+global_bbox[0],rp.centroid[1]+global_bbox[1]] for rp in pirps])
 del tmpi, pirps
+
+# import matplotlib.pyplot as plt
+# fig, ax = plt.subplots(nrows=1, ncols=2)
+# ax[0].imshow(imzimg)
+# ax[0].set_title("IMS")
+# ax[1].imshow(postIMSregincut)
+# ax[1].set_title("postIMS")
+# plt.show()
 
 
 # find good initial translation for registration:
@@ -221,7 +244,6 @@ distances, indices = kdt.query(picents+xy_init_shift, k=1, return_distance=True)
 indices = [ni[0] for ni in indices]
 reg = pycpd.RigidRegistration(X=imzcents[indices,:], Y=picents, w=0)
 TY, (s_reg, R_reg, t_reg) = reg.register()
-
 # actual initial transform for registration
 init_trans = np.round(t_reg+np.array([global_bbox[0],global_bbox[1]])).astype(int)
 
