@@ -8,6 +8,7 @@ from napari_imsmicrolink.utils.json import NpEncoder
 import skimage
 import numpy as np
 import json
+import matplotlib.pyplot as plt
 from image_registration_IMS_to_preIMS_utils import readimage_crop, prepare_image_for_sam, create_ring_mask, composite2affine, saveimage_tile, normalize_image, get_image_shape
 import sys,os
 import logging, traceback
@@ -408,82 +409,6 @@ logging.info(f"ymaximz: {ymaximz}")
 
 # init_translation = (-np.min(imzcoords,axis=0).astype(float)+np.min(centsred,axis=0).astype(float)).astype(int)
 
-if False:
-    postIMScent = skimage.measure.regionprops(skimage.measure.label(postIMSnringmask))[0].centroid
-    postIMScentred = np.array(postIMScent)/stepsize*resolution
-
-    # plt.imshow(postIMSmpre)
-    # plt.scatter(centsred[:,1]*stepsize,centsred[:,0]*stepsize)
-    # plt.scatter(postIMScentred[1]*stepsize,postIMScentred[0]*stepsize)
-    # plt.show()
-
-    angles = np.array([get_angle(centsred[i,:],postIMScentred) for i in range(centsred.shape[0])])
-    angles = angles +180
-    angles.sort()
-
-    # plt.hist(angles, bins=360)
-    # plt.show()
-
-    angle_max_error = 2.5
-    angles_min = angles
-    angles_max = angles+angle_max_error*2
-
-    angles_ls = [[angles_min[0], angles_max[0]]]
-    counts_ls = [0]
-    pos=0
-    for i in range(len(angles)-1):
-        if (angles_ls[pos][1]-angles_min[i+1])>0:
-            angles_ls[pos][1]=angles_max[i+1]
-            counts_ls[pos]+=1
-        else:
-            print(f"new: {i}")
-            angles_ls.append([angles_min[i+1],angles_max[i+1]])
-            counts_ls.append(0)
-            pos+=1
-
-    if len(angles_ls)>1:
-        do_merge=False
-        if angles_ls[-1][1]>360 and angles_ls[0][0]<0:
-            do_merge=True
-        elif angles_ls[-1][1]>360 and angles_ls[0][0]>=0:
-            if angles_ls[-1][1]%360 - angles_ls[0][0] > 0:
-                do_merge=True
-        elif angles_ls[-1][1]<=360 and angles_ls[0][0]<0:
-            if angles_ls[-1][1] - angles_ls[0][0]%360 < 0:
-                do_merge=True
-        if do_merge:
-            angles_ls[0][0]=angles_ls[-1][0]
-            del angles_ls[-1]
-            counts_ls[0]+=counts_ls[-1]
-            del counts_ls[-1]
-    angles_ls = [np.array(ang)-angle_max_error for ang in angles_ls]
-    angles_ls
-    counts_ls
-
-
-    imzcent = np.mean(imzcoords,axis=0)
-    angles = np.array([get_angle(imzcoords[i,:].astype(float),imzcent) for i in range(imzcoords.shape[0])])
-    angles = angles +180
-    # plt.hist(angles, bins=360)
-    # plt.show()
-
-    boolls = []
-    for i in range(len(angles_ls)):
-        if angles_ls[i][0]>angles_ls[i][1]:
-            boolls.append(np.logical_or(angles > angles_ls[i][0],angles < angles_ls[i][1]))
-        else:
-            boolls.append(np.logical_and(angles > angles_ls[i][0],angles < angles_ls[i][1]))
-    to_keep = np.sum(np.stack(boolls),axis=0).astype(bool)
-
-    imzcoords = imzcoords[to_keep,:]
-
-    # # plt.imshow(postIMSmb)
-    plt.scatter(imzcoords[:,1]*stepsize/resolution,imzcoords[:,0]*stepsize/resolution)
-    plt.scatter(imzcent[1]*stepsize/resolution,imzcent[0]*stepsize/resolution)
-    plt.show()
-
-
-
 logging.info("Prepare for initial registration with sitk")
 logging.info("Prepare postIMS image")
 postIMSpimg = np.zeros(postIMSm.shape, dtype=bool)
@@ -566,36 +491,50 @@ postIMSro_trans = sitk.GetArrayFromImage(resampler.Execute(sitk.GetImageFromArra
 tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_sitk_registration.ome.tiff"
 logging.info(f"Save Image difference as: {tmpfilename}")
 saveimage_tile(postIMSro_trans-imzimg_regin, tmpfilename, resolution)
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 # fig, ax = plt.subplots(nrows=1, ncols=3)
-# ax[0].imshow(imzimg_regin)
-# ax[1].imshow(postIMSro_trans)
-# ax[2].imshow(postIMSro_trans-imzimg_regin)
+# ax[0].imshow(skimage.transform.resize(postIMSpimg,imzimg_regin.shape)-imzimg_regin)
+# ax[1].imshow(postIMSro_trans-imzimg_regin)
+# ax[2].imshow(skimage.transform.resize(postIMSpimg,imzimg_regin.shape)-postIMSro_trans)
 # plt.show()
 
+# plt.imshow(postIMSro_trans.astype(float)+imzimg_regin.astype(float))
+# plt.show()
 
 # inverse transformation
 tinv = transform.GetInverse()
-tinv.SetTranslation(-np.array(tinv.GetTranslation())[[1,0]]/10)
+# tinv.SetTranslation(-np.array(tinv.GetTranslation())[[1,0]]/10)
+if rotation_imz==180:
+# works for rotation=180
+    tinv.SetTranslation(np.array(tinv.GetTranslation())[[0,1]]/10-0.5)
+elif rotation_imz==0:
+    tinv.SetTranslation(-np.array(tinv.GetTranslation())[[1,0]]/10+1.5)
+# tinv.SetMatrix(transform.GetMatrix())
 
 
 
 imzringmask = create_ring_mask(imzimg[xminimz:xmaximz,yminimz:ymaximz], imspixel_outscale, imspixel_inscale)
 logging.info("Create IMS boundary coordinates")
 imzcoords = create_imz_coords(imzimg, imzringmask, imzrefcoords, imz_bbox, rotmat)
+# plt.imshow(imzimg[xminimz:xmaximz,yminimz:ymaximz])
+# plt.scatter(imzcoords_in[:,1], imzcoords_in[:,0],color="red",alpha=0.5)
+# plt.show()
 
 logging.info("Create IMS boundary coordinates")
-init_translation = -np.min(imzcoords,axis=0).astype(int)
+# init_translation = -np.min(imzcoords,axis=0).astype(int)
+init_translation = -np.array([xminimz,yminimz]).astype(int)
 imzcoords_in = imzcoords + init_translation
 imzcoordsfilttrans = np.array([tinv.TransformPoint(imzcoords_in[i,:].astype(float)) for i in range(imzcoords_in.shape[0])])
 
 tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_sitk_registration.svg"
 plt.close()
-plt.scatter(imzcoordsfilttrans[:,0], imzcoordsfilttrans[:,1],color="red")
-plt.scatter(centsred[:,0], centsred[:,1],color="blue")
+# plt.imshow(imzimg[xminimz:xmaximz,yminimz:ymaximz])
+# plt.scatter(imzcoords_in[:,1], imzcoords_in[:,0],color="black",alpha=0.5)
+plt.scatter(imzcoordsfilttrans[:,1], imzcoordsfilttrans[:,0],color="red",alpha=0.5)
+plt.scatter(centsred[:,1], centsred[:,0],color="blue",alpha=0.5)
 plt.title("matching points")
 fig = plt.gcf()
-fig.set_size_inches(10,10)
+fig.set_size_inches(20,20)
 fig.savefig(tmpfilename)
 # plt.show()
 
@@ -621,80 +560,210 @@ centsred = points_from_mask(postIMSmb, pixelsize=pixelsize, resolution=resolutio
 # plt.title("matching points")
 # plt.show()
 
+
+n_points_ls = []
+for xsh in np.linspace(-3,3,25):
+    for ysh in np.linspace(-3,3,25):
+        matches = skimage.feature.match_descriptors(centsred, imzcoordsfilttrans + np.array([xsh,ysh]), max_distance=1)
+        n_points_ls.append([matches.shape[0],xsh,ysh])
+n_points_arr = np.array(n_points_ls)
+n_points_arr[n_points_arr[:,0] == np.max(n_points_arr[:,0]),:]
+xsh = n_points_arr[n_points_arr[:,0] == np.max(n_points_arr[:,0]),1][0]
+ysh = n_points_arr[n_points_arr[:,0] == np.max(n_points_arr[:,0]),2][0]
+# plt.scatter(imzcoordsfilttrans[:,0]+xsh, imzcoordsfilttrans[:,1]+ysh,color="red")
+# plt.scatter(centsred[:,0], centsred[:,1],color="blue")
+# plt.title("matching points")
+# plt.show()
+
+
+
 logging.info("Find matching IMS and postIMS points")
 # eval matching points
-kdt = KDTree(imzcoordsfilttrans, leaf_size=30, metric='euclidean')
+kdt = KDTree(imzcoordsfilttrans+np.array([xsh,ysh]), leaf_size=30, metric='euclidean')
 centsred_distances, indices = kdt.query(centsred, k=1, return_distance=True)
-centsred_has_match = centsred_distances.flatten()<3
-# imz_has_match = imz_distances.flatten()<0.75
+# centsred_has_match = centsred_distances.flatten()<1
+centsred_has_match = centsred_distances.flatten()<0.75
 kdt = KDTree(centsred, leaf_size=30, metric='euclidean')
-imz_distances, indices = kdt.query(imzcoordsfilttrans, k=1, return_distance=True)
-imz_has_match = imz_distances.flatten()<3
-# centsred_has_match = centsred_distances.flatten()<0.75
+imz_distances, indices = kdt.query(imzcoordsfilttrans+np.array([xsh,ysh]), k=1, return_distance=True)
+# imz_has_match = imz_distances.flatten()<1
+imz_has_match = imz_distances.flatten()<0.75
 
 centsredfilt = centsred[centsred_has_match,:]
 imzcoordsfilt = imzcoordsfilttrans[imz_has_match,:]
 
+# plt.scatter(imzcoordsfilt[:,0]+xsh, imzcoordsfilt[:,1]+ysh,color="red")
+# plt.scatter(centsredfilt[:,0], centsredfilt[:,1],color="blue")
+# plt.title("matching points")
+# plt.show()
+
+
+
+if False:
+    postIMScent = skimage.measure.regionprops(skimage.measure.label(postIMSnringmask))[0].centroid
+    postIMScentred = np.array(postIMScent)/stepsize*resolution
+
+    # plt.imshow(postIMSmpre)
+    # plt.scatter(centsred[:,1]*stepsize,centsred[:,0]*stepsize)
+    # plt.scatter(postIMScentred[1]*stepsize,postIMScentred[0]*stepsize)
+    # plt.show()
+
+    angles = np.array([get_angle(centsred[i,:],postIMScentred) for i in range(centsred.shape[0])])
+    angles = angles[centsred_has_match]
+    angles = angles +180
+    angles_order = pd.factorize(list(angles), sort=True)[0]
+    angles_sort = np.array(sorted(angles))
+    angles_sort_order = pd.factorize(list(angles_sort), sort=True)[0]
+
+    angle_max_error = 2.5
+    angles_min = angles_sort
+    angles_max = angles_sort+angle_max_error*2
+
+    angles_ls = [[angles_min[0], angles_max[0]]]
+    counts_ls = [1]
+    pos=0
+    angles_group = [[angles_min[0], pos]]
+    for i in range(len(angles_sort)-1):
+        if (angles_ls[pos][1]-angles_min[i+1])>0:
+            angles_ls[pos][1]=angles_max[i+1]
+            counts_ls[pos]+=1
+        else:
+            print(f"new: {i}")
+            angles_ls.append([angles_min[i+1],angles_max[i+1]])
+            counts_ls.append(1)
+            pos+=1
+        angles_group.append([angles_min[i], pos])
+    
+    angles_group = np.array(angles_group)
+    angles_group = np.concatenate([angles_group,np.reshape(np.array(list(range(angles_group.shape[0]))),(angles_group.shape[0],1))],axis=1)
+    if len(angles_ls)>1:
+        do_merge=False
+        if angles_ls[-1][1]>360 and angles_ls[0][0]<0:
+            do_merge=True
+        elif angles_ls[-1][1]>360 and angles_ls[0][0]>=0:
+            if angles_ls[-1][1]%360 - angles_ls[0][0] > 0:
+                do_merge=True
+        elif angles_ls[-1][1]<=360 and angles_ls[0][0]<0:
+            if angles_ls[-1][1] - angles_ls[0][0]%360 < 0:
+                do_merge=True
+        if do_merge:
+            angles_ls[0][0]=angles_ls[-1][0]
+            del angles_ls[-1]
+            counts_ls[0]+=counts_ls[-1]
+            del counts_ls[-1]
+            angles_group[angles_group[:,1]==angles_group[-1,1],1] = 0
+    angles_ls = [np.array(ang)-angle_max_error for ang in angles_ls]
+    angles_ls
+    counts_ls
+
+    if len(angles_ls) > 1:
+        total_angles = [(ang[1]-ang[0])%360 for ang in angles_ls]
+        points_per_angle = np.array(counts_ls)/np.array(total_angles)
+        grps = np.unique(angles_group[:,1])
+        if np.min(points_per_angle)*3<np.max(points_per_angle):
+            wanted_ratio = 2*np.min(points_per_angle)
+            inds_to_keep = []
+            for grp in grps[points_per_angle>wanted_ratio]:
+                n_points = np.array(counts_ls)[grps == grp][0]
+                npoints_to_keep = int(np.floor(n_points/(points_per_angle[grps==grp]-wanted_ratio))[0])
+                import random
+                ransam = random.sample(range(n_points),npoints_to_keep)
+                inds_to_keep += list(angles_group[angles_group[:,1] == grp,:][ransam,2])
+            for grp in grps[points_per_angle<=wanted_ratio]:
+                inds_to_keep += list(angles_group[angles_group[:,1] == grp,:][:,2])
+
+
+
+    # imzcent = np.mean(imzcoords,axis=0)
+    # angles = np.array([get_angle(imzcoords[i,:].astype(float),imzcent) for i in range(imzcoords.shape[0])])
+    # angles = angles +180
+    # # plt.hist(angles, bins=360)
+    # # plt.show()
+
+    # boolls = []
+    # for i in range(len(angles_ls)):
+    #     if angles_ls[i][0]>angles_ls[i][1]:
+    #         boolls.append(np.logical_or(angles > angles_ls[i][0],angles < angles_ls[i][1]))
+    #     else:
+    #         boolls.append(np.logical_and(angles > angles_ls[i][0],angles < angles_ls[i][1]))
+    # to_keep = np.sum(np.stack(boolls),axis=0).astype(bool)
+
+    # imzcoords = imzcoords[to_keep,:]
+
+    # # # plt.imshow(postIMSmb)
+    # plt.scatter(imzcoords[:,1]*stepsize/resolution,imzcoords[:,0]*stepsize/resolution)
+    # plt.scatter(imzcent[1]*stepsize/resolution,imzcent[0]*stepsize/resolution)
+    # plt.show()
+
+
+    centsredfilt = centsredfilt[np.array(inds_to_keep).astype(int),:]
+    matches = skimage.feature.match_descriptors(centsredfilt, imzcoordsfilt + np.array([xsh,ysh]), max_distance=1)
+    imzcoordsfilt = imzcoordsfilt[matches[:,1],:]
+
+# matches = skimage.feature.match_descriptors(centsredfilt, imzcoordsfilt + np.array([xsh,ysh]), max_distance=1)
+# dst = centsredfilt[matches[:,0],:]
+# src = imzcoordsfilt[matches[:,1],:]
+# import random
+# random.seed(45)
+# model_robust, inliers = skimage.measure.ransac((src, dst), skimage.transform.EuclideanTransform, min_samples=3, residual_threshold=0.2, max_trials=500)
+# model_robust
+# R_reg = model_robust.params[:2,:2]
+# t_reg = model_robust.translation
+# postIMScoordsout = np.matmul(centsredfilt,R_reg)+t_reg
+
+
 
 logging.info("Run point cloud registration")
-imzcoordsin = imzcoordsfilt
-postIMScoordsin = centsredfilt
-for k in [2,0.75]:
-    reg = pycpd.RigidRegistration(Y=postIMScoordsin.astype(float), X=imzcoordsin.astype(float), w=0.001, s=1, scale=False)
-    postIMScoordsout, (s_reg, R_reg, t_reg) = reg.register()
-
-    kdt = KDTree(imzcoordsin, leaf_size=30, metric='euclidean')
-    centsred_distances, indices = kdt.query(postIMScoordsout, k=1, return_distance=True)
-    centsred_has_match = centsred_distances.flatten()<k
-    kdt = KDTree(postIMScoordsout, leaf_size=30, metric='euclidean')
-    imz_distances, indices = kdt.query(imzcoordsin, k=1, return_distance=True)
-    imz_has_match = imz_distances.flatten()<k
-
-    postIMScoordsin = postIMScoordsin[centsred_has_match,:]
-    postIMScoordsout = postIMScoordsout[centsred_has_match,:]
-    imzcoordsin = imzcoordsin[imz_has_match,:]
+reg = pycpd.RigidRegistration(Y=centsredfilt.astype(float), X=imzcoordsfilt.astype(float), w=0, s=1, scale=False)
+postIMScoordsout, (s_reg, R_reg, t_reg) = reg.register()
+# postIMScoordsin = centsredfilt[centsred_has_match,:]
+# postIMScoordsout = postIMScoordsout[centsred_has_match,:]
+# imzcoordsin = imzcoordsfilt[imz_has_match,:]
 
 
 tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_pycpd_registration.svg"
 plt.close()
-plt.scatter(imzcoordsin[:,0]*stepsize, imzcoordsin[:,1]*stepsize,color="red")
+plt.scatter(imzcoordsfilt[:,0]*stepsize, imzcoordsfilt[:,1]*stepsize,color="red",alpha=0.5)
 plt.scatter(postIMScoordsout[:,0]*stepsize, postIMScoordsout[:,1]*stepsize,color="blue",alpha=0.5)
 plt.title("matching points")
-fig = plt.gcf()
-fig.set_size_inches(10,10)
-fig.savefig(tmpfilename)
 # plt.show()
+fig = plt.gcf()
+fig.set_size_inches(20,20)
+fig.savefig(tmpfilename)
+
+
+# imzcoordsfilttrans2 = np.matmul(imzcoordsfilttrans,R_reg.T) + -t_reg
 
 pycpd_transform = sitk.Euler2DTransform()
 pycpd_transform.SetCenter(np.array([0.0,0.0]).astype(np.double))
 pycpd_transform.SetMatrix(R_reg.flatten().astype(np.double))
-pycpd_transform.SetTranslation(np.flip(t_reg))
+pycpd_transform.SetTranslation(-t_reg)
 
-pycpd_transform_inv = pycpd_transform.GetInverse()
 tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_pycpd_registration_all.svg"
 plt.close()
 imzcoordsfilttrans2 = np.array([pycpd_transform.TransformPoint(imzcoordsfilttrans[i,:].astype(float)) for i in range(imzcoordsfilttrans.shape[0])])
-plt.scatter(centsred[:,0]*stepsize/resolution, centsred[:,1]*stepsize/resolution,color="blue")
+plt.scatter(centsred[:,0]*stepsize/resolution, centsred[:,1]*stepsize/resolution,color="blue",alpha=0.5)
 plt.scatter(imzcoordsfilttrans2[:,0]*stepsize/resolution, imzcoordsfilttrans2[:,1]*stepsize/resolution,color="red",alpha=0.5)
 fig = plt.gcf()
-fig.set_size_inches(10,10)
+fig.set_size_inches(20,20)
 fig.savefig(tmpfilename)
 # plt.imshow(postIMSmpre.T)
 # plt.title("matching points")
 # plt.show()
 
 tm = sitk.CompositeTransform(2)
-tm.AddTransform(pycpd_transform_inv)
+tm.AddTransform(pycpd_transform)
 tm.AddTransform(tinv)
 pycpd_transform_comb = composite2affine(tm, [0,0])
 pycpd_transform_comb.GetParameters()
 
 
+
 imzcoords_all = create_imz_coords(imzimg, None, imzrefcoords, imz_bbox, rotmat)
-imzcoords_in = imzcoords_all - np.min(imzcoords_all,axis=0)
+# imzcoords_in = imzcoords_all - np.min(imzcoords_all,axis=0)
+imzcoords_in = imzcoords_all + init_translation
 imzcoordstransformed = np.array([pycpd_transform_comb.TransformPoint(imzcoords_in[i,:].astype(float)) for i in range(imzcoords_in.shape[0])])
-# plt.scatter(centsred[:,0]*stepsize/resolution, centsred[:,1]*stepsize/resolution,color="blue")
 # plt.scatter(imzcoordstransformed[:,0]*stepsize/resolution, imzcoordstransformed[:,1]*stepsize/resolution,color="red")
+# plt.scatter(centsred[:,0]*stepsize/resolution, centsred[:,1]*stepsize/resolution,color="blue")
 # plt.imshow(postIMSmpre.T)
 # plt.title("matching points")
 # plt.show()
@@ -719,8 +788,8 @@ logging.info(f"Center: {pycpd_transform.GetCenter()}")
 
 
 logging.info("Final pycpd registration:")
-logging.info(f"Number of points IMS: {imzcoordsin.shape[0]}")
-logging.info(f"Number of points postIMS: {postIMScoordsin.shape[0]}")
+logging.info(f"Number of points IMS: {imzcoordsfilt.shape[0]}")
+logging.info(f"Number of points postIMS: {postIMScoordsout.shape[0]}")
 logging.info(f"Translation: {pycpd_transform_comb.GetTranslation()}")
 logging.info(f"Rotation: {pycpd_transform_comb.GetMatrix()}")
 
@@ -800,13 +869,18 @@ tm3 = sitk.Euler2DTransform()
 # t_reg = t_reg + init_translation
 # tm3.SetCenter(np.array([yshift+t_reg[1]*stepsize/resolution,xshift+t_reg[0]*stepsize/resolution]).astype(np.double))
 # tm3.SetCenter(np.array([yshift+t_reg[1]*stepsize/resolution+stepsize/resolution/2,xshift+t_reg[0]*stepsize/resolution+stepsize/resolution/2]).astype(np.double))
-tm3.SetCenter(np.array([xshift+stepsize/2,yshift+stepsize/2]).astype(np.double))
+# tm3.SetCenter(np.array([xshift+stepsize/2,yshift+stepsize/2]).astype(np.double))
+# tm3.SetCenter(np.array([xshift,yshift]).astype(np.double))
+tm3.SetCenter(np.array([0,0]).astype(np.double))
 tm3_rotmat = pycpd_transform_comb.GetMatrix()
 tm3.SetMatrix(tm3_rotmat)
 # tm3_translation = np.flip(np.array(pycpd_transform_comb.GetTranslation()))*stepsize/resolution + init_translation*stepsize/resolution
-tm3_translation = np.flip(np.array(pycpd_transform_comb.GetTranslation()))*stepsize
+tm3_translation = np.array(pycpd_transform_comb.GetTranslation())*stepsize
 # tm3.SetTranslation(np.flip(tm3_translation))
-tm3.SetTranslation(np.flip(tm3_translation))
+if rotation_imz==180:
+    tm3.SetTranslation(tm3_translation*-1)
+elif rotation_imz==0:
+    tm3.SetTranslation(tm3_translation)
 logging.info("3. Transformation: Euler2D")
 logging.info(tm3.GetParameters())
 
@@ -844,7 +918,7 @@ if rotation_imz==0:
     tmfl.SetMatrix(np.array([tmpmat[:2],tmpmat[2:]]).T.flatten())
 
 # tmfl.GetTranslation()
-# # pmap_coord_data.keys()
+# pmap_coord_data.keys()
 # xs = np.array(pmap_coord_data['x_padded'].tolist())*stepsize
 # ys = np.array(pmap_coord_data['y_padded'].tolist())*stepsize
 # tmpcoords = np.stack([xs,ys],axis=1)
@@ -855,17 +929,24 @@ if rotation_imz==0:
 # np.min(tmpcoordstrans,axis=0)-np.array([ymin,xmin])
 # np.max(tmpcoordstrans,axis=0)-np.array([ymax,xmax])
 
-
+# # check match
 # postIMScut = readimage_crop(postIMS_file, [int(xmin/resolution), int(ymin/resolution), int(xmax/resolution), int(ymax/resolution)])
-# for i in [-2,-1,0,1,2]:
-#     for j in [-2,-1,0,1,2]:
-#         yinds = (tmpcoordstrans[:,0]/resolution+i-ymin/resolution).astype(int)
-#         xinds = (tmpcoordstrans[:,1]/resolution+j-xmin/resolution).astype(int)
+# for i in range(-3,4,1):
+#     for j in range(-3,4,1):
+#         xinds = (tmpcoordstrans[:,1]/resolution+i-xmin/resolution).astype(int)
+#         yinds = (tmpcoordstrans[:,0]/resolution+j-ymin/resolution).astype(int)
+#         xb = np.logical_and(xinds >= 0, xinds <= (postIMScut.shape[0]-1))
+#         yb = np.logical_and(yinds >= 0, yinds <= (postIMScut.shape[1]-1))
+#         inds = np.logical_and(xb,yb)
+#         xinds = xinds[inds]
+#         yinds = yinds[inds]
 #         postIMScut[xinds,yinds,:] = [0,0,255]
+
 
 # import matplotlib.pyplot as plt
 # plt.imshow(postIMScut)
 # plt.show()
+
 
 # plt.scatter(tmpcoordstrans[:,1]-ymin,tmpcoordstrans[:,0]-xmin)
 # plt.scatter(centsred[:,1]*stepsize,centsred[:,0]*stepsize)
