@@ -30,6 +30,17 @@ def readimage_crop(image: str, bbox: list[int]):
         image_crop = z[bbox[0]:bbox[2],bbox[1]:bbox[3]]
     return image_crop
 
+def get_image_shape(image: str):
+    '''Read shape of an image'''
+    store = tifffile.imread(image, aszarr=True)
+    z = zarr.open(store, mode='r')
+    if isinstance(z, zarr.hierarchy.Group): 
+        image_shape = z[0].shape
+    elif isinstance(z, zarr.core.Array): 
+        image_shape = z.shape
+    return image_shape
+
+
 def saveimage_tile(image: np.ndarray, filename: str, resolution: float):
     empty_transform = BASE_RIG_TFORM
     empty_transform['Spacing'] = (str(resolution),str(resolution))
