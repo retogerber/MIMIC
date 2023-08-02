@@ -129,6 +129,10 @@ global_bbox = [
     np.max([p[3] for p in postIMS_pre_bbox]),
 ]
 del tmpbool
+logging.info(f"\txmin: {global_bbox[0]}")
+logging.info(f"\tymin: {global_bbox[1]}")
+logging.info(f"\txmax: {global_bbox[2]}")
+logging.info(f"\tymax: {global_bbox[3]}")
 
 
 logging.info("Read imzML file")
@@ -138,6 +142,7 @@ imz = napari_imsmicrolink.data.ims_pixel_map.PixelMapIMS(imzmlfile)
 imz.ims_res = stepsize
 # create image mask
 imzimg = imz._make_pixel_map_at_ims(randomize=False, map_type="minimized")
+logging.info(f"IMZML shape: {imzimg.shape}")
 
 logging.info("Apply rotation")
 # rotate 180 degrees
@@ -187,6 +192,7 @@ too_small = imzarea < np.mean(imzarea) - 5*np.std(imzarea)
 imzrps = np.array(imzrps)[np.logical_not(too_small)]
 imzcents = np.array([[rp.centroid[0],rp.centroid[1]] for rp in imzrps])
 del imzrps, imzarea, too_small
+logging.info(f"\tCentroids of IMZ: {imzcents}")
 
 # get centroids of postIMS regions
 tmpi = postIMSregincut
@@ -194,7 +200,7 @@ tmpi[np.logical_not(boolimg)] = 0
 pirps = skimage.measure.regionprops(tmpi)
 picents = np.array([[rp.centroid[0]+global_bbox[0],rp.centroid[1]+global_bbox[1]] for rp in pirps])
 del tmpi, pirps
-
+logging.info(f"\tCentroids of postIMS: {picents}")
 # import matplotlib.pyplot as plt
 # fig, ax = plt.subplots(nrows=1, ncols=2)
 # ax[0].imshow(imzimg)
@@ -210,6 +216,10 @@ del tmpi, pirps
 # register point clouds and get maximum distance to nearest neighbor
 # the lowest maximum distance should be a good starting point for registration
 def find_approx_init_translation(imzcents, picents):
+    if (picents.shape[0]==1) and (imzcents.shape[0]==1):
+        xy_init_shift = -np.array([imzcents[0,0]-picents[0,0]+global_bbox[0],imzcents[0,1]-picents[0,1]+global_bbox[1]])
+        return xy_init_shift, xy_init_shift
+
     max_dists = list()
     xrange = np.abs(imzimgres.shape[0]-postIMSregin.shape[0])
     yrange = np.abs(imzimgres.shape[1]-postIMSregin.shape[1])
@@ -221,7 +231,7 @@ def find_approx_init_translation(imzcents, picents):
         distances, indices = kdt.query(picents+np.array(combs[i,:]), k=1, return_distance=True)
         indices = [ni[0] for ni in indices]
         max_dists.append(np.max(distances))
-
+    
     # do precise registration of points only on 200 combinations with lowest max distances
     topn = 200 if combs.shape[0]>200 else combs.shape[0]
     ind = np.argpartition(max_dists, -topn)[:topn]
@@ -231,6 +241,9 @@ def find_approx_init_translation(imzcents, picents):
         kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
         distances, indices = kdt.query(picents+np.array(combs_red[i,:]), k=1, return_distance=True)
         indices = [ni[0] for ni in indices]
+        # if (picents.shape[0]==1) and (imzcents.shape[0]==1):
+        #     max_dists_red.append(np.max(distances))
+        # else:
         reg = pycpd.RigidRegistration(X=imzcents[indices,:], Y=picents, w=0)
         TY, (s_reg, R_reg, t_reg) = reg.register()
         kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
@@ -241,6 +254,9 @@ def find_approx_init_translation(imzcents, picents):
     return xy_init_shift, np.min(max_dists_red)
 
 xy_init_shift, max_dist = find_approx_init_translation(imzcents, picents)
+
+logging.info(f"\tInital translation: {xy_init_shift}")
+logging.info(f"\tMax distance: {max_dist}")
 
 # kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
 # distances, indices = kdt.query(imzcents, k=2, return_distance=True)
@@ -259,14 +275,18 @@ xy_init_shift, max_dist = find_approx_init_translation(imzcents, picents)
 
 
 
-kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
-distances, indices = kdt.query(picents+xy_init_shift, k=1, return_distance=True)
-indices = [ni[0] for ni in indices]
-reg = pycpd.RigidRegistration(X=imzcents[indices,:], Y=picents, w=0)
-TY, (s_reg, R_reg, t_reg) = reg.register()
-# actual initial transform for registration
-init_trans = np.round(t_reg+np.array([global_bbox[0],global_bbox[1]])).astype(int)
+if (picents.shape[0]==1) and (imzcents.shape[0]==1):
+    init_trans = np.round(xy_init_shift).astype(int)
+else:
+    kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
+    distances, indices = kdt.query(picents+xy_init_shift, k=1, return_distance=True)
+    indices = [ni[0] for ni in indices]
+    reg = pycpd.RigidRegistration(X=imzcents[indices,:], Y=picents, w=0)
+    TY, (s_reg, R_reg, t_reg) = reg.register()
+    # actual initial transform for registration
+    init_trans = np.round(t_reg+np.array([global_bbox[0],global_bbox[1]])).astype(int)
 
+logging.info(f"Initial translation: {init_trans}")
 # import matplotlib.pyplot as plt
 # plt.scatter(picents[:,1]+xy_init_shift[1], picents[:,0]+xy_init_shift[0])
 # plt.scatter(TY[:,1], TY[:,0])
@@ -324,6 +344,7 @@ R.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration(R))
 # run registration
 transform = R.Execute(fixed, moving)
 
+logging.info(f"Final translation: {transform.GetTranslation()}")
 # transform expanded, labeled mask
 resampler = sitk.ResampleImageFilter()
 resampler.SetTransform(transform)

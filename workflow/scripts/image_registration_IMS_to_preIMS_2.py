@@ -26,10 +26,10 @@ sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 logging.info("Start")
 
 # parameters
-# stepsize = 30
+# stepsize = 20
 # stepsize = 10
 stepsize = float(snakemake.params["IMS_pixelsize"])
-# pixelsize = 24
+# pixelsize = 16
 # pixelsize = 8 
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
 # resolution = 1
@@ -52,22 +52,27 @@ logging.info("Microscopy pixelsize: "+str(resolution))
 # postIMS_file = "/home/retger/Downloads/cirrhosis_TMA_postIMS_reduced.ome.tiff"
 # postIMS_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS_reduced.ome.tiff"
 # postIMS_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS.ome.tiff"
+# postIMS_file = "/home/retger/Downloads/NASH_HCC_TMA_postIMS.ome.tiff"
 # resolution = 0.22537
 postIMS_file = snakemake.input["postIMS_downscaled"]
 # postIMSr_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/postIMS/test_combined_postIMS_reduced_mask.ome.tiff"
 # postIMSr_file = "/home/retger/Downloads/cirrhosis_TMA_postIMS_reduced_mask.ome.tiff"
 # postIMSr_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS_reduced_mask.ome.tiff"
+# postIMSr_file = "/home/retger/Downloads/NASH_HCC_TMA_postIMS_reduced_mask.ome.tiff"
 postIMSr_file = snakemake.input["postIMSmask_downscaled"]
 # imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/IMS_test_combined.imzML"
 # imzmlfile = "/home/retger/Downloads/cirrhosis_TMA_IMS.imzML"
 # imzmlfile = "/home/retger/Downloads/pos_mode_lipids_tma_02022023_imzml.imzML"
+# imzmlfile = "/home/retger/Downloads/hcc-tma-3_aaxl_20raster_06132022-total ion count.imzML"
 imzmlfile = snakemake.input["imzml"]
 # imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/Lipid_TMA_37819_009_transformed.ome.tiff"
+# imc_mask_file = "/home/retger/Downloads/NASH_HCC_TMA-2_001_transformed.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 # output_table = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/test_combined_test_combined_IMS_to_postIMS_matches.csv"
 # output_table = "/home/retger/Downloads/cirrhosis_TMA_cirrhosis_TMA_IMS_IMS_to_postIMS_matches.csv"
 # output_table = "/home/retger/Downloads/Lipid_TMA_3781_pos_mode_lipids_tma_02022023_imzml_IMS_to_postIMS_matches.csv"
+# output_table = "/home/retger/Downloads/NASH_HCC_TMA_NASH_HCC_TMA_IMS_IMS_to_postIMS_matches.csv"
 output_table = snakemake.input["IMS_to_postIMS_matches"]
 
 # ims_to_postIMS_regerror = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_001_IMS_to_postIMS_reg_auto_metrics.json"
@@ -113,7 +118,8 @@ dfmeta = pd.read_csv(output_table)
 imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed","")
 # imc_project = "cirrhosis_TMA"
 # imc_project="test_split_ims"
-imc_project="test_combined"
+# imc_project="test_combined"
+# imc_project="NASH_HCC_TMA"
 # imc_project = "Lipid_TMA_3781"
 imc_project = os.path.split(os.path.split(os.path.split(os.path.split(imc_mask_file)[0])[0])[0])[1]
 
@@ -506,7 +512,8 @@ tinv = transform.GetInverse()
 # tinv.SetTranslation(-np.array(tinv.GetTranslation())[[1,0]]/10)
 if rotation_imz==180:
 # works for rotation=180
-    tinv.SetTranslation(np.array(tinv.GetTranslation())[[0,1]]/10-0.5)
+    # tinv.SetTranslation(np.array(tinv.GetTranslation())[[0,1]]/10-0.5)
+    tinv.SetTranslation(-np.array(tinv.GetTranslation())[[1,0]]/10+1.5)
 elif rotation_imz==0:
     tinv.SetTranslation(-np.array(tinv.GetTranslation())[[1,0]]/10+1.5)
 # tinv.SetMatrix(transform.GetMatrix())
@@ -844,7 +851,9 @@ logging.info("Create Transformation matrix")
 # initial rotation of imz
 tm1 = sitk.Euler2DTransform()
 tm1.SetTranslation([0,0])
-transparamtm1 = np.flip((np.asarray(imzimg.shape).astype(np.double))/2*stepsize-stepsize/2).astype(np.double)
+# transparamtm1 = np.flip((np.asarray(imzimg.shape).astype(np.double))/2*stepsize-stepsize/2).astype(np.double)
+# transparamtm1 = np.flip((np.asarray(imzimg.shape).astype(np.double))/2*stepsize).astype(np.double)
+transparamtm1 = ((np.asarray(imzimg.shape).astype(np.double))/2*stepsize-stepsize/2).astype(np.double)
 tm1.SetCenter(transparamtm1)
 tm1.SetMatrix(rotmat.flatten().astype(np.double))
 logging.info("1. Transformation: Rotation")
@@ -878,7 +887,8 @@ tm3.SetMatrix(tm3_rotmat)
 tm3_translation = np.array(pycpd_transform_comb.GetTranslation())*stepsize
 # tm3.SetTranslation(np.flip(tm3_translation))
 if rotation_imz==180:
-    tm3.SetTranslation(tm3_translation*-1)
+    # tm3.SetTranslation(tm3_translation*-1)
+    tm3.SetTranslation(tm3_translation)
 elif rotation_imz==0:
     tm3.SetTranslation(tm3_translation)
 logging.info("3. Transformation: Euler2D")
@@ -913,6 +923,10 @@ logging.info(tmfl.GetParameters())
 
 if rotation_imz==0:
     # Since axis are flipped, rotate transformation
+    tmfl.SetTranslation(np.flip(np.array(tmfl.GetTranslation())))
+    tmpmat = tmfl.GetMatrix()
+    tmfl.SetMatrix(np.array([tmpmat[:2],tmpmat[2:]]).T.flatten())
+if rotation_imz==180:
     tmfl.SetTranslation(np.flip(np.array(tmfl.GetTranslation())))
     tmpmat = tmfl.GetMatrix()
     tmfl.SetMatrix(np.array([tmpmat[:2],tmpmat[2:]]).T.flatten())

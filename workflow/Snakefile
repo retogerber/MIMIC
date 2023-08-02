@@ -561,7 +561,7 @@ rule register_IMS_to_postIMS_single_core:
         postIMSmask_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced_mask.ome.tiff",
         imzml=lambda wildcards:  os.path.join("results",wildcards.project_name,"data","IMS", get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "imzml_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))),
         IMCmask="results/{project_name}/data/IMC_mask/{sample}_transformed.ome.tiff",
-        IMS_to_postIMS_matches=lambda wildcards: f'results/{wildcards.project_name}/data/IMS/{wildcards.project_name}_{get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "imzml_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"])).replace("IMS_","").replace(".imzML","")}_IMS_to_postIMS_matches.csv', 
+        IMS_to_postIMS_matches=lambda wildcards: f'results/{wildcards.project_name}/data/IMS/{wildcards.project_name}_{get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "imzml_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"])).replace(".imzML","")}_IMS_to_postIMS_matches.csv', 
     output:
         IMS_to_postIMS_error="results/{project_name}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics_auto.json",
         IMS_to_postIMS_error_image="results/{project_name}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics_auto.ome.tiff",
