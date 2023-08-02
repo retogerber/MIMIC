@@ -67,7 +67,7 @@ postIMSr_file = snakemake.input["postIMSmask_downscaled"]
 imzmlfile = snakemake.input["imzml"]
 # imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/Lipid_TMA_37819_009_transformed.ome.tiff"
-# imc_mask_file = "/home/retger/Downloads/NASH_HCC_TMA-2_001_transformed.ome.tiff"
+# imc_mask_file = "/home/retger/Downloads/NASH_HCC_TMA-2_010_transformed.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 # output_table = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/test_combined_test_combined_IMS_to_postIMS_matches.csv"
 # output_table = "/home/retger/Downloads/cirrhosis_TMA_cirrhosis_TMA_IMS_IMS_to_postIMS_matches.csv"
@@ -194,15 +194,6 @@ logging.info("Mean filter")
 # tmp2 = skimage.filters.rank.mean(tmp1*255, skimage.morphology.disk(kersize))
 # tmp2 = skimage.filters.rank.mean(tmp1*255, kernel)
 tmp2 = cv2.filter2D(src = tmp1*255, ddepth=-1, kernel=kernel/np.sum(kernel))
-# combine with original image
-tmp3 = 0.5*postIMSmpre + 0.5*tmp2
-tmp3 = skimage.exposure.equalize_adapthist(normalize_image(tmp3))
-tmp3 = normalize_image(tmp3)*255
-tmp3 = tmp3.astype(np.uint8)
-postIMSmforpoints = tmp3.copy()
-del tmp1, tmp2, tmp3
-postIMSm = postIMSmforpoints.copy()
-postIMSm[np.logical_not(postIMSringmask)] = 0
 
 # from: https://stackoverflow.com/a/26392655
 def get_angle(p0, p1=np.array([0,0]), p2=None):
@@ -314,36 +305,66 @@ def points_from_mask(
     centsred = centsred[to_keep_adj,:]
     return centsred
 
+def find_threshold(mask: np.ndarray):
+    # find best threshold by maximizing number of points that fullfill criteria
+    # grid search
+    # broad steps
+    thresholds = list(range(127,250,10))
+    n_points = []
+    for th in thresholds:
+        # threshold
+        maskb = mask>th
+        centsred = points_from_mask(maskb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize)
+        # logging.info(f"threshold: {th}, npoints= {centsred.shape[0]}")
+        n_points.append(centsred.shape[0])
+
+    threshold = np.asarray(thresholds)[n_points == np.max(n_points)][0]
+    # fine steps
+    thresholds = list(range(threshold-9,threshold+9))
+    n_points = []
+    for th in thresholds:
+        # threshold
+        maskb = mask>th
+        centsred = points_from_mask(maskb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize)
+        # logging.info(f"threshold: {th}, npoints= {centsred.shape[0]}")
+        n_points.append(centsred.shape[0])
+
+    max_points = np.max(n_points)
+    threshold = np.asarray(thresholds)[n_points == max_points][0]
+    return threshold, max_points
+
 logging.info("Find best threshold for points")
-# find best threshold by maximizing number of points that fullfill criteria
-# grid search
-# broad steps
-thresholds = list(range(127,250,10))
-n_points = []
-for th in thresholds:
-    # threshold
-    postIMSmb = postIMSm>th
-    centsred = points_from_mask(postIMSmb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize)
-    logging.info(f"threshold: {th}, npoints= {centsred.shape[0]}")
-    n_points.append(centsred.shape[0])
 
-threshold = np.asarray(thresholds)[n_points == np.max(n_points)][0]
-# fine steps
-thresholds = list(range(threshold-9,threshold+9))
-n_points = []
-for th in thresholds:
-    # threshold
-    postIMSmb = postIMSm>th
-    centsred = points_from_mask(postIMSmb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize)
-    logging.info(f"threshold: {th}, npoints= {centsred.shape[0]}")
-    n_points.append(centsred.shape[0])
+ws = [0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.5,0.75,0.9]
+thresholds=[]
+n_points=[]
+for w in ws:
+    # combine with original image
+    tmp3 = w*postIMSmpre + (1-w)*tmp2
+    tmp3 = skimage.exposure.equalize_adapthist(normalize_image(tmp3))
+    tmp3 = normalize_image(tmp3)*255
+    tmp3 = tmp3.astype(np.uint8)
+    postIMSmforpoints = tmp3.copy()
+    postIMSm = postIMSmforpoints.copy()
+    postIMSm[np.logical_not(postIMSringmask)] = 0
 
-threshold = np.asarray(thresholds)[n_points == np.max(n_points)][0]
+    threshold, max_points= find_threshold(postIMSm)
+    logging.info(f"weight: {w}, threshold: {threshold}, n_points: {max_points}")
+    thresholds.append(threshold)
+    n_points.append(max_points)
 
-logging.info("Max number of IMS pixels detected: "+str(np.max(n_points)))
+max_points = np.max(n_points)
+threshold = np.asarray(thresholds)[n_points == max_points][0]
+w = np.asarray(ws)[n_points == max_points][0]
+
+logging.info("Max number of IMS pixels detected: "+str(max_points))
 logging.info("Corresponding threshold: "+str(threshold))
 
 logging.info("Apply threshold")
+postIMSmforpoints = w*postIMSmpre + (1-w)*tmp2
+postIMSmforpoints = skimage.exposure.equalize_adapthist(normalize_image(postIMSmforpoints))
+postIMSmforpoints = normalize_image(postIMSmforpoints)*255
+postIMSmforpoints = postIMSmforpoints.astype(np.uint8)
 postIMSm = postIMSmforpoints.copy()
 postIMSm[np.logical_not(postIMSoutermask)] = 0
 postIMSmb = postIMSm>threshold
@@ -458,8 +479,11 @@ fixed = sitk.GetImageFromArray(imzimg_regin)
 moving = sitk.GetImageFromArray(postIMSpimg)
 
 # initial transformation
+centsrange = np.max(centsred,axis=0)-np.min(centsred,axis=0)
+imzsrange = np.array([xmaximz-xminimz,ymaximz-yminimz])
+centsmin_adj = np.min(centsred,axis=0)+(centsrange-imzsrange)/2
 init_transform = sitk.Euler2DTransform()
-init_transform.SetTranslation(np.min(centsred,axis=0)[[1,0]]*10)
+init_transform.SetTranslation(centsmin_adj[[1,0]]*10)
 
 logging.info("Setup registration")
 R = sitk.ImageRegistrationMethod()

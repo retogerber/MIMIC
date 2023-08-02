@@ -101,6 +101,12 @@ postIMS = np.stack([postIMS, postIMS, postIMS], axis=2)
 postIMSmasks, scores1 = sam_core(postIMS, sam)
 postIMSmasks = np.stack([preprocess_mask(msk,rescale) for msk in postIMSmasks ])
 
+postIMSmask_areas = [np.sum(postIMSmasks[i,:,:]>0) for i in range(3)]
+preIMSmask_area = np.sum(preIMSmasks)
+mask_diff = np.array(postIMSmask_areas) - preIMSmask_area
+postIMSmasks = postIMSmasks[mask_diff==np.min(mask_diff),:,:]
+logging.info(f"Min area difference postIMS-preIMS: {np.min(mask_diff)} (normalized by postIMS area: {np.min(mask_diff)/np.sum(postIMSmasks):6.4f})")
+
 # fig, ax = plt.subplots(nrows=1, ncols=2)
 # ax[0].imshow(postIMS[1000:1500,2000:2500])
 # ax[0].set_title("postIMS")
