@@ -174,6 +174,7 @@ logging.info("Create ringmask")
 postIMSringmask = create_ring_mask(postIMSrcut, (1/resolution)*stepsize*imspixel_outscale, (1/resolution)*stepsize*imspixel_inscale)
 logging.info("Isotropic dilation")
 postIMSoutermask = skimage.morphology.isotropic_dilation(postIMSrcut, (1/resolution)*stepsize*imspixel_outscale)
+postIMSinnermask = skimage.morphology.isotropic_erosion(postIMSrcut, (1/resolution)*stepsize*imspixel_inscale)
 
 # ksize=int((1/resolution)*stepsize*4*2)
 # kernel = np.ones((ksize,ksize),dtype=int)
@@ -217,7 +218,8 @@ def points_from_mask(
         mask: np.ndarray, 
         pixelsize: np.double, 
         resolution: np.double,
-        stepsize: np.double):
+        stepsize: np.double,
+        min_n: int = 9):
     '''
     Extract point from binary mask
     '''
@@ -300,41 +302,61 @@ def points_from_mask(
     from scipy.sparse.csgraph import connected_components
     concomp = connected_components(adjmat)
     components, n_points_in_component = np.unique(concomp[1], return_counts=True)
-    comps_to_keep = components[n_points_in_component>9]
+    comps_to_keep = components[n_points_in_component>min_n]
     to_keep_adj = np.array([c in comps_to_keep for c in concomp[1]])
     centsred = centsred[to_keep_adj,:]
     return centsred
 
-def find_threshold(mask: np.ndarray):
+def find_threshold(mask: np.ndarray, thr_range=[127,250], min_n:int = 9):
     # find best threshold by maximizing number of points that fullfill criteria
     # grid search
     # broad steps
-    thresholds = list(range(127,250,10))
+    thresholds = list(range(thr_range[0],thr_range[1],10))
     n_points = []
     for th in thresholds:
         # threshold
         maskb = mask>th
-        centsred = points_from_mask(maskb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize)
-        # logging.info(f"threshold: {th}, npoints= {centsred.shape[0]}")
-        n_points.append(centsred.shape[0])
-
-    threshold = np.asarray(thresholds)[n_points == np.max(n_points)][0]
-    # fine steps
-    thresholds = list(range(threshold-9,threshold+9))
-    n_points = []
-    for th in thresholds:
-        # threshold
-        maskb = mask>th
-        centsred = points_from_mask(maskb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize)
+        centsred = points_from_mask(maskb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize, min_n=min_n)
         # logging.info(f"threshold: {th}, npoints= {centsred.shape[0]}")
         n_points.append(centsred.shape[0])
 
     max_points = np.max(n_points)
     threshold = np.asarray(thresholds)[n_points == max_points][0]
+
+    # finer steps
+    thresholds = list(range(threshold-9,threshold+10,3))
+    n_points = []
+    for th in thresholds:
+        if th == threshold:
+            n_points.append(max_points)
+        else:
+            # threshold
+            maskb = mask>th
+            centsred = points_from_mask(maskb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize, min_n=min_n)
+            # logging.info(f"threshold: {th}, npoints= {centsred.shape[0]}")
+            n_points.append(centsred.shape[0])
+
+    max_points = np.max(n_points)
+    threshold = np.asarray(thresholds)[n_points == max_points][0]
+
+    # fine steps
+    thresholds = list(range(threshold-2,threshold+3))
+    n_points = []
+    for th in thresholds:
+        if th == threshold:
+            n_points.append(max_points)
+        else:
+            # threshold
+            maskb = mask>th
+            centsred = points_from_mask(maskb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize, min_n=min_n)
+            # logging.info(f"threshold: {th}, npoints= {centsred.shape[0]}")
+            n_points.append(centsred.shape[0])
+
+    max_points = np.max(n_points)
+    threshold = np.asarray(thresholds)[n_points == max_points][0]
     return threshold, max_points
 
-logging.info("Find best threshold for points")
-
+logging.info("Find best threshold for points (outer points)")
 ws = [0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.5,0.75,0.9]
 thresholds=[]
 n_points=[]
@@ -347,31 +369,137 @@ for w in ws:
     postIMSmforpoints = tmp3.copy()
     postIMSm = postIMSmforpoints.copy()
     postIMSm[np.logical_not(postIMSringmask)] = 0
+    if len(thresholds)>0:
+        thr_range = [thresholds[-1]-21,thresholds[-1]+21]
+        thr_range[0] = 0 if thr_range[0]<0 else thr_range[0]
+        thr_range[1] = 255 if thr_range[1]>255 else thr_range[1]
+    else:
+        thr_range = [127,250]
 
-    threshold, max_points= find_threshold(postIMSm)
+    threshold, max_points= find_threshold(postIMSm, thr_range=thr_range)
     logging.info(f"weight: {w}, threshold: {threshold}, n_points: {max_points}")
     thresholds.append(threshold)
     n_points.append(max_points)
 
-max_points = np.max(n_points)
-threshold = np.asarray(thresholds)[n_points == max_points][0]
-w = np.asarray(ws)[n_points == max_points][0]
+max_points_outer = np.max(n_points)
+threshold_outer = np.asarray(thresholds)[n_points == max_points_outer][0]
+w_outer = np.asarray(ws)[n_points == max_points_outer][0]
 
-logging.info("Max number of IMS pixels detected: "+str(max_points))
-logging.info("Corresponding threshold: "+str(threshold))
 
-logging.info("Apply threshold")
-postIMSmforpoints = w*postIMSmpre + (1-w)*tmp2
-postIMSmforpoints = skimage.exposure.equalize_adapthist(normalize_image(postIMSmforpoints))
-postIMSmforpoints = normalize_image(postIMSmforpoints)*255
-postIMSmforpoints = postIMSmforpoints.astype(np.uint8)
-postIMSm = postIMSmforpoints.copy()
-postIMSm[np.logical_not(postIMSoutermask)] = 0
-postIMSmb = postIMSm>threshold
+logging.info("Find best threshold for points (inner points)")
+ws = [0.001,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.5]
+thresholds=[]
+n_points=[]
+for w in ws:
+    # combine with original image
+    tmp3 = w*postIMSmpre + (1-w)*tmp2
+    tmp3 = skimage.exposure.equalize_adapthist(normalize_image(tmp3))
+    tmp3 = normalize_image(tmp3)*255
+    tmp3 = tmp3.astype(np.uint8)
+    postIMSmforpoints = tmp3.copy()
+    postIMSm = postIMSmforpoints.copy()
+    postIMSm[np.logical_not(postIMSinnermask)] = 0
+    if len(thresholds)>0:
+        thr_range = [thresholds[-1]-21,thresholds[-1]+21]
+        thr_range[0] = 0 if thr_range[0]<0 else thr_range[0]
+        thr_range[1] = 255 if thr_range[1]>255 else thr_range[1]
+    else:
+        thr_range = [127,250]
 
-# get points from complete image
-centsred = points_from_mask(postIMSmb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize)
-# plt.imshow(postIMSmb)
+    threshold, max_points= find_threshold(postIMSm, thr_range=thr_range)
+    logging.info(f"weight: {w}, threshold: {threshold}, n_points: {max_points}")
+    thresholds.append(threshold)
+    n_points.append(max_points)
+
+max_points_inner = np.max(n_points)
+threshold_inner = np.asarray(thresholds)[n_points == max_points_inner][0]
+w_inner = np.asarray(ws)[n_points == max_points_inner][0]
+
+logging.info("Max number of IMS pixels detected (outer): "+str(max_points_outer))
+logging.info("Corresponding threshold (outer): "+str(threshold_outer))
+logging.info("Max number of IMS pixels detected (inner): "+str(max_points_inner))
+logging.info("Corresponding threshold (inner): "+str(threshold_inner))
+
+def points_from_mask_two_thresholds(
+        img_median: np.ndarray,
+        img_convolved: np.ndarray,
+        mask_outer: np.ndarray,
+        mask_inner: np.ndarray,
+        w_outer: np.double,
+        w_inner: np.double,
+        threshold_outer:np.double,
+        threshold_inner:np.double,
+        pixelsize: np.double,
+        resolution: np.double,
+        stepsize: np.double,
+        min_n_outer: int = 9, 
+        min_n_inner: int = 9):
+
+    logging.info("Apply threshold (outer)")
+    tmpimg = w_outer*img_median + (1-w_outer)*img_convolved
+    tmpimg = skimage.exposure.equalize_adapthist(normalize_image(tmpimg))
+    tmpimg = normalize_image(tmpimg)*255
+    tmpimg = tmpimg.astype(np.uint8)
+    tmpimg[np.logical_not(mask_outer)] = 0
+    tmpimgb = tmpimg>threshold_outer
+    # get points from complete image
+    centsred_outer = points_from_mask(tmpimgb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize, min_n=min_n_outer)
+
+    logging.info("Apply threshold (inner)")
+    tmpimg = w_inner*img_median + (1-w_inner)*img_convolved
+    tmpimg = skimage.exposure.equalize_adapthist(normalize_image(tmpimg))
+    tmpimg = normalize_image(tmpimg)*255
+    tmpimg = tmpimg.astype(np.uint8)
+    tmpimg[np.logical_not(mask_inner)] = 0
+    tmpimgb = tmpimg>threshold_inner
+    # get points from complete image
+    centsred_inner = points_from_mask(tmpimgb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize, min_n=min_n_inner)
+
+    logging.info("Combine points")
+    centsred = np.vstack([centsred_outer,centsred_inner])
+    kdt = KDTree(centsred, leaf_size=30, metric='euclidean')
+    distances, indices = kdt.query(centsred, k=2, return_distance=True)
+
+    same_pixel = distances[:,1]<0.25
+
+    x=np.arange(centsred.shape[0])[same_pixel]
+    y=indices[same_pixel,1]
+    pairs = []
+    for i in range(len(x)):
+        pairs.append(sorted([x[i],y[i]]))
+    pairs = sorted(pairs)
+    doublet_to_keep = []
+    for i in range(len(pairs)):
+        if pairs[i][0] not in doublet_to_keep:
+            doublet_to_keep.append(pairs[i][0])
+    
+    centsred_1 = centsred[np.logical_not(same_pixel),:]
+    centsred_2 = centsred[doublet_to_keep,:]
+    centsred = np.vstack([centsred_1,centsred_2])
+    return centsred
+
+
+centsred = points_from_mask_two_thresholds(
+    img_median = postIMSmpre,
+    img_convolved = tmp2,
+    mask_outer = postIMSoutermask,
+    mask_inner = postIMSinnermask,
+    w_outer = w_outer,
+    w_inner = w_inner,
+    threshold_outer = threshold_outer,
+    threshold_inner = threshold_inner,
+    pixelsize = pixelsize,
+    resolution = resolution,
+    stepsize = stepsize,
+    min_n_outer=6,
+    min_n_inner=4
+)
+
+
+logging.info("Number of unique IMS pixels detected (both): "+str(centsred.shape[0]))
+# plt.scatter(centsred_inner[:,1]*stepsize/resolution,centsred_inner[:,0]*stepsize/resolution)
+# plt.scatter(centsred_outer[:,1]*stepsize/resolution,centsred_outer[:,0]*stepsize/resolution)
+# plt.imshow(postIMSmpre)
 # plt.scatter(centsred[:,1]*stepsize/resolution,centsred[:,0]*stepsize/resolution)
 # plt.show()
 
@@ -572,62 +700,42 @@ fig.savefig(tmpfilename)
 
 logging.info("Create postIMS boundary from observed points")
 # create new ringmask based on found points
-postIMSn = np.zeros(postIMSmforpoints.shape)
+postIMSn = np.zeros(postIMSmpre.shape)
 for i in range(centsred.shape[0]):
     postIMSn[int(centsred[i,0]/resolution*stepsize),int(centsred[i,1]/resolution*stepsize)] = 1
 postIMSn = skimage.morphology.convex_hull_image(postIMSn)
 postIMSnringmask = create_ring_mask(postIMSn, imspixel_outscale*stepsize/resolution, imspixel_inscale*stepsize/resolution)
+# postIMSninnermask = skimage.morphology.isotropic_erosion(postIMSn, (1/resolution)*stepsize*imspixel_inscale)
 # plt.imshow(postIMSnringmask)
 # plt.scatter(centsred[:,1]/resolution*stepsize,centsred[:,0]/resolution*stepsize)
 # plt.show()
 
 logging.info("Extract postIMS boundary points")
-postIMSm = postIMSmforpoints.copy()
-postIMSm[np.logical_not(postIMSnringmask)] = 0
-postIMSmb = postIMSm>threshold
-centsred = points_from_mask(postIMSmb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize)
+centsred = points_from_mask_two_thresholds(
+    img_median = postIMSmpre,
+    img_convolved = tmp2,
+    mask_outer = postIMSnringmask,
+    mask_inner = postIMSn,
+    w_outer = w_outer,
+    w_inner = w_inner,
+    threshold_outer = threshold_outer,
+    threshold_inner = threshold_inner,
+    pixelsize = pixelsize,
+    resolution = resolution,
+    stepsize = stepsize,
+    min_n_outer=8,
+    min_n_inner=8
+)
+
+
+# postIMSm = postIMSmforpoints.copy()
+# postIMSm[np.logical_not(postIMSnringmask)] = 0
+# postIMSmb = postIMSm>threshold
+# centsred = points_from_mask(postIMSmb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize)
 # plt.scatter(imzcoordsfilttrans[:,0], imzcoordsfilttrans[:,1],color="red")
 # plt.scatter(centsred[:,0], centsred[:,1],color="blue")
 # plt.title("matching points")
 # plt.show()
-
-
-n_points_ls = []
-for xsh in np.linspace(-3,3,25):
-    for ysh in np.linspace(-3,3,25):
-        matches = skimage.feature.match_descriptors(centsred, imzcoordsfilttrans + np.array([xsh,ysh]), max_distance=1)
-        n_points_ls.append([matches.shape[0],xsh,ysh])
-n_points_arr = np.array(n_points_ls)
-n_points_arr[n_points_arr[:,0] == np.max(n_points_arr[:,0]),:]
-xsh = n_points_arr[n_points_arr[:,0] == np.max(n_points_arr[:,0]),1][0]
-ysh = n_points_arr[n_points_arr[:,0] == np.max(n_points_arr[:,0]),2][0]
-# plt.scatter(imzcoordsfilttrans[:,0]+xsh, imzcoordsfilttrans[:,1]+ysh,color="red")
-# plt.scatter(centsred[:,0], centsred[:,1],color="blue")
-# plt.title("matching points")
-# plt.show()
-
-
-
-logging.info("Find matching IMS and postIMS points")
-# eval matching points
-kdt = KDTree(imzcoordsfilttrans+np.array([xsh,ysh]), leaf_size=30, metric='euclidean')
-centsred_distances, indices = kdt.query(centsred, k=1, return_distance=True)
-# centsred_has_match = centsred_distances.flatten()<1
-centsred_has_match = centsred_distances.flatten()<0.75
-kdt = KDTree(centsred, leaf_size=30, metric='euclidean')
-imz_distances, indices = kdt.query(imzcoordsfilttrans+np.array([xsh,ysh]), k=1, return_distance=True)
-# imz_has_match = imz_distances.flatten()<1
-imz_has_match = imz_distances.flatten()<0.75
-
-centsredfilt = centsred[centsred_has_match,:]
-imzcoordsfilt = imzcoordsfilttrans[imz_has_match,:]
-
-# plt.scatter(imzcoordsfilt[:,0]+xsh, imzcoordsfilt[:,1]+ysh,color="red")
-# plt.scatter(centsredfilt[:,0], centsredfilt[:,1],color="blue")
-# plt.title("matching points")
-# plt.show()
-
-
 
 if False:
     postIMScent = skimage.measure.regionprops(skimage.measure.label(postIMSnringmask))[0].centroid
@@ -639,7 +747,7 @@ if False:
     # plt.show()
 
     angles = np.array([get_angle(centsred[i,:],postIMScentred) for i in range(centsred.shape[0])])
-    angles = angles[centsred_has_match]
+    # angles = angles[centsred_has_match]
     angles = angles +180
     angles_order = pd.factorize(list(angles), sort=True)[0]
     angles_sort = np.array(sorted(angles))
@@ -729,6 +837,75 @@ if False:
     centsredfilt = centsredfilt[np.array(inds_to_keep).astype(int),:]
     matches = skimage.feature.match_descriptors(centsredfilt, imzcoordsfilt + np.array([xsh,ysh]), max_distance=1)
     imzcoordsfilt = imzcoordsfilt[matches[:,1],:]
+
+# weight by location on boundary
+postIMScent = skimage.measure.regionprops(skimage.measure.label(postIMSnringmask))[0].centroid
+postIMScentred = np.array(postIMScent)/stepsize*resolution
+angles = np.array([get_angle(centsred[i,:],postIMScentred) for i in range(centsred.shape[0])])
+angles = angles +180
+n_groups=10
+grps = (angles/(360/n_groups)).astype(int)
+np_grps = np.array([np.sum(grps==i) for i in range(n_groups)]).astype(np.double)
+is_nonzero = np_grps!=0
+grp_weights=np_grps*0
+grp_weights[is_nonzero] = 1/np_grps[is_nonzero]
+weights = grps*0.0
+for i in range(n_groups):
+    weights[grps==i] = grp_weights[i]
+
+import shapely
+import shapely.affinity
+poly = shapely.geometry.MultiPoint(imzcoordsfilttrans).convex_hull
+poly = poly.buffer(0.5)
+np.max(imzcoordsfilttrans,axis=0)-np.min(imzcoordsfilttrans,axis=0)
+shapely.affinity.scale(poly,xfact=2,yfact=2)
+mp = shapely.geometry.MultiPoint(centsred)
+tpls = [shapely.geometry.Point(centsred[i,:]) for i in range(centsred.shape[0])]
+n_points_ls = []
+for xsh in np.linspace(-3,3,41):
+    for ysh in np.linspace(-3,3,41):
+        tpoly = shapely.affinity.translate(poly,xsh,ysh)
+        pconts = np.sum(np.array([tpoly.contains(tpls[i]) for i in range(len(tpls))]))/len(tpls)
+        matches = skimage.feature.match_descriptors(centsred, imzcoordsfilttrans + np.array([xsh,ysh]), max_distance=1)
+        weighted_points = np.sum(weights[matches[:,0]])
+        kdt = KDTree(imzcoordsfilttrans[matches[:,1]]+np.array([xsh,ysh]), leaf_size=30, metric='euclidean')
+        centsred_distances, indices = kdt.query(centsred[matches[:,0]], k=1, return_distance=True)
+        centsred_has_match = centsred_distances.flatten()<0.75
+        mean_dist = np.mean(centsred_distances[centsred_has_match])
+        n_points_ls.append([weighted_points, matches.shape[0],pconts, mean_dist,xsh,ysh])
+
+n_points_arr = np.array(n_points_ls)
+n_points_arr_red = n_points_arr[n_points_arr[:,2] == np.max(n_points_arr[:,2]),:]
+weighted_score = n_points_arr_red[:,0]/np.max(n_points_arr_red[:,0]) + 1/(n_points_arr_red[:,3]/np.min(n_points_arr_red[:,3]))
+xsh = n_points_arr_red[weighted_score == np.max(weighted_score),4][0]
+ysh = n_points_arr_red[weighted_score == np.max(weighted_score),5][0]
+
+# plt.scatter(imzcoordsfilttrans[:,0]+xsh, imzcoordsfilttrans[:,1]+ysh,color="red")
+# plt.scatter(centsred[:,0], centsred[:,1],color="blue")
+# plt.title("matching points")
+# plt.show()
+
+
+
+logging.info("Find matching IMS and postIMS points")
+# eval matching points
+kdt = KDTree(imzcoordsfilttrans+np.array([xsh,ysh]), leaf_size=30, metric='euclidean')
+centsred_distances, indices = kdt.query(centsred, k=1, return_distance=True)
+# centsred_has_match = centsred_distances.flatten()<1
+centsred_has_match = centsred_distances.flatten()<0.75
+kdt = KDTree(centsred, leaf_size=30, metric='euclidean')
+imz_distances, indices = kdt.query(imzcoordsfilttrans+np.array([xsh,ysh]), k=1, return_distance=True)
+# imz_has_match = imz_distances.flatten()<1
+imz_has_match = imz_distances.flatten()<0.75
+
+centsredfilt = centsred[centsred_has_match,:]
+imzcoordsfilt = imzcoordsfilttrans[imz_has_match,:]
+
+# plt.scatter(imzcoordsfilt[:,0]+xsh, imzcoordsfilt[:,1]+ysh,color="red")
+# plt.scatter(centsredfilt[:,0], centsredfilt[:,1],color="blue")
+# plt.title("matching points")
+# plt.show()
+
 
 # matches = skimage.feature.match_descriptors(centsredfilt, imzcoordsfilt + np.array([xsh,ysh]), max_distance=1)
 # dst = centsredfilt[matches[:,0],:]
