@@ -117,7 +117,7 @@ def choose_imsml_coordsfile(wildcards):
         filename = get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
         filename = str(filename).strip()
         if filename == "":
-            filename_out = f"results/{wildcards.project_name}/data/IMS/postIMS_to_IMS_{wildcards.project_name}_{wildcards.sample}-IMSML-coords.h5"
+            filename_out = f"results/{wildcards.project_name}/data/IMS/postIMS_to_IMS_{wildcards.project_name}-{wildcards.sample}-IMSML-coords.h5"
         else:
             filename_out = f"results/{wildcards.project_name}/data/IMS/{filename}"
         return filename_out
@@ -128,4 +128,19 @@ def decide_IMS_to_postIMS_reg_metrics_auto_or_not(wildcards):
         filename = [str(f).strip() for f in filename]
         out = ["_auto" if f == ""  else "" for f in filename]
         return out
+
+
+def choose_imsml_coordsfile_from_imzml(wildcards):
+        sample_names = get_column_entry_from_metadata_two_conditions(wildcards.imzml_base+".imzML", wildcards.project_name, "sample_name", "imzml_filename", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)
+        filenames = []
+        for sample in sample_names:
+            filename = get_column_entry_from_metadata_two_conditions(sample, wildcards.project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
+            filename = str(filename).strip()
+            if filename == "":
+                filename_out = f"results/{wildcards.project_name}/data/IMS/postIMS_to_IMS_{wildcards.project_name}-{sample}-IMSML-coords.h5"
+            else:
+                filename_out = f"results/{wildcards.project_name}/data/IMS/{filename}"
+            filenames.append(filename_out)
+        return filenames
+
 
