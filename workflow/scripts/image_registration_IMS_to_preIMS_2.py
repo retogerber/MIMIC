@@ -418,7 +418,7 @@ def find_w(img_median: np.ndarray, img_convolved: np.ndarray, mask1: np.ndarray,
         n_border_points.append(max_border_points)
         weighted_dist.append(max_weighted_dist)
         wsobs.append(w)
-        if max_border_points < np.floor(0.985*np.max(n_border_points)):
+        if max_border_points < np.floor(0.95*np.max(n_border_points)):
             break
 
     wt = np.array(weighted_dist)
@@ -684,7 +684,7 @@ saveimage_tile(postIMSro_trans-imzimg_regin, tmpfilename, resolution)
 tinv = transform.GetInverse()
 tinv.SetTranslation(-np.array(tinv.GetTranslation())[[1,0]]/10+1.5)
 
-imzringmask = create_ring_mask(imzimg[xminimz:xmaximz,yminimz:ymaximz], imspixel_outscale, imspixel_inscale)
+imzringmask = create_ring_mask(imzimg[xminimz:xmaximz,yminimz:ymaximz], imspixel_outscale, imspixel_inscale+1)
 logging.info("Create IMS boundary coordinates")
 imzcoords = create_imz_coords(imzimg, imzringmask, imzrefcoords, imz_bbox, rotmat)
 
@@ -841,22 +841,6 @@ if False:
     imzcoordsfilt = imzcoordsfilt[matches[:,1],:]
 
 logging.info("Grid search for fine transformation")
-# weight by location on boundary, i.e. get angle of points to centroid, 
-# divided possible space of angles (0-360) into 10 groups, normalize weight of points per group
-postIMScent = skimage.measure.regionprops(skimage.measure.label(postIMSnringmask))[0].centroid
-postIMScentred = np.array(postIMScent)/stepsize*resolution
-angles = np.array([get_angle(centsred[i,:],postIMScentred) for i in range(centsred.shape[0])])
-angles = angles +180
-n_groups=10
-grps = (angles/(360/n_groups)).astype(int)
-np_grps = np.array([np.sum(grps==i) for i in range(n_groups)]).astype(np.double)
-is_nonzero = np_grps!=0
-grp_weights=np_grps*0
-grp_weights[is_nonzero] = 1/np_grps[is_nonzero]
-weights = grps*0.0
-for i in range(n_groups):
-    weights[grps==i] = grp_weights[i]
-
 # create polygon to check if centsred points are within polygon
 import shapely
 import shapely.affinity
@@ -871,7 +855,12 @@ for i in range(len(imzcoordsfilttrans)):
     tmpind = indices[i,:][close[i,:]]
     tmpch.append(shapely.geometry.MultiPoint(imzcoordsfilttrans[tmpind,:]).convex_hull)
 poly = shapely.unary_union(tmpch)
-poly = shapely.geometry.Polygon(poly.exterior)
+try:
+    poly = shapely.geometry.Polygon(poly.exterior)
+    logging.info("\tUse Grid")
+except:
+    logging.info("\tUse Convex hull")
+    poly = shapely.geometry.MultiPoint(imzcoordsfilttrans).convex_hull
 poly = poly.buffer(0.25)
 # centsred points
 tpls = [shapely.geometry.Point(centsred[i,:]) for i in range(centsred.shape[0])]
@@ -879,14 +868,43 @@ tpls = [shapely.geometry.Point(centsred[i,:]) for i in range(centsred.shape[0])]
 poly_small = poly.buffer(-7)
 pconts = np.array([poly_small.contains(tpls[i]) for i in range(len(tpls))])
 tpls = np.array(tpls)[np.logical_not(pconts)]
+centsred_tmp = centsred[np.logical_not(pconts),:]
+
+# weight by location on boundary, i.e. get angle of points to centroid, 
+# divided possible space of angles (0-360) into 10 groups, normalize weight of points per group
+postIMScent = skimage.measure.regionprops(skimage.measure.label(postIMSnringmask))[0].centroid
+postIMScentred = np.array(postIMScent)/stepsize*resolution
+angles = np.array([get_angle(centsred_tmp[i,:],postIMScentred) for i in range(np.sum(np.logical_not(pconts)))])
+def get_grp_weights(angles,n_groups=10):
+    grps = (angles/(360/n_groups)).astype(int)
+    np_grps = np.array([np.sum(grps==i) for i in range(n_groups)]).astype(np.double)
+    is_nonzero = np_grps!=0
+    grp_weights=np_grps*0
+    grp_weights[is_nonzero] = 1/np_grps[is_nonzero]
+    weights = grps*0.0
+    for i in range(n_groups):
+        weights[grps==i] = grp_weights[i]
+    return weights
+
+angles = angles +180
+wls = []
+for n_groups in [2,4,10,12,24,36]:
+    for sh in [0,5,10,15,20,25,30,35,40,45]:
+        wls.append(get_grp_weights((angles+sh)%360,n_groups))
+weights = np.mean(np.stack(wls),axis=0)
+weights=weights/np.max(weights)
+# plt.scatter(angles,weights)
+# plt.scatter(centsred[np.logical_not(pconts),:][:,1],centsred[np.logical_not(pconts),:][:,0],c=weights)
+# plt.show()
+
 
 # template transform
 tmp_transform = sitk.Euler2DTransform()
 tmp_transform.SetCenter((poly.bounds[2]-poly.bounds[0],poly.bounds[3]-poly.bounds[1]))
 
 # KDtree for distance calculations
-kdt = KDTree(centsred, leaf_size=30, metric='euclidean')
-cents_indices = np.arange(centsred.shape[0])
+kdt = KDTree(centsred_tmp, leaf_size=30, metric='euclidean')
+cents_indices = np.arange(centsred_tmp.shape[0])
 imz_indices = np.arange(imzcoordsfilttrans.shape[0])
 n_points_ls = []
 for xsh in np.linspace(-3,3,31):
@@ -898,10 +916,11 @@ for xsh in np.linspace(-3,3,31):
             tpoly = shapely.affinity.translate(tpoly,xsh,ysh)
             shapely.prepare(tpoly)
             # check if points are in polygon
-            pconts = np.mean(np.array([tpoly.contains(tpls[i]) for i in range(len(tpls))]))
+            does_contain = np.array([tpoly.contains(tpls[i]) for i in range(len(tpls))])
+            pconts = np.mean(does_contain)
 
             if pconts<0.95:
-                n_points_ls.append([0,0,pconts,999999,xsh,ysh,rot])
+                n_points_ls.append([0,0,pconts,999999,999999,xsh,ysh,rot])
                 continue
 
             # transform points
@@ -912,16 +931,19 @@ for xsh in np.linspace(-3,3,31):
             a=np.stack([
                 cents_indices[match_indices[bool_ind]],
                 imz_indices[bool_ind[:,0]],
-                imz_distances[bool_ind]]).T
+                imz_distances[bool_ind],
+                does_contain.astype(int)[match_indices[bool_ind]]]).T
             a = a[a[:, 0].argsort()]
             alsd = np.split(a[:, 2], np.unique(a[:, 0], return_index=True)[1][1:]) 
             bool_ind2 = np.concatenate([alsd[i]==np.min(alsd[i]) for i in range(len(alsd))])
-            matches = a[bool_ind2,:2].astype(int)
-            weighted_points = np.sum(weights[matches[:,0]])
-            mean_dist = np.mean(a[bool_ind2,2])
+            bool_ind_comb = np.logical_and(bool_ind2, a[:,3]==1)
+            matches = a[bool_ind_comb,:2].astype(int)
+            weighted_points = np.mean(weights[matches[:,0]])
+            mean_dist = np.mean(a[bool_ind_comb,2])
+            weighted_mean_dist = np.sum(a[bool_ind_comb,2]*weights[matches[:,0]])/np.sum(weights[matches[:,0]])/len(a[bool_ind_comb,2])
 
             # add metrics
-            n_points_ls.append([weighted_points, matches.shape[0],pconts, mean_dist,xsh,ysh,rot])
+            n_points_ls.append([weighted_points, matches.shape[0],pconts, mean_dist,weighted_mean_dist,xsh,ysh,rot])
 
 n_points_arr = np.array(n_points_ls)
 if np.max(n_points_arr[:,2])<0.95:
@@ -931,13 +953,26 @@ if np.max(n_points_arr[:,2])<0.95:
 else:
     # filter by proportion of points in polygon
     n_points_arr_red = n_points_arr[np.logical_or(n_points_arr[:,2] >= 0.99,n_points_arr[:,2]==np.max(n_points_arr[:,2])),:]
+
+    b=(n_points_arr_red[:,2]-np.min(n_points_arr_red[:,2]))/(np.max(n_points_arr_red[:,2])-np.min(n_points_arr_red[:,2]))
+    d=(n_points_arr_red[:,1]-np.min(n_points_arr_red[:,1]))/(np.max(n_points_arr_red[:,1])-np.min(n_points_arr_red[:,1]))
+    e=1-(n_points_arr_red[:,4]-np.min(n_points_arr_red[:,4]))/(np.max(n_points_arr_red[:,4])-np.min(n_points_arr_red[:,4]))
+    # plt.scatter(d,e,c=b)
+    # plt.show()
+
     # score based on number of points and distances
-    weighted_score = n_points_arr_red[:,0]/np.max(n_points_arr_red[:,0]) + 1/(n_points_arr_red[:,3]/np.min(n_points_arr_red[:,3]))
+    # weighted_score = (a+b+c+d)/4
+    # weighted_score=e
+    weighted_score = (b+d+e)/3
+
+    # plt.scatter(e,weighted_score)
+    # plt.scatter(e,d)
+    # plt.show()
 
     # best transformation parameters
-    xsh = n_points_arr_red[weighted_score == np.max(weighted_score),4][0]
-    ysh = n_points_arr_red[weighted_score == np.max(weighted_score),5][0]
-    rot = n_points_arr_red[weighted_score == np.max(weighted_score),6][0]
+    xsh = n_points_arr_red[weighted_score == np.max(weighted_score),5][0]
+    ysh = n_points_arr_red[weighted_score == np.max(weighted_score),6][0]
+    rot = n_points_arr_red[weighted_score == np.max(weighted_score),7][0]
 logging.info(f"Rotation: {rot:6.4f}, xshift: {xsh}, yshift: {ysh}")
 tmp_transform.SetParameters((rot,xsh,ysh))
 tmpimzrot = np.array([tmp_transform.TransformPoint(imzcoordsfilttrans[i,:]) for i in range(imzcoordsfilttrans.shape[0])])
@@ -966,12 +1001,13 @@ imz_has_match = imz_distances.flatten()<0.5
 centsredfilt = centsred[centsred_has_match,:]
 imzcoordsfilt = imzcoordsfilttrans[imz_has_match,:]
 
-# matches = skimage.feature.match_descriptors(centsredfilt, imzcoordsfilt + np.array([xsh,ysh]), max_distance=1)
+# matches = skimage.feature.match_descriptors(centsredfilt, tmpimzrot[imz_has_match,:], max_distance=1)
 # dst = centsredfilt[matches[:,0],:]
 # src = imzcoordsfilt[matches[:,1],:]
 # import random
 # random.seed(45)
-# model_robust, inliers = skimage.measure.ransac((src, dst), skimage.transform.EuclideanTransform, min_samples=3, residual_threshold=0.2, max_trials=500)
+# # model_robust, inliers = skimage.measure.ransac((src, dst), skimage.transform.EuclideanTransform, min_samples=21, residual_threshold=0.02, max_trials=10000)
+# model_robust, inliers = skimage.measure.ransac((src, dst), skimage.transform.AffineTransform, min_samples=21, residual_threshold=0.02, max_trials=1000)
 # model_robust
 # R_reg = model_robust.params[:2,:2]
 # t_reg = model_robust.translation
@@ -980,9 +1016,11 @@ imzcoordsfilt = imzcoordsfilttrans[imz_has_match,:]
 
 
 logging.info("Run point cloud registration")
-reg = pycpd.RigidRegistration(Y=centsredfilt.astype(float), X=imzcoordsfilt.astype(float), w=0, s=1, scale=False)
-postIMScoordsout, (s_reg, R_reg, t_reg) = reg.register()
+# reg = pycpd.RigidRegistration(Y=centsredfilt.astype(float), X=imzcoordsfilt.astype(float), w=0, s=1, scale=False)
+# postIMScoordsout, (s_reg, R_reg, t_reg) = reg.register()
 
+reg = pycpd.AffineRegistration(Y=centsredfilt.astype(float), X=imzcoordsfilt.astype(float), w=0, s=1, scale=False)
+postIMScoordsout, (R_reg, t_reg) = reg.register()
 tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_pycpd_registration.svg"
 plt.close()
 plt.scatter(imzcoordsfilt[:,0]*stepsize, imzcoordsfilt[:,1]*stepsize,color="red",alpha=0.5)
@@ -996,16 +1034,21 @@ fig.savefig(tmpfilename)
 
 # imzcoordsfilttrans2 = np.matmul(imzcoordsfilttrans,R_reg.T) + -t_reg
 
-pycpd_transform = sitk.Euler2DTransform()
+# pycpd_transform = sitk.Euler2DTransform()
+pycpd_transform = sitk.AffineTransform(2)
 pycpd_transform.SetCenter(np.array([0.0,0.0]).astype(np.double))
-pycpd_transform.SetMatrix(R_reg.flatten().astype(np.double))
-pycpd_transform.SetTranslation(-t_reg)
+pycpd_transform.SetMatrix(R_reg.T.flatten().astype(np.double))
+pycpd_transform.SetTranslation(t_reg)
+pycpd_transform.GetInverse().GetMatrix()
+pycpd_transform = pycpd_transform.GetInverse()
+
 
 tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_pycpd_registration_all.svg"
 plt.close()
 imzcoordsfilttrans2 = np.array([pycpd_transform.TransformPoint(imzcoordsfilttrans[i,:].astype(float)) for i in range(imzcoordsfilttrans.shape[0])])
 plt.scatter(centsred[:,0]*stepsize/resolution, centsred[:,1]*stepsize/resolution,color="blue",alpha=0.5)
 plt.scatter(imzcoordsfilttrans2[:,0]*stepsize/resolution, imzcoordsfilttrans2[:,1]*stepsize/resolution,color="red",alpha=0.5)
+# plt.show()
 fig = plt.gcf()
 fig.set_size_inches(20,20)
 fig.savefig(tmpfilename)
@@ -1094,7 +1137,8 @@ logging.info("2. Transformation: Translation")
 logging.info(tm2.GetParameters())
 
 # Registration of points 
-tm3 = sitk.Euler2DTransform()
+# tm3 = sitk.Euler2DTransform()
+tm3 = sitk.AffineTransform(2)
 tm3.SetCenter(np.array([0,0]).astype(np.double))
 tm3_rotmat = pycpd_transform_comb.GetMatrix()
 tm3.SetMatrix(tm3_rotmat)
@@ -1234,6 +1278,15 @@ for i in [-2,-1,0,1,2]:
         xinds = xinds[inds]
         yinds = yinds[inds]
         postIMScut[xinds,yinds,:] = [0,0,255]
+
+# add imc location
+imcmask = readimage_crop(imc_mask_file, [int(xmin), int(ymin), int(xmax), int(ymax)])
+imcmaskch = skimage.morphology.convex_hull_image(imcmask>0)
+imcmaskchi = skimage.morphology.isotropic_erosion(imcmaskch, 1)
+imcmaskb = np.logical_and(np.logical_not(imcmaskchi),imcmaskch)
+imcmaskbr = skimage.transform.resize(imcmaskb, postIMScut.shape, preserve_range = True)[:,:,0]
+postIMScut[imcmaskbr] = [255,255,255]
+
 
 saveimage_tile(postIMScut, ims_to_postIMS_regerror_image, resolution)
 
