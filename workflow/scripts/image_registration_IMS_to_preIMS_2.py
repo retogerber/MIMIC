@@ -48,7 +48,7 @@ logging.info("Microscopy pixelsize: "+str(resolution))
 # imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed.ome.tiff" 
 # output_table = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/test_split_ims_IMS_to_postIMS_matches.csv"
 # output_table="/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/test_split_ims_test_split_ims_2_IMS_to_postIMS_matches.csv"
-# postIMS_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/postIMS/test_combined_postIMS.ome.tiff"
+# postIMS_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/postIMS/test_combined_postIMS_reduced.ome.tiff"
 # postIMS_file = "/home/retger/Downloads/cirrhosis_TMA_postIMS_reduced.ome.tiff"
 # postIMS_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS_reduced.ome.tiff"
 # postIMS_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS.ome.tiff"
@@ -69,7 +69,7 @@ imzmlfile = snakemake.input["imzml"]
 # imc_mask_file = "/home/retger/Downloads/Lipid_TMA_37819_025_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/NASH_HCC_TMA-2_010_transformed.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
-# output_table = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/test_combined_test_combined_IMS_to_postIMS_matches.csv"
+# output_table = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/test_combined_IMS_test_combined_IMS_to_postIMS_matches.csv"
 # output_table = "/home/retger/Downloads/cirrhosis_TMA_cirrhosis_TMA_IMS_IMS_to_postIMS_matches.csv"
 # output_table = "/home/retger/Downloads/Lipid_TMA_3781_pos_mode_lipids_tma_02022023_imzml_IMS_to_postIMS_matches.csv"
 # output_table = "/home/retger/Downloads/NASH_HCC_TMA_NASH_HCC_TMA_IMS_IMS_to_postIMS_matches.csv"
@@ -445,8 +445,10 @@ max_score_inner, threshold_inner, w_inner = find_w(postIMSmpre, tmp2, postIMSinn
 
 logging.info("Max score (outer): "+str(max_score_outer))
 logging.info("Corresponding threshold (outer): "+str(threshold_outer))
+logging.info("Corresponding weight (outer): "+str(w_outer))
 logging.info("Max score (inner): "+str(max_score_inner))
 logging.info("Corresponding threshold (inner): "+str(threshold_inner))
+logging.info("Corresponding weight (inner): "+str(w_inner))
 
 def points_from_mask_two_thresholds(
         img_median: np.ndarray,
@@ -946,6 +948,8 @@ for xsh in np.linspace(-3,3,31):
             n_points_ls.append([weighted_points, matches.shape[0],pconts, mean_dist,weighted_mean_dist,xsh,ysh,rot])
 
 n_points_arr = np.array(n_points_ls)
+n_points_arr = n_points_arr[np.isfinite(n_points_arr).any(axis=1)]
+logging.info(f"\tNumber of finite points:{n_points_arr.shape[0]}/{len(n_points_ls)}")
 if np.max(n_points_arr[:,2])<0.95:
     xsh=0
     ysh=0
@@ -1032,23 +1036,24 @@ fig.set_size_inches(20,20)
 fig.savefig(tmpfilename)
 
 
-# imzcoordsfilttrans2 = np.matmul(imzcoordsfilttrans,R_reg.T) + -t_reg
+# Invert Transformation
+R_reg_inv = np.array([[1-(R_reg[1,1]-1),-R_reg[0,1]],[-R_reg[1,0],1-(R_reg[0,0]-1)]])
 
-# pycpd_transform = sitk.Euler2DTransform()
+# imzcoordsfilttrans2 = np.matmul(imzcoordsfilttrans,R_reg_inv) + -t_reg
+
 pycpd_transform = sitk.AffineTransform(2)
 pycpd_transform.SetCenter(np.array([0.0,0.0]).astype(np.double))
-pycpd_transform.SetMatrix(R_reg.T.flatten().astype(np.double))
-pycpd_transform.SetTranslation(t_reg)
-pycpd_transform.GetInverse().GetMatrix()
-pycpd_transform = pycpd_transform.GetInverse()
+pycpd_transform.SetMatrix(R_reg_inv.T.flatten().astype(np.double))
+pycpd_transform.SetTranslation(-t_reg)
 
 
 tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_pycpd_registration_all.svg"
 plt.close()
 imzcoordsfilttrans2 = np.array([pycpd_transform.TransformPoint(imzcoordsfilttrans[i,:].astype(float)) for i in range(imzcoordsfilttrans.shape[0])])
-plt.scatter(centsred[:,0]*stepsize/resolution, centsred[:,1]*stepsize/resolution,color="blue",alpha=0.5)
-plt.scatter(imzcoordsfilttrans2[:,0]*stepsize/resolution, imzcoordsfilttrans2[:,1]*stepsize/resolution,color="red",alpha=0.5)
+plt.scatter(centsred[:,0]*stepsize/resolution, centsred[:,1]*stepsize/resolution,color="blue",alpha=0.5, s=100)
+plt.scatter(imzcoordsfilttrans2[:,0]*stepsize/resolution, imzcoordsfilttrans2[:,1]*stepsize/resolution,color="red",alpha=0.5, s=100)
 # plt.show()
+
 fig = plt.gcf()
 fig.set_size_inches(20,20)
 fig.savefig(tmpfilename)
@@ -1064,10 +1069,15 @@ pycpd_transform_comb.GetParameters()
 imzcoords_all = create_imz_coords(imzimg, None, imzrefcoords, imz_bbox, rotmat)
 imzcoords_in = imzcoords_all + init_translation
 imzcoordstransformed = np.array([pycpd_transform_comb.TransformPoint(imzcoords_in[i,:].astype(float)) for i in range(imzcoords_in.shape[0])])
-plt.scatter(imzcoordstransformed[:,0]*stepsize/resolution, imzcoordstransformed[:,1]*stepsize/resolution,color="red")
-plt.scatter(centsred[:,0]*stepsize/resolution, centsred[:,1]*stepsize/resolution,color="blue")
-plt.imshow(postIMSmpre.T)
+tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_pycpd_registration_image.png"
+plt.close()
+plt.scatter(imzcoordstransformed[:,1]*stepsize/resolution, imzcoordstransformed[:,0]*stepsize/resolution,color="red", s=100)
+plt.scatter(centsred[:,1]*stepsize/resolution, centsred[:,0]*stepsize/resolution,color="blue", s=100)
+plt.imshow(postIMSmpre)
 plt.title("matching points")
+fig = plt.gcf()
+fig.set_size_inches(20,20)
+fig.savefig(tmpfilename)
 # plt.show()
 
 
@@ -1125,7 +1135,7 @@ tm1.SetTranslation([0,0])
 transparamtm1 = ((np.asarray(imzimg.shape).astype(np.double))/2*stepsize-stepsize/2).astype(np.double)
 tm1.SetCenter(transparamtm1)
 tm1.SetMatrix(rotmat.flatten().astype(np.double))
-logging.info("1. Transformation: Rotation")
+logging.info(f"1. Transformation: {tm1.GetName()}")
 logging.info(tm1.GetParameters())
 
 # Translation because of IMS crop
@@ -1133,7 +1143,7 @@ tm2 = sitk.TranslationTransform(2)
 yshift = init_translation[1]*stepsize
 xshift = init_translation[0]*stepsize
 tm2.SetParameters(np.array([xshift,yshift]).astype(np.double))
-logging.info("2. Transformation: Translation")
+logging.info(f"2. Transformation: {tm2.GetName()}")
 logging.info(tm2.GetParameters())
 
 # Registration of points 
@@ -1144,7 +1154,7 @@ tm3_rotmat = pycpd_transform_comb.GetMatrix()
 tm3.SetMatrix(tm3_rotmat)
 tm3_translation = np.array(pycpd_transform_comb.GetTranslation())*stepsize
 tm3.SetTranslation(tm3_translation)
-logging.info("3. Transformation: Euler2D")
+logging.info(f"3. Transformation: {tm3.GetName()}")
 logging.info(tm3.GetParameters())
 
 
@@ -1153,7 +1163,7 @@ tm4 = sitk.TranslationTransform(2)
 yshift = ymin
 xshift = xmin
 tm4.SetParameters(np.array([xshift,yshift]).astype(np.double))
-logging.info("4. Transformation: Translation")
+logging.info(f"4. Transformation: {tm4.GetName()}")
 logging.info(tm4.GetParameters())
 
 
@@ -1165,13 +1175,14 @@ tm.AddTransform(tm3)
 tm.AddTransform(tm2)
 tm.AddTransform(tm1)
 tmfl = composite2affine(tm, [0,0])
-logging.info("Combined Transformation: Affine")
+logging.info(f"Combined Transformation: {tmfl.GetName()}")
 logging.info(tmfl.GetParameters())
 
 # Since axis are flipped, rotate transformation
 tmfl.SetTranslation(np.flip(np.array(tmfl.GetTranslation())))
 tmpmat = tmfl.GetMatrix()
-tmfl.SetMatrix(np.array([tmpmat[:2],tmpmat[2:]]).T.flatten())
+# tmfl.SetMatrix(np.array([tmpmat[:2],tmpmat[2:]]).T.flatten())
+tmfl.SetMatrix(np.array([[tmpmat[3],tmpmat[2]],[tmpmat[1],tmpmat[0]]]).flatten())
 
 # tmfl.GetTranslation()
 # pmap_coord_data.keys()
