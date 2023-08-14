@@ -909,9 +909,9 @@ kdt = KDTree(centsred_tmp, leaf_size=30, metric='euclidean')
 cents_indices = np.arange(centsred_tmp.shape[0])
 imz_indices = np.arange(imzcoordsfilttrans.shape[0])
 n_points_ls = []
-for xsh in np.linspace(-3,3,31):
-    for ysh in np.linspace(-3,3,31):
-        for rot in np.linspace(-np.pi/288,np.pi/288,21):
+for xsh in np.linspace(-3,3,25):
+    for ysh in np.linspace(-3,3,25):
+        for rot in np.linspace(-np.pi/144,np.pi/144,31):
             # transform polygon
             tmp_transform.SetParameters((rot,xsh,ysh))
             tpoly = shapely.affinity.rotate(poly,rot, use_radians=True)
@@ -948,7 +948,7 @@ for xsh in np.linspace(-3,3,31):
             n_points_ls.append([weighted_points, matches.shape[0],pconts, mean_dist,weighted_mean_dist,xsh,ysh,rot])
 
 n_points_arr = np.array(n_points_ls)
-n_points_arr = n_points_arr[np.isfinite(n_points_arr).any(axis=1)]
+n_points_arr = n_points_arr[np.isfinite(n_points_arr).all(axis=1)]
 logging.info(f"\tNumber of finite points:{n_points_arr.shape[0]}/{len(n_points_ls)}")
 if np.max(n_points_arr[:,2])<0.95:
     xsh=0
@@ -956,7 +956,16 @@ if np.max(n_points_arr[:,2])<0.95:
     rot=0
 else:
     # filter by proportion of points in polygon
-    n_points_arr_red = n_points_arr[np.logical_or(n_points_arr[:,2] >= 0.99,n_points_arr[:,2]==np.max(n_points_arr[:,2])),:]
+    tmpthres = np.array([0,0.5,0.75,0.9,0.95,0.96,0.97,0.98,0.99,0.995,0.9975,0.999])
+    n_counts = np.array([np.sum(n_points_arr[:,2] >= t) for t in tmpthres])
+    has_min_counts = n_counts < np.ceil(len(n_points_ls)*0.01)
+    logging.info(f"\tNumber of valid filter thresholds: {np.sum(has_min_counts)}")
+    logging.info(f"\tCounts: {n_counts}")
+    pcont_threshold = tmpthres[has_min_counts][0] 
+    logging.info(f"\tFilter threshold: {pcont_threshold}")
+    n_points_arr_red = n_points_arr[np.logical_or(n_points_arr[:,2] >= pcont_threshold,n_points_arr[:,2]==np.max(n_points_arr[:,2])),:]
+    logging.info(f"\tNumber of points: {n_points_arr_red.shape[0]}/{n_points_arr.shape[0]}")
+
 
     b=(n_points_arr_red[:,2]-np.min(n_points_arr_red[:,2]))/(np.max(n_points_arr_red[:,2])-np.min(n_points_arr_red[:,2]))
     d=(n_points_arr_red[:,1]-np.min(n_points_arr_red[:,1]))/(np.max(n_points_arr_red[:,1])-np.min(n_points_arr_red[:,1]))
@@ -1281,6 +1290,14 @@ napari_imsmicrolink.utils.coords.pmap_coords_to_h5(pmap_coord_data, coords_out_f
 postIMScut = readimage_crop(postIMS_file, [int(xmin/resolution), int(ymin/resolution), int(xmax/resolution), int(ymax/resolution)])
 for i in [-2,-1,0,1,2]:
     for j in [-2,-1,0,1,2]:
+        xindsc = (centsred[:,0]/resolution*stepsize).astype(int)
+        yindsc = (centsred[:,1]/resolution*stepsize).astype(int)
+        xb = np.logical_and(xindsc >= 0, xindsc <= (postIMScut.shape[0]-1))
+        yb = np.logical_and(yindsc >= 0, yindsc <= (postIMScut.shape[1]-1))
+        inds = np.logical_and(xb,yb)
+        xindsc = xindsc[inds]
+        yindsc = yindsc[inds]
+        postIMScut[xindsc,yindsc,:] = [255,0,0]
         xinds = (np.array(pmap_coord_data["y_micro_physical"].to_list())/resolution+i-xmin/resolution).astype(int)
         yinds = (np.array(pmap_coord_data["x_micro_physical"].to_list())/resolution+j-ymin/resolution).astype(int)
         xb = np.logical_and(xinds >= 0, xinds <= (postIMScut.shape[0]-1))
@@ -1288,7 +1305,10 @@ for i in [-2,-1,0,1,2]:
         inds = np.logical_and(xb,yb)
         xinds = xinds[inds]
         yinds = yinds[inds]
-        postIMScut[xinds,yinds,:] = [0,0,255]
+        coled = postIMScut[xinds,yinds,0]==255
+        postIMScut[xinds[np.logical_not(coled)],yinds[np.logical_not(coled)],:] = [0,0,255]
+        postIMScut[xinds[coled],yinds[coled],:] = [255,0,255]
+
 
 # add imc location
 imcmask = readimage_crop(imc_mask_file, [int(xmin), int(ymin), int(xmax), int(ymax)])
