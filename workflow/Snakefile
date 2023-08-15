@@ -566,7 +566,7 @@ rule register_IMS_to_postIMS:
 
 
 rule register_IMS_to_postIMS_single_core:
-    threads: 1
+    threads: 4
     resources:
         mem_mb=20000
     params:

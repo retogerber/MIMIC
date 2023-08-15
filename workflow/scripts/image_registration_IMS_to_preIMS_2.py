@@ -32,6 +32,8 @@ sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
 sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 
 
+threads = int(snakemake.threads)
+cv2.setNumThreads(threads)
 logging.info("Start")
 
 # parameters
@@ -173,9 +175,12 @@ postIMSrcut = np.round(postIMSrcut).astype(np.uint8)
 logging.info("Create ringmask")
 postIMSringmask = create_ring_mask(postIMSrcut, (1/resolution)*stepsize*imspixel_outscale, (1/resolution)*stepsize*imspixel_inscale)
 logging.info("Isotropic dilation")
-postIMSoutermask = skimage.morphology.isotropic_dilation(postIMSrcut, (1/resolution)*stepsize*imspixel_outscale)
-postIMSoutermask_small = skimage.morphology.isotropic_dilation(postIMSrcut, (1/resolution)*stepsize)
-postIMSinnermask = skimage.morphology.isotropic_erosion(postIMSrcut, (1/resolution)*stepsize*imspixel_inscale)
+# postIMSoutermask = skimage.morphology.isotropic_dilation(postIMSrcut, (1/resolution)*stepsize*imspixel_outscale)
+postIMSoutermask = cv2.morphologyEx(src=postIMSrcut.astype(np.uint8), op = cv2.MORPH_DILATE, kernel = skimage.morphology.square(2*int((1/resolution)*stepsize*imspixel_outscale))).astype(bool)
+# postIMSoutermask_small = skimage.morphology.isotropic_dilation(postIMSrcut, (1/resolution)*stepsize)
+postIMSoutermask_small = cv2.morphologyEx(src=postIMSrcut.astype(np.uint8), op = cv2.MORPH_DILATE, kernel = skimage.morphology.square(2*int((1/resolution)*stepsize))).astype(bool)
+# postIMSinnermask = skimage.morphology.isotropic_erosion(postIMSrcut, (1/resolution)*stepsize*imspixel_inscale)
+postIMSinnermask = cv2.morphologyEx(src=postIMSrcut.astype(np.uint8), op = cv2.MORPH_ERODE, kernel = skimage.morphology.square(2*int((1/resolution)*stepsize*imspixel_inscale))).astype(bool)
 del postIMSrcut
 gc.collect()
 
@@ -295,24 +300,28 @@ def points_from_mask(
     centsred = centsred[to_keep_adj,:]
     return centsred
 
-def find_threshold(img: np.ndarray, maskb_dist: np.ndarray, thr_range=[127,250], min_n:int = 9):
+def scores_points_from_mask(th, img, maskb_dist, min_n:int = 9):
+    maskb = img>th
+    centsred = points_from_mask(maskb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize, min_n=min_n)
+    cents = (centsred*stepsize/resolution).astype(int)
+    dists = maskb_dist[cents[:,0],cents[:,1]]/stepsize*resolution
+    inv_dists = np.array([1/d if d>0 else 0 for d in dists])
+    return (centsred.shape[0], np.sum(dists<=2), np.sum(inv_dists))
+
+from multiprocessing import Pool, Value
+import functools
+def find_threshold(img: np.ndarray, maskb_dist: np.ndarray, thr_range=[127,250], min_n:int = 9, threads:int=1):
 
     # find best threshold by maximizing number of points that fullfill criteria
     # grid search
     # broad steps
+    scorer = functools.partial(scores_points_from_mask, img=img, maskb_dist = maskb_dist, min_n=min_n)
     thresholds = list(range(thr_range[0],thr_range[1],10))
-    n_points = []
-    weighted_dist = []
-    n_border_points = []
-    for th in thresholds:
-        maskb = img>th
-        centsred = points_from_mask(maskb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize, min_n=min_n)
-        cents = (centsred*stepsize/resolution).astype(int)
-        dists = maskb_dist[cents[:,0],cents[:,1]]/stepsize*resolution
-        inv_dists = np.array([1/d if d>0 else 0 for d in dists])
-        n_points.append(centsred.shape[0])
-        n_border_points.append(np.sum(dists<=2))
-        weighted_dist.append(np.sum(inv_dists))
+    if threads>1:
+        with Pool(threads) as p:
+            n_points, n_border_points, weighted_dist = zip(*p.map(scorer, thresholds))
+    else:
+        n_points, n_border_points, weighted_dist = zip(*map(scorer, thresholds))
 
     wt = np.array(weighted_dist)
     wtm = 1 if np.max(wt)==0 else np.max(wt)
@@ -330,23 +339,11 @@ def find_threshold(img: np.ndarray, maskb_dist: np.ndarray, thr_range=[127,250],
 
     # finer steps
     thresholds = list(range(threshold-9,threshold+10,3))
-    n_points = []
-    weighted_dist = []
-    n_border_points = []
-    for th in thresholds:
-        if th == threshold:
-            n_points.append(max_points)
-            n_border_points.append(max_border_points)
-            weighted_dist.append(max_weighted_dist)
-        else:
-            maskb = img>th
-            centsred = points_from_mask(maskb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize, min_n=min_n)
-            cents = (centsred*stepsize/resolution).astype(int)
-            dists = maskb_dist[cents[:,0],cents[:,1]]/stepsize*resolution
-            inv_dists = np.array([1/d if d>0 else 0 for d in dists])
-            n_points.append(centsred.shape[0])
-            n_border_points.append(np.sum(dists<=2))
-            weighted_dist.append(np.sum(inv_dists))
+    if threads>1:
+        with Pool(threads) as p:
+            n_points, n_border_points, weighted_dist = zip(*p.map(scorer, thresholds))
+    else:
+        n_points, n_border_points, weighted_dist = zip(*map(scorer, thresholds))
 
     wt = np.array(weighted_dist)
     wtm = 1 if np.max(wt)==0 else np.max(wt)
@@ -364,23 +361,11 @@ def find_threshold(img: np.ndarray, maskb_dist: np.ndarray, thr_range=[127,250],
 
     # fine steps
     thresholds = list(range(threshold-2,threshold+3))
-    n_points = []
-    weighted_dist = []
-    n_border_points = []
-    for th in thresholds:
-        if th == threshold:
-            n_points.append(max_points)
-            n_border_points.append(max_border_points)
-            weighted_dist.append(max_weighted_dist)
-        else:
-            maskb = img>th
-            centsred = points_from_mask(maskb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize, min_n=min_n)
-            cents = (centsred*stepsize/resolution).astype(int)
-            dists = maskb_dist[cents[:,0],cents[:,1]]/stepsize*resolution
-            inv_dists = np.array([1/d if d>0 else 0 for d in dists])
-            n_points.append(centsred.shape[0])
-            n_border_points.append(np.sum(dists<=2))
-            weighted_dist.append(np.sum(inv_dists))
+    if threads>1:
+        with Pool(threads) as p:
+            n_points, n_border_points, weighted_dist = zip(*p.map(scorer, thresholds))
+    else:
+        n_points, n_border_points, weighted_dist = zip(*map(scorer, thresholds))
 
     wt = np.array(weighted_dist)
     wtm = 1 if np.max(wt)==0 else np.max(wt)
@@ -398,39 +383,51 @@ def find_threshold(img: np.ndarray, maskb_dist: np.ndarray, thr_range=[127,250],
 
     return threshold, max_points, max_border_points, max_weighted_dist
 
-logging.info("Find best threshold for points (outer points)")
-def find_w(img_median: np.ndarray, img_convolved: np.ndarray, mask1: np.ndarray, mask2: np.ndarray, ws):
-    maskb_dist = distance_transform_edt(mask1)
-    wsobs = []
-    thresholds=[]
-    n_points=[]
-    weighted_dist = []
-    n_border_points = []
-    for w in ws:
-        # combine with original image
-        tmp3 = w*img_median + (1-w)*img_convolved
-        tmp3 = skimage.exposure.equalize_adapthist(normalize_image(tmp3))
-        tmp3 = normalize_image(tmp3)*255
-        tmp3 = tmp3.astype(np.uint8)
-        postIMSmforpoints = tmp3.copy()
-        postIMSm = postIMSmforpoints.copy()
-        postIMSm[np.logical_not(mask2)] = 0
-        if len(thresholds)>0:
-            thr_range = [thresholds[-1]-11,thresholds[-1]+11]
+# def score_find_w(w, img_median, img_convolved, maskb_dist, mask2, threads):
+def score_find_w(w):
+    postIMSm = w*img_median_in + (1-w)*img_convolved_in
+    postIMSm = skimage.exposure.equalize_adapthist(normalize_image(postIMSm))
+    postIMSm = normalize_image(postIMSm)*255
+    postIMSm = postIMSm.astype(np.uint8)
+    postIMSm[np.logical_not(mask2_in)] = 0
+    if threads_in>1:
+        if current_threshold_in.value>0:
+            thr_range = [int(current_threshold_in.value)-31,int(current_threshold_in.value)+31]
             thr_range[0] = 0 if thr_range[0]<0 else thr_range[0]
             thr_range[1] = 255 if thr_range[1]>255 else thr_range[1]
         else:
             thr_range = [127,250]
+    else:
+        thr_range = [127,250]
 
-        threshold, max_points, max_border_points, max_weighted_dist= find_threshold(postIMSm, maskb_dist, thr_range=thr_range)
-        logging.info(f"weight: {w}, threshold: {threshold}, n_points: {max_points}, border points: {max_border_points}, sum of inverse distances {max_weighted_dist}")
-        thresholds.append(threshold)
-        n_points.append(max_points)
-        n_border_points.append(max_border_points)
-        weighted_dist.append(max_weighted_dist)
-        wsobs.append(w)
-        if max_border_points < np.floor(0.95*np.max(n_border_points)):
-            break
+    threshold, max_points, max_border_points, max_weighted_dist= find_threshold(postIMSm, maskb_dist_in, thr_range=thr_range, threads=1)
+    logging.info(f"weight: {w}, threshold: {threshold}, n_points: {max_points}, border points: {max_border_points}, sum of inverse distances {max_weighted_dist}")
+    if threads_in>1:
+        current_threshold_in.value = threshold
+    return (threshold, max_points, max_border_points, max_weighted_dist, w)
+
+def init_worker(img_median, img_convolved, maskb_dist, mask2, threads, current_threshold):
+    global img_median_in
+    img_median_in = img_median
+    global img_convolved_in
+    img_convolved_in = img_convolved
+    global maskb_dist_in
+    maskb_dist_in = maskb_dist
+    global mask2_in
+    mask2_in = mask2
+    global threads_in
+    threads_in = threads
+    global current_threshold_in
+    current_threshold_in = current_threshold
+
+
+logging.info("Find best threshold for points (outer points)")
+def find_w(img_median: np.ndarray, img_convolved: np.ndarray, mask1: np.ndarray, mask2: np.ndarray, ws, threads:int=1):
+    maskb_dist = distance_transform_edt(mask1)
+
+    current_threshold = Value('i', 0)    
+    with Pool(threads, initializer= init_worker, initargs=(img_median, img_convolved, maskb_dist, mask2, threads, current_threshold)) as p:
+        thresholds, n_points, n_border_points, weighted_dist, wsobs = zip(*p.map(score_find_w, ws))
 
     wt = np.array(weighted_dist)
     wtm = 1 if np.max(wt)==0 else np.max(wt)
@@ -446,14 +443,14 @@ def find_w(img_median: np.ndarray, img_convolved: np.ndarray, mask1: np.ndarray,
     return max_score, threshold, w
 
 ws = [0.001,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.5,0.6,0.7,0.8,0.9,0.99]
-max_score_outer, threshold_outer, w_outer = find_w(postIMSmpre, tmp2, postIMSoutermask_small, postIMSringmask, ws)
+max_score_outer, threshold_outer, w_outer = find_w(postIMSmpre, tmp2, postIMSoutermask_small, postIMSringmask, ws, threads=threads)
 del postIMSringmask, postIMSoutermask_small
 gc.collect()
 
 
 logging.info("Find best threshold for points (inner points)")
 ws = [0.001,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.5,0.6,0.7,0.8,0.9,0.99]
-max_score_inner, threshold_inner, w_inner = find_w(postIMSmpre, tmp2, postIMSinnermask, postIMSinnermask, ws)
+max_score_inner, threshold_inner, w_inner = find_w(postIMSmpre, tmp2, postIMSinnermask, postIMSinnermask, ws, threads=threads)
 
 logging.info("Max score (outer): "+str(max_score_outer))
 logging.info("Corresponding threshold (outer): "+str(threshold_outer))
@@ -931,45 +928,68 @@ kdt = KDTree(centsred_tmp, leaf_size=30, metric='euclidean')
 cents_indices = np.arange(centsred_tmp.shape[0])
 del centsred_tmp
 imz_indices = np.arange(imzcoordsfilttrans.shape[0])
-n_points_ls = []
-for xsh in np.linspace(-3,3,25):
-    for ysh in np.linspace(-3,3,25):
-        for rot in np.linspace(-np.pi/144,np.pi/144,31):
-            # transform polygon
-            tmp_transform.SetParameters((rot,xsh,ysh))
-            tpoly = shapely.affinity.rotate(poly,rot, use_radians=True)
-            tpoly = shapely.affinity.translate(tpoly,xsh,ysh)
-            shapely.prepare(tpoly)
-            # check if points are in polygon
-            does_contain = np.array([tpoly.contains(tpls[i]) for i in range(len(tpls))])
-            pconts = np.mean(does_contain)
 
-            if pconts<0.95:
-                n_points_ls.append([0,0,pconts,999999,999999,xsh,ysh,rot])
-                continue
+# def score_init_transform(tz, poly, tpls, imzcoordsfilttrans, cents_indices, imz_indices):
+def score_init_transform(tz):
+    xsh, ysh, rot = tz
+    tmp_transform = sitk.Euler2DTransform()
+    tmp_transform.SetCenter((poly.bounds[2]-poly.bounds[0],poly.bounds[3]-poly.bounds[1]))
+    tmp_transform.SetParameters((rot,xsh,ysh))
+    tpoly = shapely.affinity.rotate(poly,rot, use_radians=True)
+    tpoly = shapely.affinity.translate(tpoly,xsh,ysh)
+    shapely.prepare(tpoly)
+    # check if points are in polygon
+    does_contain = np.array([tpoly.contains(tpls[i]) for i in range(len(tpls))])
+    pconts = np.mean(does_contain)
 
-            # transform points
-            tmpimzrot = np.array([tmp_transform.TransformPoint(imzcoordsfilttrans[i,:]) for i in range(imzcoordsfilttrans.shape[0])])
-            # calculate distances and matches 
-            imz_distances, match_indices = kdt.query(tmpimzrot, k=1, return_distance=True)
-            bool_ind = imz_distances<1
-            a=np.stack([
-                cents_indices[match_indices[bool_ind]],
-                imz_indices[bool_ind[:,0]],
-                imz_distances[bool_ind],
-                does_contain.astype(int)[match_indices[bool_ind]]]).T
-            a = a[a[:, 0].argsort()]
-            alsd = np.split(a[:, 2], np.unique(a[:, 0], return_index=True)[1][1:]) 
-            bool_ind2 = np.concatenate([alsd[i]==np.min(alsd[i]) for i in range(len(alsd))])
-            bool_ind_comb = np.logical_and(bool_ind2, a[:,3]==1)
-            matches = a[bool_ind_comb,:2].astype(int)
-            weighted_points = np.mean(weights[matches[:,0]])
-            mean_dist = np.mean(a[bool_ind_comb,2])
-            weighted_mean_dist = np.sum(a[bool_ind_comb,2]*weights[matches[:,0]])/np.sum(weights[matches[:,0]])/len(a[bool_ind_comb,2])
+    if pconts<0.95:
+        return [0,0,pconts,999999,999999,xsh,ysh,rot]
 
-            # add metrics
-            n_points_ls.append([weighted_points, matches.shape[0],pconts, mean_dist,weighted_mean_dist,xsh,ysh,rot])
+    # transform points
+    tmpimzrot = np.array([tmp_transform.TransformPoint(imzcoordsfilttrans[i,:]) for i in range(imzcoordsfilttrans.shape[0])])
+    # calculate distances and matches 
+    imz_distances, match_indices = kdt.query(tmpimzrot, k=1, return_distance=True)
+    bool_ind = imz_distances<1
+    a=np.stack([
+        cents_indices[match_indices[bool_ind]],
+        imz_indices[bool_ind[:,0]],
+        imz_distances[bool_ind],
+        does_contain.astype(int)[match_indices[bool_ind]]]).T
+    a = a[a[:, 0].argsort()]
+    alsd = np.split(a[:, 2], np.unique(a[:, 0], return_index=True)[1][1:]) 
+    bool_ind2 = np.concatenate([alsd[i]==np.min(alsd[i]) for i in range(len(alsd))])
+    bool_ind_comb = np.logical_and(bool_ind2, a[:,3]==1)
+    matches = a[bool_ind_comb,:2].astype(int)
+    weighted_points = np.mean(weights[matches[:,0]])
+    mean_dist = np.mean(a[bool_ind_comb,2])
+    weighted_mean_dist = np.sum(a[bool_ind_comb,2]*weights[matches[:,0]])/np.sum(weights[matches[:,0]])/len(a[bool_ind_comb,2])
 
+    # add metrics
+    return [weighted_points, matches.shape[0],pconts, mean_dist,weighted_mean_dist,xsh,ysh,rot]
+
+def init_worker(poly_in, tpls_in, imzcoordsfilttrans_in, cents_indices_in, imz_indices_in):
+    global poly
+    poly = poly_in
+    global tpls
+    tpls = tpls_in
+    global imzcoordsfilttrans
+    imzcoordsfilttrans = imzcoordsfilttrans_in
+    global cents_indices
+    cents_indices = cents_indices_in
+    global imz_indices
+    imz_indices = imz_indices_in
+
+import itertools
+tz = itertools.product(np.linspace(-3,3,25), np.linspace(-3,3,25), np.linspace(-np.pi/144,np.pi/144,31))
+with Pool(threads, initializer= init_worker, initargs=(poly, tpls, imzcoordsfilttrans, cents_indices, imz_indices)) as p:
+    n_points_ls = p.map(score_init_transform, tz)
+
+
+# scorer = functools.partial(score_init_transform, poly=poly, tpls=tpls, imzcoordsfilttrans=imzcoordsfilttrans, cents_indices = cents_indices, imz_indices=imz_indices)
+# tz = itertools.product(np.linspace(-3,3,25), np.linspace(-3,3,25), np.linspace(-np.pi/144,np.pi/144,31))
+# # tz = itertools.product(np.linspace(-2,2,15), np.linspace(-2,2,15), np.linspace(-np.pi/144,np.pi/144,11))
+# with Pool(threads) as p:
+#     n_points_ls = p.map(scorer, tz)
 del poly, tpls
 gc.collect()
 n_points_arr = np.array(n_points_ls)
@@ -995,9 +1015,18 @@ else:
     logging.info(f"\tNumber of points: {n_points_arr_red.shape[0]}/{n_points_arr.shape[0]}")
 
 
-    b=(n_points_arr_red[:,2]-np.min(n_points_arr_red[:,2]))/(np.max(n_points_arr_red[:,2])-np.min(n_points_arr_red[:,2]))
-    d=(n_points_arr_red[:,1]-np.min(n_points_arr_red[:,1]))/(np.max(n_points_arr_red[:,1])-np.min(n_points_arr_red[:,1]))
-    e=1-(n_points_arr_red[:,4]-np.min(n_points_arr_red[:,4]))/(np.max(n_points_arr_red[:,4])-np.min(n_points_arr_red[:,4]))
+    if np.min(n_points_arr_red[:,2])==np.max(n_points_arr_red[:,2]):
+        b = np.ones(len(n_points_arr_red[:,2]))
+    else:
+        b=(n_points_arr_red[:,2]-np.min(n_points_arr_red[:,2]))/(np.max(n_points_arr_red[:,2])-np.min(n_points_arr_red[:,2]))
+    if np.min(n_points_arr_red[:,1])==np.max(n_points_arr_red[:,1]):
+        d = np.ones(len(n_points_arr_red[:,1]))
+    else:
+        d=(n_points_arr_red[:,1]-np.min(n_points_arr_red[:,1]))/(np.max(n_points_arr_red[:,1])-np.min(n_points_arr_red[:,1]))
+    if np.min(n_points_arr_red[:,4])==np.max(n_points_arr_red[:,4]):
+        e = np.ones(len(n_points_arr_red[:,4]))
+    else:
+        e=1-(n_points_arr_red[:,4]-np.min(n_points_arr_red[:,4]))/(np.max(n_points_arr_red[:,4])-np.min(n_points_arr_red[:,4]))
     # plt.scatter(d,e,c=b)
     # plt.show()
 

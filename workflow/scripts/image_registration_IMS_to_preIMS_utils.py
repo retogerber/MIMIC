@@ -1,4 +1,5 @@
 import numpy as np
+import cv2
 import skimage
 from segment_anything import SamPredictor
 from wsireg.utils.im_utils import grayscale
@@ -151,10 +152,12 @@ def create_ring_mask(img, outscale, inscale):
     outscale: pixels to scale outwards from current border
     inscale: pixels to scale inwards from current border
     '''
-    outermask = skimage.morphology.isotropic_dilation(img, outscale)
+    # outermask = skimage.morphology.isotropic_dilation(img, outscale)
+    outermask = cv2.morphologyEx(src=img.astype(np.uint8), op = cv2.MORPH_DILATE, kernel = skimage.morphology.square(2*int(outscale))).astype(bool)
     tmmask = np.zeros((img.shape[0]+2,img.shape[1]+2))
     tmmask[1:(img.shape[0]+1),1:(img.shape[1]+1)] = img 
-    innermask = skimage.morphology.isotropic_erosion(tmmask, inscale)
+    # innermask = skimage.morphology.isotropic_erosion(tmmask, inscale)
+    innermask = cv2.morphologyEx(src=tmmask.astype(np.uint8), op = cv2.MORPH_ERODE, kernel = skimage.morphology.square(2*int(inscale))).astype(bool)
     innermask = innermask[1:(img.shape[0]+1),1:(img.shape[1]+1)]
     ringmask = np.logical_and(outermask, np.logical_not(innermask))
     return ringmask
