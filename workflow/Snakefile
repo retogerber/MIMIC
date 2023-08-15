@@ -68,7 +68,7 @@ rule all:
         #expand("results/{project_name}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics_auto.json",zip, project_name=project_names,sample=sample_names),
         #expand("results/{project_name}/data/IMS/{project_name}_{imzml_base}_IMS_to_postIMS_matches.csv",zip, project_name=project_names, imzml_base = imzml_base),
         #expand("results/{project_name}/data/IMS/postIMS_to_IMS_{project_name}_{sample}-IMSML-coords.h5",zip, project_name=project_names, sample=sample_names)
-        expand("results/{project_name}/data/cell_overlap/{project_name}_{imzml_base}_peak_cell_overlap.csv",zip,project_name=unique_imzml_project[1], imzml_base=unique_imzml_project[0])
+        #expand("results/{project_name}/data/cell_overlap/{project_name}_{imzml_base}_peak_cell_overlap.csv",zip,project_name=unique_imzml_project[1], imzml_base=unique_imzml_project[0])
         
 
 
@@ -297,6 +297,8 @@ rule transform_IMC_location_to_preIMC:
     params:
         microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "microscopy_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"]))
     threads: 4
+    resources:
+        mem_mb=5000
     input:
         IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC_{core}.geojson",
         postIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_transformations.json"
@@ -418,6 +420,8 @@ rule precise_register_IMC_to_preIMC:
 
 rule transform_IMCaggr_to_postIMS:
     threads: 16
+    resources:
+        mem_mb=20000
     input:
         IMC_to_preIMC_transform=IMC_to_preIMC_transform_pkl_core_name_from_sample_name,
         preIMC_orig_size_transform=preIMC_orig_size_transform_core_name_from_sample_name,
@@ -439,6 +443,8 @@ rule transform_IMCaggr_to_postIMS:
 
 rule transform_IMCmask_to_postIMS:
     threads: 16
+    resources:
+        mem_mb=20000
     input:
         IMC_to_preIMC_transform=IMC_to_preIMC_transform_pkl_core_name_from_sample_name,
         preIMC_orig_size_transform=preIMC_orig_size_transform_core_name_from_sample_name,
@@ -459,6 +465,8 @@ rule transform_IMCmask_to_postIMS:
 
 rule transform_postIMC_to_postIMS:
     threads: 16
+    resources:
+        mem_mb=80000
     params:
         microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "microscopy_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"]))
     input:
@@ -480,6 +488,8 @@ rule transform_postIMC_to_postIMS:
 
 rule downscale_postIMS:
     threads: 4
+    resources:
+        mem_mb=5000
     params:
         microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "microscopy_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
         IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMC_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
@@ -504,6 +514,8 @@ use rule downscale_postIMS as downscale_preIMS with:
     
 rule extract_core_mask_from_postIMS:
     threads: 4
+    resources:
+        mem_mb=10000
     params:
         IMS_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMS_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
         IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMC_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
@@ -526,6 +538,9 @@ rule extract_core_mask_from_postIMS:
 
 
 rule register_IMS_to_postIMS:
+    threads: 1
+    resources:
+        mem_mb=20000
     params:
         IMS_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMS_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
         IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMC_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
@@ -551,6 +566,9 @@ rule register_IMS_to_postIMS:
 
 
 rule register_IMS_to_postIMS_single_core:
+    threads: 1
+    resources:
+        mem_mb=20000
     params:
         IMS_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMS_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
         #IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMC_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
@@ -596,6 +614,8 @@ rule download_sam_weights:
 
 rule image_registration_evaluation:
     threads: 4
+    resources:
+        mem_mb=5000
     params:
         downscale = 1
     input:
@@ -710,6 +730,8 @@ rule transform_IMC_location_to_postIMS:
     params:
         microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "microscopy_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"]))
     threads: 4
+    resources:
+        mem_mb=20000
     input:
         IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC_{core}.geojson",
         postIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_transformations.json"
@@ -728,6 +750,8 @@ rule transform_IMC_location_to_postIMS:
 
 rule process_imzml:
     threads: 16
+    resources:
+        mem_mb=20000
     input: 
         imzml=lambda wildcards: os.path.join("results",wildcards.project_name,"data","IMS", f"{wildcards.imzml_base}.imzML"),
         ibd=lambda wildcards: os.path.join("results",wildcards.project_name,"data","IMS", f"{wildcards.imzml_base}.ibd"),
@@ -748,6 +772,8 @@ rule combine_IMS_celloverlap_data:
         IMS_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMS_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
         IMS_shrink_factor=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMS_shrink_factor", "project_name", read_sample_metadata(config["sample_metadata"]))
     threads: 16
+    resources:
+        mem_mb=20000
     input:
         imsml_coords_fp = choose_imsml_coordsfile_from_imzml,
         peaks="results/{project_name}/data/IMS/{imzml_base}_peaks.h5",
