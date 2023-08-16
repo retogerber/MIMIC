@@ -909,13 +909,14 @@ def get_grp_weights(angles,n_groups=10):
 
 angles = angles +180
 wls = []
-for n_groups in [2,4,10,12,24,36]:
-    for sh in [0,5,10,15,20,25,30,35,40,45]:
+for n_groups in [2,3,4,5,6,7,8,9,10,12]:
+    for sh in np.arange(-45,50,5):
         wls.append(get_grp_weights((angles+sh)%360,n_groups))
-weights = np.mean(np.stack(wls),axis=0)
-weights=weights/np.max(weights)
+weights = np.mean(np.stack(wls),axis=0)**(1.5)
+weights = weights/np.sum(weights)*len(weights)
+# weights=weights/np.max(weights)
 # plt.scatter(angles,weights)
-# plt.scatter(centsred[np.logical_not(pconts),:][:,1],centsred[np.logical_not(pconts),:][:,0],c=weights)
+# plt.scatter(centsred[np.logical_not(pconts),:][:,1],centsred[np.logical_not(pconts),:][:,0],c=np.sqrt(weights))
 # plt.show()
 
 
@@ -962,12 +963,13 @@ def score_init_transform(tz):
     matches = a[bool_ind_comb,:2].astype(int)
     weighted_points = np.mean(weights[matches[:,0]])
     mean_dist = np.mean(a[bool_ind_comb,2])
-    weighted_mean_dist = np.sum(a[bool_ind_comb,2]*weights[matches[:,0]])/np.sum(weights[matches[:,0]])/len(a[bool_ind_comb,2])
+    # weighted_mean_dist = np.sum(a[bool_ind_comb,2]*weights[matches[:,0]])/np.sum(weights[matches[:,0]])/len(a[bool_ind_comb,2])
+    weighted_mean_dist = np.sum(a[bool_ind_comb,2]*weights[matches[:,0]])/len(a[bool_ind_comb,2])
 
     # add metrics
     return [weighted_points, matches.shape[0],pconts, mean_dist,weighted_mean_dist,xsh,ysh,rot]
 
-def init_worker(poly_in, tpls_in, imzcoordsfilttrans_in, cents_indices_in, imz_indices_in):
+def init_worker(poly_in, tpls_in, imzcoordsfilttrans_in, cents_indices_in, imz_indices_in, weights_in):
     global poly
     poly = poly_in
     global tpls
@@ -978,22 +980,69 @@ def init_worker(poly_in, tpls_in, imzcoordsfilttrans_in, cents_indices_in, imz_i
     cents_indices = cents_indices_in
     global imz_indices
     imz_indices = imz_indices_in
+    global weights
+    weights = weights_in
 
 import itertools
-tz = itertools.product(np.linspace(-3,3,25), np.linspace(-3,3,25), np.linspace(-np.pi/144,np.pi/144,31))
-with Pool(threads, initializer= init_worker, initargs=(poly, tpls, imzcoordsfilttrans, cents_indices, imz_indices)) as p:
+xrinit = np.linspace(-3,3,25)
+yrinit = np.linspace(-3,3,25)
+rotrinit = np.linspace(-np.pi/144,np.pi/144,11)
+logging.info(f"\tNumber of iterations: {len(xrinit)*len(yrinit)*len(rotrinit)}")
+tz = itertools.product(xrinit, yrinit, rotrinit)
+with Pool(threads, initializer= init_worker, initargs=(poly, tpls, imzcoordsfilttrans, cents_indices, imz_indices, weights)) as p:
     n_points_ls = p.map(score_init_transform, tz)
 
+n_points_arr_init = np.array(n_points_ls)
+n_points_arr_init = n_points_arr_init[np.isfinite(n_points_arr_init).all(axis=1)]
+if np.max(n_points_arr_init[:,2])<0.95:
+    pcont_threshold = np.max(n_points_arr_init[:,2])
+    xrinit2 = np.linspace(-3,3,49)
+    yrinit2 = np.linspace(-3,3,49)
+    rotrinit2 = np.linspace(-np.pi/144,np.pi/144,31)
+else:
+    pcont_threshold = np.quantile(n_points_arr_init[:,2],0.9)
+    n_points_arr_init_red = n_points_arr_init[np.logical_or(n_points_arr_init[:,2] >= pcont_threshold,n_points_arr_init[:,2]==np.max(n_points_arr_init[:,2])),:]
+    xrinit2 = np.arange(np.min(n_points_arr_init_red[:,5])-0.5,np.max(n_points_arr_init_red[:,5])+0.5,0.1)
+    xrinit2 = xrinit2[~np.array([np.any(np.isclose(x,xrinit)) for x in xrinit2])]
+    yrinit2 = np.arange(np.min(n_points_arr_init_red[:,6])-0.5,np.max(n_points_arr_init_red[:,6])+0.5,0.1)
+    yrinit2 = yrinit2[~np.array([np.any(np.isclose(y,yrinit)) for y in yrinit2])]
+    rotrinit2 = np.arange(np.min(n_points_arr_init_red[:,7]),np.max(n_points_arr_init_red[:,7]),0.002)
+    rotrinit2 = rotrinit2[~np.array([np.any(np.isclose(rot,rotrinit)) for rot in rotrinit2])]
 
-# scorer = functools.partial(score_init_transform, poly=poly, tpls=tpls, imzcoordsfilttrans=imzcoordsfilttrans, cents_indices = cents_indices, imz_indices=imz_indices)
-# tz = itertools.product(np.linspace(-3,3,25), np.linspace(-3,3,25), np.linspace(-np.pi/144,np.pi/144,31))
-# # tz = itertools.product(np.linspace(-2,2,15), np.linspace(-2,2,15), np.linspace(-np.pi/144,np.pi/144,11))
-# with Pool(threads) as p:
-#     n_points_ls = p.map(scorer, tz)
+
+import itertools
+logging.info(f"\tNumber of iterations: {len(xrinit2)*len(yrinit2)*len(rotrinit2)}")
+tz = itertools.product(xrinit2,yrinit2,rotrinit2)
+with Pool(threads, initializer= init_worker, initargs=(poly, tpls, imzcoordsfilttrans, cents_indices, imz_indices, weights)) as p:
+    n_points_ls = p.map(score_init_transform, tz)
+
+n_points_arr_init2 = np.array(n_points_ls)
+n_points_arr_init2 = n_points_arr_init2[np.isfinite(n_points_arr_init2).all(axis=1)]
+if np.max(n_points_arr_init2[:,2])<0.95:
+    pcont_threshold = np.max(n_points_arr_init2[:,2])
+    xr = np.linspace(-3,3,49)
+    yr = np.linspace(-3,3,49)
+    rotr = np.linspace(-np.pi/144,np.pi/144,31)
+else:
+    pcont_threshold = np.quantile(n_points_arr_init2[:,2],1)
+    n_points_arr_init2_red = n_points_arr_init2[np.logical_or(n_points_arr_init2[:,2] >= pcont_threshold,n_points_arr_init2[:,2]==np.max(n_points_arr_init2[:,2])),:]
+    xr = np.arange(np.min(n_points_arr_init2_red[:,5])-0.1,np.max(n_points_arr_init2_red[:,5])+0.1,0.05)
+    xr = xr[~np.array([np.any(np.isclose(x,xrinit)) for x in xr])]
+    yr = np.arange(np.min(n_points_arr_init2_red[:,6])-0.1,np.max(n_points_arr_init2_red[:,6])+0.1,0.05)
+    yr = yr[~np.array([np.any(np.isclose(y,yrinit)) for y in yr])]
+    rotr = np.arange(np.min(n_points_arr_init2_red[:,7])-0.002,np.max(n_points_arr_init2_red[:,7])+0.005,0.0002)
+    rotr = rotr[~np.array([np.any(np.isclose(rot,rotrinit)) for rot in rotr])]
+
+import itertools
+logging.info(f"\tNumber of iterations: {len(xr)*len(yr)*len(rotr)}")
+tz = itertools.product(xr,yr,rotr)
+with Pool(threads, initializer= init_worker, initargs=(poly, tpls, imzcoordsfilttrans, cents_indices, imz_indices, weights)) as p:
+    n_points_ls = p.map(score_init_transform, tz)
 del poly, tpls
 gc.collect()
 n_points_arr = np.array(n_points_ls)
 n_points_arr = n_points_arr[np.isfinite(n_points_arr).all(axis=1)]
+n_points_arr = np.vstack([n_points_arr_init_red,n_points_arr_init2_red, n_points_arr])
 logging.info(f"\tNumber of finite points:{n_points_arr.shape[0]}/{len(n_points_ls)}")
 if np.max(n_points_arr[:,2])<0.95:
     xsh=0
@@ -1001,16 +1050,9 @@ if np.max(n_points_arr[:,2])<0.95:
     rot=0
 else:
     # filter by proportion of points in polygon
-    tmpthres = np.array([0,0.5,0.75,0.9,0.95,0.96,0.97,0.98,0.99,0.995,0.9975,0.999,0.9995,0.9999,1])
-    n_counts = np.array([np.sum(n_points_arr[:,2] >= t) for t in tmpthres])
-    has_min_counts = n_counts < np.ceil(len(n_points_ls)*0.01)
-    logging.info(f"\tNumber of valid filter thresholds: {np.sum(has_min_counts)}")
-    logging.info(f"\tCounts: {n_counts}")
-    if np.sum(has_min_counts) == 0:
-        pcont_threshold = np.max(n_points_arr[:,2])
-    else:
-        pcont_threshold = tmpthres[has_min_counts][0] 
+    pcont_threshold = np.quantile(n_points_arr[:,2],0.995)
     logging.info(f"\tFilter threshold: {pcont_threshold}")
+    logging.info(f"\tCounts: {np.sum(n_points_arr[:,2]>=pcont_threshold)}")
     n_points_arr_red = n_points_arr[np.logical_or(n_points_arr[:,2] >= pcont_threshold,n_points_arr[:,2]==np.max(n_points_arr[:,2])),:]
     logging.info(f"\tNumber of points: {n_points_arr_red.shape[0]}/{n_points_arr.shape[0]}")
 
@@ -1027,22 +1069,20 @@ else:
         e = np.ones(len(n_points_arr_red[:,4]))
     else:
         e=1-(n_points_arr_red[:,4]-np.min(n_points_arr_red[:,4]))/(np.max(n_points_arr_red[:,4])-np.min(n_points_arr_red[:,4]))
-    # plt.scatter(d,e,c=b)
-    # plt.show()
 
     # score based on number of points and distances
-    # weighted_score = (a+b+c+d)/4
-    # weighted_score=e
+    # weighted_score = (2*b+4*d+e)/7
     weighted_score = (b+d+e)/3
-
-    # plt.scatter(e,weighted_score)
-    # plt.scatter(e,d)
-    # plt.show()
+    # weighted_score = (n_points_arr_red[:,2]-0.99)*100*e
+    inds = np.arange(0,len(weighted_score),1)
+    # inds = inds[d>0.95]
+    # weighted_score = weighted_score[d>0.95]
+    ind = inds[weighted_score == np.max(weighted_score)][0]
 
     # best transformation parameters
-    xsh = n_points_arr_red[weighted_score == np.max(weighted_score),5][0]
-    ysh = n_points_arr_red[weighted_score == np.max(weighted_score),6][0]
-    rot = n_points_arr_red[weighted_score == np.max(weighted_score),7][0]
+    xsh = n_points_arr_red[ind,5]
+    ysh = n_points_arr_red[ind,6]
+    rot = n_points_arr_red[ind,7]
     del n_points_arr_red
 
 del n_points_ls, n_points_arr
@@ -1121,8 +1161,8 @@ pycpd_transform.SetTranslation(-t_reg)
 tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_pycpd_registration_all.svg"
 plt.close()
 imzcoordsfilttrans2 = np.array([pycpd_transform.TransformPoint(imzcoordsfilttrans[i,:].astype(float)) for i in range(imzcoordsfilttrans.shape[0])])
-plt.scatter(centsred[:,0]*stepsize/resolution, centsred[:,1]*stepsize/resolution,color="blue",alpha=0.5, s=100)
-plt.scatter(imzcoordsfilttrans2[:,0]*stepsize/resolution, imzcoordsfilttrans2[:,1]*stepsize/resolution,color="red",alpha=0.5, s=100)
+plt.scatter(imzcoordsfilttrans2[:,0]*stepsize/resolution, imzcoordsfilttrans2[:,1]*stepsize/resolution,color="red",alpha=0.5)
+plt.scatter(centsred[:,0]*stepsize/resolution, centsred[:,1]*stepsize/resolution,color="blue",alpha=0.5)
 # plt.show()
 
 fig = plt.gcf()
