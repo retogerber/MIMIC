@@ -22,7 +22,7 @@ sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
 sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 
 logging.info("Start")
-
+cv2.setNumThreads(snakemake.threads)
 # cell mask file
 #cell_image_fp="/home/retger/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_006_transformed.ome.tiff"
 cell_image_fp=snakemake.input["IMCmask"]

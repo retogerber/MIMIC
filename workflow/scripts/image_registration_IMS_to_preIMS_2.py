@@ -996,9 +996,10 @@ n_points_arr_init = np.array(n_points_ls)
 n_points_arr_init = n_points_arr_init[np.isfinite(n_points_arr_init).all(axis=1)]
 if np.max(n_points_arr_init[:,2])<0.95:
     pcont_threshold = np.max(n_points_arr_init[:,2])
-    xrinit2 = np.linspace(-3,3,49)
-    yrinit2 = np.linspace(-3,3,49)
-    rotrinit2 = np.linspace(-np.pi/144,np.pi/144,31)
+    n_points_arr_init_red = n_points_arr_init[np.logical_or(n_points_arr_init[:,2] >= pcont_threshold,n_points_arr_init[:,2]==np.max(n_points_arr_init[:,2])),:]
+    xrinit2 = np.linspace(-3,3,7)
+    yrinit2 = np.linspace(-3,3,7)
+    rotrinit2 = np.linspace(-np.pi/144,np.pi/144,7)
 else:
     pcont_threshold = np.quantile(n_points_arr_init[:,2],0.9)
     n_points_arr_init_red = n_points_arr_init[np.logical_or(n_points_arr_init[:,2] >= pcont_threshold,n_points_arr_init[:,2]==np.max(n_points_arr_init[:,2])),:]
@@ -1020,9 +1021,10 @@ n_points_arr_init2 = np.array(n_points_ls)
 n_points_arr_init2 = n_points_arr_init2[np.isfinite(n_points_arr_init2).all(axis=1)]
 if np.max(n_points_arr_init2[:,2])<0.95:
     pcont_threshold = np.max(n_points_arr_init2[:,2])
-    xr = np.linspace(-3,3,49)
-    yr = np.linspace(-3,3,49)
-    rotr = np.linspace(-np.pi/144,np.pi/144,31)
+    n_points_arr_init2_red = n_points_arr_init2[np.logical_or(n_points_arr_init2[:,2] >= pcont_threshold,n_points_arr_init2[:,2]==np.max(n_points_arr_init2[:,2])),:]
+    xr = np.linspace(-3,3,7)
+    yr = np.linspace(-3,3,7)
+    rotr = np.linspace(-np.pi/144,np.pi/144,7)
 else:
     pcont_threshold = np.quantile(n_points_arr_init2[:,2],1)
     n_points_arr_init2_red = n_points_arr_init2[np.logical_or(n_points_arr_init2[:,2] >= pcont_threshold,n_points_arr_init2[:,2]==np.max(n_points_arr_init2[:,2])),:]

@@ -568,7 +568,7 @@ rule register_IMS_to_postIMS:
 rule register_IMS_to_postIMS_single_core:
     threads: 4
     resources:
-        mem_mb=20000
+        mem_mb=30000
     params:
         IMS_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMS_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
         #IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMC_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
@@ -615,7 +615,7 @@ rule download_sam_weights:
 rule image_registration_evaluation:
     threads: 4
     resources:
-        mem_mb=5000
+        mem_mb=20000
     params:
         downscale = 1
     input:
