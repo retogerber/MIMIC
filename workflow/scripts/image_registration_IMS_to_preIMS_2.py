@@ -260,26 +260,29 @@ def points_from_mask(
     # to IMS scale
     centsred = cents*resolution/stepsize
     del cents
+    centsred = filter_points(centsred, min_n=min_n)
+    return centsred
 
+def filter_points(points, min_n:int = 9):
     # create neighborhood adjacency matrix, connections based on:
     #   - distance
     #   - angle 
     # filter according to distance to nearest neighbors,
     # expected for a grid are distances close to 1
-    kdt = KDTree(centsred, leaf_size=30, metric='euclidean')
-    distances, indices = kdt.query(centsred, k=5, return_distance=True)
+    kdt = KDTree(points, leaf_size=30, metric='euclidean')
+    distances, indices = kdt.query(points, k=5, return_distance=True)
     dists = distances[:,1:]
     del kdt, distances
-    to_keep_dist = np.logical_and(dists>0.925, dists < 1.075)
+    to_keep_dist = np.logical_and(dists>0.93, dists < 1.07)
 
     # restrict angles to nearest neighbors to certain ranges
     angles = list()
     for i in range(indices.shape[0]):
-        angles.append(np.array([get_angle(centsred[j,:]-centsred[i,:],[0,0],[1,0]) for j in indices[i,1:]]))
+        angles.append(np.array([get_angle(points[j,:]-points[i,:],[0,0],[1,0]) for j in indices[i,1:]]))
     absangles = np.abs(np.array(angles))
     to_keep_angle = np.logical_or(
-            np.logical_or(absangles < 10, absangles > 170),
-            np.logical_and(absangles > 80, absangles < 100),
+            np.logical_or(absangles < 9, absangles > 171),
+            np.logical_and(absangles > 81, absangles < 99),
     )
     to_keep = np.logical_and(to_keep_angle, to_keep_dist)
     some_neighbors = np.sum(to_keep, axis=1)>0
@@ -297,8 +300,32 @@ def points_from_mask(
     components, n_points_in_component = np.unique(concomp[1], return_counts=True)
     comps_to_keep = components[n_points_in_component>min_n]
     to_keep_adj = np.array([c in comps_to_keep for c in concomp[1]])
-    centsred = centsred[to_keep_adj,:]
-    return centsred
+    points = points[to_keep_adj,:]
+    return points
+
+def combine_points(p1, p2, threshold=0.5):
+    pcomb = np.vstack([p1,p2])
+    kdt = KDTree(pcomb, leaf_size=30, metric='euclidean')
+    distances, indices = kdt.query(pcomb, k=2, return_distance=True)
+
+    same_pixel = distances[:,1] < threshold
+
+    x=np.arange(pcomb.shape[0])[same_pixel]
+    y=indices[same_pixel,1]
+    pairs = []
+    for i in range(len(x)):
+        pairs.append(sorted([x[i],y[i]]))
+    pairs = sorted(pairs)
+    doublet_to_keep = []
+    for i in range(len(pairs)):
+        if pairs[i][0] not in doublet_to_keep:
+            doublet_to_keep.append(pairs[i][0])
+    
+    pcomb_1 = pcomb[np.logical_not(same_pixel),:]
+    pcomb_2 = pcomb[doublet_to_keep,:]
+    pcomb = np.vstack([pcomb_1,pcomb_2])
+    return pcomb
+
 
 def scores_points_from_mask(th, img, maskb_dist, min_n:int = 9):
     maskb = img>th
@@ -306,7 +333,7 @@ def scores_points_from_mask(th, img, maskb_dist, min_n:int = 9):
     cents = (centsred*stepsize/resolution).astype(int)
     dists = maskb_dist[cents[:,0],cents[:,1]]/stepsize*resolution
     inv_dists = np.array([1/d if d>0 else 0 for d in dists])
-    return (centsred.shape[0], np.sum(dists<=2), np.sum(inv_dists))
+    return (centsred.shape[0], np.sum(dists<=2), np.sum(inv_dists), centsred)
 
 from multiprocessing import Pool, Value
 import functools
@@ -319,9 +346,9 @@ def find_threshold(img: np.ndarray, maskb_dist: np.ndarray, thr_range=[127,250],
     thresholds = list(range(thr_range[0],thr_range[1],10))
     if threads>1:
         with Pool(threads) as p:
-            n_points, n_border_points, weighted_dist = zip(*p.map(scorer, thresholds))
+            n_points, n_border_points, weighted_dist, centsredls1 = zip(*p.map(scorer, thresholds))
     else:
-        n_points, n_border_points, weighted_dist = zip(*map(scorer, thresholds))
+        n_points, n_border_points, weighted_dist, centsredls1 = zip(*map(scorer, thresholds))
 
     wt = np.array(weighted_dist)
     wtm = 1 if np.max(wt)==0 else np.max(wt)
@@ -329,21 +356,21 @@ def find_threshold(img: np.ndarray, maskb_dist: np.ndarray, thr_range=[127,250],
     ntm = 1 if np.max(nt)==0 else np.max(nt)
     bt = np.array(n_border_points)
     btm = 1 if np.max(bt)==0 else np.max(bt)
-    scores = wt/wtm+nt/ntm+4*bt/btm
-    max_score=np.max(scores)
+    scores1 = wt/wtm+nt/ntm+4*bt/btm
+    max_score=np.max(scores1)
     max_points = np.max(n_points)
     max_border_points = np.max(n_border_points)
     max_weighted_dist = np.max(weighted_dist)
 
-    threshold = np.asarray(thresholds)[scores == max_score][0]
+    threshold = np.asarray(thresholds)[scores1 == max_score][0]
 
     # finer steps
     thresholds = list(range(threshold-9,threshold+10,3))
     if threads>1:
         with Pool(threads) as p:
-            n_points, n_border_points, weighted_dist = zip(*p.map(scorer, thresholds))
+            n_points, n_border_points, weighted_dist, centsredls2 = zip(*p.map(scorer, thresholds))
     else:
-        n_points, n_border_points, weighted_dist = zip(*map(scorer, thresholds))
+        n_points, n_border_points, weighted_dist, centsredls2 = zip(*map(scorer, thresholds))
 
     wt = np.array(weighted_dist)
     wtm = 1 if np.max(wt)==0 else np.max(wt)
@@ -351,21 +378,21 @@ def find_threshold(img: np.ndarray, maskb_dist: np.ndarray, thr_range=[127,250],
     ntm = 1 if np.max(nt)==0 else np.max(nt)
     bt = np.array(n_border_points)
     btm = 1 if np.max(bt)==0 else np.max(bt)
-    scores = wt/wtm+nt/ntm+4*bt/btm
-    max_score=np.max(scores)
+    scores2 = wt/wtm+nt/ntm+4*bt/btm
+    max_score=np.max(scores2)
     max_points = np.max(n_points)
     max_border_points = np.max(n_border_points)
     max_weighted_dist = np.max(weighted_dist)
 
-    threshold = np.asarray(thresholds)[scores == max_score][0]
+    threshold = np.asarray(thresholds)[scores2 == max_score][0]
 
     # fine steps
     thresholds = list(range(threshold-2,threshold+3))
     if threads>1:
         with Pool(threads) as p:
-            n_points, n_border_points, weighted_dist = zip(*p.map(scorer, thresholds))
+            n_points, n_border_points, weighted_dist, centsredls3 = zip(*p.map(scorer, thresholds))
     else:
-        n_points, n_border_points, weighted_dist = zip(*map(scorer, thresholds))
+        n_points, n_border_points, weighted_dist, centsredls3 = zip(*map(scorer, thresholds))
 
     wt = np.array(weighted_dist)
     wtm = 1 if np.max(wt)==0 else np.max(wt)
@@ -373,15 +400,25 @@ def find_threshold(img: np.ndarray, maskb_dist: np.ndarray, thr_range=[127,250],
     ntm = 1 if np.max(nt)==0 else np.max(nt)
     bt = np.array(n_border_points)
     btm = 1 if np.max(bt)==0 else np.max(bt)
-    scores = wt/wtm+nt/ntm+4*bt/btm
-    max_score=np.max(scores)
+    scores3 = wt/wtm+nt/ntm+4*bt/btm
+    max_score=np.max(scores3)
     max_points = np.max(n_points)
     max_border_points = np.max(n_border_points)
     max_weighted_dist = np.max(weighted_dist)
 
-    threshold = np.asarray(thresholds)[scores == max_score][0]
+    threshold = np.asarray(thresholds)[scores3 == max_score][0]
 
-    return threshold, max_points, max_border_points, max_weighted_dist
+    centsredls = centsredls1 + centsredls2 + centsredls3
+    scores = np.concatenate([scores1, scores2, scores3])
+    scoresred = [scores[i] for i in range(len(scores)) if centsredls[i].shape[0]>0]
+    centsredls = [c for c in centsredls if c.shape[0]>0]
+    inds = np.arange(len(scoresred))[np.flip(np.argsort(scoresred))]
+    centsredlssort = [centsredls[i] for i in inds]
+
+    from functools import reduce
+    centsred = reduce(combine_points, centsredlssort)
+
+    return threshold, max_points, max_border_points, max_weighted_dist, centsred
 
 # def score_find_w(w, img_median, img_convolved, maskb_dist, mask2, threads):
 def score_find_w(w):
@@ -400,11 +437,11 @@ def score_find_w(w):
     else:
         thr_range = [127,250]
 
-    threshold, max_points, max_border_points, max_weighted_dist= find_threshold(postIMSm, maskb_dist_in, thr_range=thr_range, threads=1)
+    threshold, max_points, max_border_points, max_weighted_dist, centsred= find_threshold(postIMSm, maskb_dist_in, thr_range=thr_range, threads=1)
     logging.info(f"weight: {w}, threshold: {threshold}, n_points: {max_points}, border points: {max_border_points}, sum of inverse distances {max_weighted_dist}")
     if threads_in>1:
         current_threshold_in.value = threshold
-    return (threshold, max_points, max_border_points, max_weighted_dist, w)
+    return (threshold, max_points, max_border_points, max_weighted_dist, w, centsred)
 
 def init_worker(img_median, img_convolved, maskb_dist, mask2, threads, current_threshold):
     global img_median_in
@@ -427,7 +464,7 @@ def find_w(img_median: np.ndarray, img_convolved: np.ndarray, mask1: np.ndarray,
 
     current_threshold = Value('i', 0)    
     with Pool(threads, initializer= init_worker, initargs=(img_median, img_convolved, maskb_dist, mask2, threads, current_threshold)) as p:
-        thresholds, n_points, n_border_points, weighted_dist, wsobs = zip(*p.map(score_find_w, ws))
+        thresholds, n_points, n_border_points, weighted_dist, wsobs, centsredls = zip(*p.map(score_find_w, ws))
 
     wt = np.array(weighted_dist)
     wtm = 1 if np.max(wt)==0 else np.max(wt)
@@ -440,17 +477,24 @@ def find_w(img_median: np.ndarray, img_convolved: np.ndarray, mask1: np.ndarray,
     threshold = np.asarray(thresholds)[scores == max_score][0]
     w = np.asarray(wsobs)[scores == max_score][0]
 
-    return max_score, threshold, w
+    scoresred = [scores[i] for i in range(len(scores)) if centsredls[i].shape[0]>0]
+    centsredls = [c for c in centsredls if c.shape[0]>0]
+    inds = np.arange(len(scoresred))[np.flip(np.argsort(scoresred))]
+    centsredlssort = [centsredls[i] for i in inds]
+
+    from functools import reduce
+    centsred = reduce(combine_points, centsredlssort)
+
+    return max_score, threshold, w, centsred
 
 ws = [0.001,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.5,0.6,0.7,0.8,0.9,0.99]
-max_score_outer, threshold_outer, w_outer = find_w(postIMSmpre, tmp2, postIMSoutermask_small, postIMSringmask, ws, threads=threads)
+max_score_outer, threshold_outer, w_outer, centsred_outer = find_w(postIMSmpre, tmp2, postIMSoutermask_small, postIMSringmask, ws, threads=threads)
 del postIMSringmask, postIMSoutermask_small
 gc.collect()
 
-
 logging.info("Find best threshold for points (inner points)")
 ws = [0.001,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.5,0.6,0.7,0.8,0.9,0.99]
-max_score_inner, threshold_inner, w_inner = find_w(postIMSmpre, tmp2, postIMSinnermask, postIMSinnermask, ws, threads=threads)
+max_score_inner, threshold_inner, w_inner, centsred_inner = find_w(postIMSmpre, tmp2, postIMSinnermask, postIMSinnermask, ws, threads=threads)
 
 logging.info("Max score (outer): "+str(max_score_outer))
 logging.info("Corresponding threshold (outer): "+str(threshold_outer))
@@ -518,31 +562,35 @@ def points_from_mask_two_thresholds(
     return centsred
 
 
-centsred = points_from_mask_two_thresholds(
-    img_median = postIMSmpre,
-    img_convolved = tmp2,
-    mask_outer = postIMSoutermask,
-    mask_inner = postIMSinnermask,
-    w_outer = w_outer,
-    w_inner = w_inner,
-    threshold_outer = threshold_outer,
-    threshold_inner = threshold_inner,
-    pixelsize = pixelsize,
-    resolution = resolution,
-    stepsize = stepsize,
-    min_n_outer=6,
-    min_n_inner=4
-)
+# centsred = points_from_mask_two_thresholds(
+#     img_median = postIMSmpre,
+#     img_convolved = tmp2,
+#     mask_outer = postIMSoutermask,
+#     mask_inner = postIMSinnermask,
+#     w_outer = w_outer,
+#     w_inner = w_inner,
+#     threshold_outer = threshold_outer,
+#     threshold_inner = threshold_inner,
+#     pixelsize = pixelsize,
+#     resolution = resolution,
+#     stepsize = stepsize,
+#     min_n_outer=6,
+#     min_n_inner=4
+# )
+centsred = combine_points(centsred_outer, centsred_inner)
+centsred2 = filter_points(centsred)
+
+
 del postIMSoutermask, postIMSinnermask
 gc.collect()
-
 
 logging.info("Number of unique IMS pixels detected (both): "+str(centsred.shape[0]))
 # plt.scatter(centsred_inner[:,1]*stepsize/resolution,centsred_inner[:,0]*stepsize/resolution)
 # plt.scatter(centsred_outer[:,1]*stepsize/resolution,centsred_outer[:,0]*stepsize/resolution)
-# plt.imshow(postIMSmpre)
-# plt.scatter(centsred[:,1]*stepsize/resolution,centsred[:,0]*stepsize/resolution)
-# plt.show()
+plt.imshow(postIMSmpre)
+# plt.scatter(centsred[:,1]*stepsize/resolution,centsred[:,0]*stepsize/resolution, c="blue")
+plt.scatter(centsred2[:,1]*stepsize/resolution,centsred2[:,0]*stepsize/resolution)
+plt.show()
 
 # rotate IMS coordinates 
 if rotation_imz in [-180, 180]:
@@ -731,21 +779,30 @@ postIMSn = skimage.morphology.convex_hull_image(postIMSn)
 postIMSnringmask = create_ring_mask(postIMSn, imspixel_outscale*stepsize/resolution, imspixel_inscale*stepsize/resolution)
 
 logging.info("Extract postIMS boundary points")
-centsred = points_from_mask_two_thresholds(
-    img_median = postIMSmpre,
-    img_convolved = tmp2,
-    mask_outer = postIMSnringmask,
-    mask_inner = postIMSn,
-    w_outer = w_outer,
-    w_inner = w_inner,
-    threshold_outer = threshold_outer,
-    threshold_inner = threshold_inner,
-    pixelsize = pixelsize,
-    resolution = resolution,
-    stepsize = stepsize,
-    min_n_outer=8,
-    min_n_inner=8
-)
+ws = [0.001,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.5,0.6,0.7,0.8,0.9,0.99]
+max_score_outer, threshold_outer, w_outer, centsred_outer = find_w(postIMSmpre, tmp2, postIMSnringmask, postIMSnringmask, ws, threads=threads)
+
+logging.info("Find best threshold for points (inner points)")
+ws = [0.001,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.5,0.6,0.7,0.8,0.9,0.99]
+max_score_inner, threshold_inner, w_inner, centsred_inner = find_w(postIMSmpre, tmp2, postIMSn, postIMSn, ws, threads=threads)
+
+centsred = combine_points(centsred_outer, centsred_inner)
+
+# centsred = points_from_mask_two_thresholds(
+#     img_median = postIMSmpre,
+#     img_convolved = tmp2,
+#     mask_outer = postIMSnringmask,
+#     mask_inner = postIMSn,
+#     w_outer = w_outer,
+#     w_inner = w_inner,
+#     threshold_outer = threshold_outer,
+#     threshold_inner = threshold_inner,
+#     pixelsize = pixelsize,
+#     resolution = resolution,
+#     stepsize = stepsize,
+#     min_n_outer=8,
+#     min_n_inner=8
+# )
 del tmp2
 gc.collect()
 
