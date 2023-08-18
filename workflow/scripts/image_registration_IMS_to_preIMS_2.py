@@ -305,25 +305,31 @@ def filter_points(points, min_n:int = 9):
 
 def combine_points(p1, p2, threshold=0.5):
     pcomb = np.vstack([p1,p2])
-    kdt = KDTree(pcomb, leaf_size=30, metric='euclidean')
-    distances, indices = kdt.query(pcomb, k=2, return_distance=True)
+    n = [pcomb.shape[0]]
+    for _ in range(100):
+        kdt = KDTree(pcomb, leaf_size=30, metric='euclidean')
+        distances, indices = kdt.query(pcomb, k=2, return_distance=True)
 
-    same_pixel = distances[:,1] < threshold
+        same_pixel = distances[:,1] < threshold
 
-    x=np.arange(pcomb.shape[0])[same_pixel]
-    y=indices[same_pixel,1]
-    pairs = []
-    for i in range(len(x)):
-        pairs.append(sorted([x[i],y[i]]))
-    pairs = sorted(pairs)
-    doublet_to_keep = []
-    for i in range(len(pairs)):
-        if pairs[i][0] not in doublet_to_keep:
-            doublet_to_keep.append(pairs[i][0])
-    
-    pcomb_1 = pcomb[np.logical_not(same_pixel),:]
-    pcomb_2 = pcomb[doublet_to_keep,:]
-    pcomb = np.vstack([pcomb_1,pcomb_2])
+        x=indices[same_pixel,0]
+        y=indices[same_pixel,1]
+        pairs = []
+        for i in range(len(x)):
+            pairs.append(sorted([x[i],y[i]]))
+        pairs = sorted(pairs)
+        doublet_to_keep = []
+        for i in range(len(pairs)):
+            if pairs[i][0] not in doublet_to_keep:
+                doublet_to_keep.append(pairs[i][0])
+
+        pcomb_1 = pcomb[np.logical_not(same_pixel),:]
+        pcomb_2 = pcomb[doublet_to_keep,:]
+        pcomb = np.vstack([pcomb_1,pcomb_2])
+        n.append(pcomb.shape[0])
+        if n[-1]==n[-2]:
+            break
+
     return pcomb
 
 
@@ -332,7 +338,7 @@ def scores_points_from_mask(th, img, maskb_dist, min_n:int = 9):
     centsred = points_from_mask(maskb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize, min_n=min_n)
     cents = (centsred*stepsize/resolution).astype(int)
     dists = maskb_dist[cents[:,0],cents[:,1]]/stepsize*resolution
-    inv_dists = np.array([1/d if d>0 else 0 for d in dists])
+    inv_dists = np.array([1/d if d!=0 else 0 for d in dists])
     return (centsred.shape[0], np.sum(dists<=2), np.sum(inv_dists), centsred)
 
 from multiprocessing import Pool, Value
@@ -350,13 +356,13 @@ def find_threshold(img: np.ndarray, maskb_dist: np.ndarray, thr_range=[127,250],
     else:
         n_points, n_border_points, weighted_dist, centsredls1 = zip(*map(scorer, thresholds))
 
-    wt = np.array(weighted_dist)
-    wtm = 1 if np.max(wt)==0 else np.max(wt)
-    nt = np.array(n_points)
-    ntm = 1 if np.max(nt)==0 else np.max(nt)
-    bt = np.array(n_border_points)
-    btm = 1 if np.max(bt)==0 else np.max(bt)
-    scores1 = wt/wtm+nt/ntm+4*bt/btm
+    wt1 = np.array(weighted_dist)
+    wt1m = 1 if np.max(wt1)==0 else np.max(wt1)
+    nt1 = np.array(n_points)
+    nt1m = 1 if np.max(nt1)==0 else np.max(nt1)
+    bt1 = np.array(n_border_points)
+    bt1m = 1 if np.max(bt1)==0 else np.max(bt1)
+    scores1 = 2*wt1/wt1m+nt1/nt1m+4*bt1/bt1m
     max_score=np.max(scores1)
     max_points = np.max(n_points)
     max_border_points = np.max(n_border_points)
@@ -372,13 +378,13 @@ def find_threshold(img: np.ndarray, maskb_dist: np.ndarray, thr_range=[127,250],
     else:
         n_points, n_border_points, weighted_dist, centsredls2 = zip(*map(scorer, thresholds))
 
-    wt = np.array(weighted_dist)
-    wtm = 1 if np.max(wt)==0 else np.max(wt)
-    nt = np.array(n_points)
-    ntm = 1 if np.max(nt)==0 else np.max(nt)
-    bt = np.array(n_border_points)
-    btm = 1 if np.max(bt)==0 else np.max(bt)
-    scores2 = wt/wtm+nt/ntm+4*bt/btm
+    wt2 = np.array(weighted_dist)
+    wt2m = 1 if np.max(wt2)==0 else np.max(wt2)
+    nt2 = np.array(n_points)
+    nt2m = 1 if np.max(nt2)==0 else np.max(nt2)
+    bt2 = np.array(n_border_points)
+    bt2m = 1 if np.max(bt2)==0 else np.max(bt2)
+    scores2 = 2*wt2/wt2m+nt2/nt2m+4*bt2/bt2m
     max_score=np.max(scores2)
     max_points = np.max(n_points)
     max_border_points = np.max(n_border_points)
@@ -394,13 +400,13 @@ def find_threshold(img: np.ndarray, maskb_dist: np.ndarray, thr_range=[127,250],
     else:
         n_points, n_border_points, weighted_dist, centsredls3 = zip(*map(scorer, thresholds))
 
-    wt = np.array(weighted_dist)
-    wtm = 1 if np.max(wt)==0 else np.max(wt)
-    nt = np.array(n_points)
-    ntm = 1 if np.max(nt)==0 else np.max(nt)
-    bt = np.array(n_border_points)
-    btm = 1 if np.max(bt)==0 else np.max(bt)
-    scores3 = wt/wtm+nt/ntm+4*bt/btm
+    wt3 = np.array(weighted_dist)
+    wt3m = 1 if np.max(wt3)==0 else np.max(wt3)
+    nt3 = np.array(n_points)
+    nt3m = 1 if np.max(nt3)==0 else np.max(nt3)
+    bt3 = np.array(n_border_points)
+    bt3m = 1 if np.max(bt3)==0 else np.max(bt3)
+    scores3 = 2*wt3/wt3m+nt3/nt3m+4*bt3/bt3m
     max_score=np.max(scores3)
     max_points = np.max(n_points)
     max_border_points = np.max(n_border_points)
@@ -408,15 +414,26 @@ def find_threshold(img: np.ndarray, maskb_dist: np.ndarray, thr_range=[127,250],
 
     threshold = np.asarray(thresholds)[scores3 == max_score][0]
 
+    wt=np.concatenate([wt1,wt2,wt3])
+    wtm = 1 if np.max(wt)==0 else np.max(wt)
+    nt=np.concatenate([nt1,nt2,nt3])
+    ntm = 1 if np.max(nt)==0 else np.max(nt)
+    bt=np.concatenate([bt1,bt2,bt3])
+    btm = 1 if np.max(bt)==0 else np.max(bt)
+    scores = 2*wt/wtm+nt/ntm+4*bt/btm
+    max_score=np.max(scores3)
+
     centsredls = centsredls1 + centsredls2 + centsredls3
-    scores = np.concatenate([scores1, scores2, scores3])
-    scoresred = [scores[i] for i in range(len(scores)) if centsredls[i].shape[0]>0]
+    scoresred = np.array([scores[i] for i in range(len(scores)) if centsredls[i].shape[0]>0])
     centsredls = [c for c in centsredls if c.shape[0]>0]
+    
     inds = np.arange(len(scoresred))[np.flip(np.argsort(scoresred))]
+    inds = inds[scoresred[np.flip(np.argsort(scoresred))] >= 0.9*max_score]
     centsredlssort = [centsredls[i] for i in inds]
 
     from functools import reduce
     centsred = reduce(combine_points, centsredlssort)
+    centsred = filter_points(centsred, min_n)
 
     return threshold, max_points, max_border_points, max_weighted_dist, centsred
 
@@ -460,7 +477,7 @@ def init_worker(img_median, img_convolved, maskb_dist, mask2, threads, current_t
 
 logging.info("Find best threshold for points (outer points)")
 def find_w(img_median: np.ndarray, img_convolved: np.ndarray, mask1: np.ndarray, mask2: np.ndarray, ws, threads:int=1):
-    maskb_dist = distance_transform_edt(mask1)
+    maskb_dist = distance_transform_edt(mask1) - distance_transform_edt(~mask1)
 
     current_threshold = Value('i', 0)    
     with Pool(threads, initializer= init_worker, initargs=(img_median, img_convolved, maskb_dist, mask2, threads, current_threshold)) as p:
@@ -472,7 +489,7 @@ def find_w(img_median: np.ndarray, img_convolved: np.ndarray, mask1: np.ndarray,
     ntm = 1 if np.max(nt)==0 else np.max(nt)
     bt = np.array(n_border_points)
     btm = 1 if np.max(bt)==0 else np.max(bt)
-    scores = wt/wtm+nt/ntm+4*bt/btm
+    scores = 2*wt/wtm+nt/ntm+4*bt/btm
     max_score=np.max(scores)
     threshold = np.asarray(thresholds)[scores == max_score][0]
     w = np.asarray(wsobs)[scores == max_score][0]
@@ -484,6 +501,7 @@ def find_w(img_median: np.ndarray, img_convolved: np.ndarray, mask1: np.ndarray,
 
     from functools import reduce
     centsred = reduce(combine_points, centsredlssort)
+    centsred = filter_points(centsred)
 
     return max_score, threshold, w, centsred
 
@@ -578,19 +596,17 @@ def points_from_mask_two_thresholds(
 #     min_n_inner=4
 # )
 centsred = combine_points(centsred_outer, centsred_inner)
-centsred2 = filter_points(centsred)
-
-
+centsred = filter_points(centsred)
 del postIMSoutermask, postIMSinnermask
 gc.collect()
 
 logging.info("Number of unique IMS pixels detected (both): "+str(centsred.shape[0]))
 # plt.scatter(centsred_inner[:,1]*stepsize/resolution,centsred_inner[:,0]*stepsize/resolution)
 # plt.scatter(centsred_outer[:,1]*stepsize/resolution,centsred_outer[:,0]*stepsize/resolution)
-plt.imshow(postIMSmpre)
-# plt.scatter(centsred[:,1]*stepsize/resolution,centsred[:,0]*stepsize/resolution, c="blue")
-plt.scatter(centsred2[:,1]*stepsize/resolution,centsred2[:,0]*stepsize/resolution)
-plt.show()
+# plt.imshow(postIMSmpre)
+# # plt.scatter(centsred[:,1]*stepsize/resolution,centsred[:,0]*stepsize/resolution, c="blue")
+# plt.scatter(centsred2[:,1]*stepsize/resolution,centsred2[:,0]*stepsize/resolution)
+# plt.show()
 
 # rotate IMS coordinates 
 if rotation_imz in [-180, 180]:
@@ -787,6 +803,7 @@ ws = [0.001,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.5,0.6,0.7,0.8,0.9,0.99]
 max_score_inner, threshold_inner, w_inner, centsred_inner = find_w(postIMSmpre, tmp2, postIMSn, postIMSn, ws, threads=threads)
 
 centsred = combine_points(centsred_outer, centsred_inner)
+centsred = filter_points(centsred)
 
 # centsred = points_from_mask_two_thresholds(
 #     img_median = postIMSmpre,
@@ -936,7 +953,7 @@ try:
 except:
     logging.info("\tUse Convex hull")
     poly = shapely.geometry.MultiPoint(imzcoordsfilttrans).convex_hull
-poly = poly.buffer(0.25)
+poly = poly.buffer(0.15)
 # centsred points
 tpls = [shapely.geometry.Point(centsred[i,:]) for i in range(centsred.shape[0])]
 # only keep points close to the border
@@ -1060,12 +1077,9 @@ if np.max(n_points_arr_init[:,2])<0.95:
 else:
     pcont_threshold = np.quantile(n_points_arr_init[:,2],0.9)
     n_points_arr_init_red = n_points_arr_init[np.logical_or(n_points_arr_init[:,2] >= pcont_threshold,n_points_arr_init[:,2]==np.max(n_points_arr_init[:,2])),:]
-    xrinit2 = np.arange(np.min(n_points_arr_init_red[:,5])-0.5,np.max(n_points_arr_init_red[:,5])+0.5,0.1)
-    xrinit2 = xrinit2[~np.array([np.any(np.isclose(x,xrinit)) for x in xrinit2])]
-    yrinit2 = np.arange(np.min(n_points_arr_init_red[:,6])-0.5,np.max(n_points_arr_init_red[:,6])+0.5,0.1)
-    yrinit2 = yrinit2[~np.array([np.any(np.isclose(y,yrinit)) for y in yrinit2])]
-    rotrinit2 = np.arange(np.min(n_points_arr_init_red[:,7]),np.max(n_points_arr_init_red[:,7]),0.002)
-    rotrinit2 = rotrinit2[~np.array([np.any(np.isclose(rot,rotrinit)) for rot in rotrinit2])]
+    xrinit2 = np.arange(np.min(n_points_arr_init_red[:,5])-0.5,np.max(n_points_arr_init_red[:,5])+1,0.1)
+    yrinit2 = np.arange(np.min(n_points_arr_init_red[:,6])-0.5,np.max(n_points_arr_init_red[:,6])+1,0.1)
+    rotrinit2 = np.arange(np.min(n_points_arr_init_red[:,7])-2*np.pi/1440,np.max(n_points_arr_init_red[:,7])+2*np.pi/1440,np.pi/2880)
 
 
 import itertools
@@ -1085,12 +1099,9 @@ if np.max(n_points_arr_init2[:,2])<0.95:
 else:
     pcont_threshold = np.quantile(n_points_arr_init2[:,2],1)
     n_points_arr_init2_red = n_points_arr_init2[np.logical_or(n_points_arr_init2[:,2] >= pcont_threshold,n_points_arr_init2[:,2]==np.max(n_points_arr_init2[:,2])),:]
-    xr = np.arange(np.min(n_points_arr_init2_red[:,5])-0.1,np.max(n_points_arr_init2_red[:,5])+0.1,0.05)
-    xr = xr[~np.array([np.any(np.isclose(x,xrinit)) for x in xr])]
-    yr = np.arange(np.min(n_points_arr_init2_red[:,6])-0.1,np.max(n_points_arr_init2_red[:,6])+0.1,0.05)
-    yr = yr[~np.array([np.any(np.isclose(y,yrinit)) for y in yr])]
-    rotr = np.arange(np.min(n_points_arr_init2_red[:,7])-0.002,np.max(n_points_arr_init2_red[:,7])+0.005,0.0002)
-    rotr = rotr[~np.array([np.any(np.isclose(rot,rotrinit)) for rot in rotr])]
+    xr = np.arange(np.min(n_points_arr_init2_red[:,5])-0.1,np.max(n_points_arr_init2_red[:,5])+0.2,0.05)
+    yr = np.arange(np.min(n_points_arr_init2_red[:,6])-0.1,np.max(n_points_arr_init2_red[:,6])+0.2,0.05)
+    rotr = np.arange(np.min(n_points_arr_init2_red[:,7])-np.pi/2880,np.max(n_points_arr_init2_red[:,7])+2*np.pi/2880,np.pi/5760)
 
 import itertools
 logging.info(f"\tNumber of iterations: {len(xr)*len(yr)*len(rotr)}")
@@ -1190,11 +1201,11 @@ imzcoordsfilt = imzcoordsfilttrans[imz_has_match,:]
 
 
 logging.info("Run point cloud registration")
-# reg = pycpd.RigidRegistration(Y=centsredfilt.astype(float), X=imzcoordsfilt.astype(float), w=0, s=1, scale=False)
-# postIMScoordsout, (s_reg, R_reg, t_reg) = reg.register()
+reg = pycpd.RigidRegistration(Y=centsredfilt.astype(float), X=imzcoordsfilt.astype(float), w=0, s=1, scale=False)
+postIMScoordsout, (s_reg, R_reg, t_reg) = reg.register()
 
-reg = pycpd.AffineRegistration(Y=centsredfilt.astype(float), X=imzcoordsfilt.astype(float), w=0, s=1, scale=False)
-postIMScoordsout, (R_reg, t_reg) = reg.register()
+#reg = pycpd.AffineRegistration(Y=centsredfilt.astype(float), X=imzcoordsfilt.astype(float), w=0, s=1, scale=False)
+#postIMScoordsout, (R_reg, t_reg) = reg.register()
 tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_pycpd_registration.svg"
 plt.close()
 plt.scatter(imzcoordsfilt[:,0]*stepsize, imzcoordsfilt[:,1]*stepsize,color="red",alpha=0.5)
