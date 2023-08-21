@@ -144,3 +144,7 @@ def choose_imsml_coordsfile_from_imzml(wildcards):
         return filenames
 
 
+def sample_core_names(wildcards):
+    sample_names = get_column_entry_from_metadata_two_conditions(wildcards.imzml_base+".imzML", wildcards.project_name, "sample_name", "imzml_filename", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)
+    core_names = get_column_entry_from_metadata_two_conditions(wildcards.imzml_base+".imzML", wildcards.project_name, "core_name", "imzml_filename", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)
+    return f'{"|-|-|".join(str(sample_names[i])+"|-_-|"+str(core_names[i]) for i in range(len(sample_names)))}'

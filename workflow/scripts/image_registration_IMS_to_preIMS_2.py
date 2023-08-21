@@ -432,8 +432,14 @@ def find_threshold(img: np.ndarray, maskb_dist: np.ndarray, thr_range=[127,250],
     centsredlssort = [centsredls[i] for i in inds]
 
     from functools import reduce
-    centsred = reduce(combine_points, centsredlssort)
-    centsred = filter_points(centsred, min_n)
+    if len(centsredlssort)>0:
+        if len(centsredlssort[0])>0:
+            centsred = reduce(combine_points, centsredlssort)
+            centsred = filter_points(centsred, min_n)
+        else:
+            centsred = centsredlssort[0]
+    else:
+        centsred = np.zeros((0,0))
 
     return threshold, max_points, max_border_points, max_weighted_dist, centsred
 

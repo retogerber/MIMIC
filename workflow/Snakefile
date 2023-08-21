@@ -546,11 +546,11 @@ rule register_IMS_to_postIMS:
         IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMC_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
         #IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "microscopy_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
         IMS_shrink_factor=lambda wildcards: get_column_entry_from_metadata(wildcards.project_name, "IMS_shrink_factor", "project_name", read_sample_metadata(config["sample_metadata"])),
-        IMS_rotation_angle=lambda wildcards: get_column_entry_from_metadata_two_conditions(wildcards.project_name, wildcards.imzml_base+".imzML", "IMS_rotation_angle", "project_name", "imzml_filename", read_sample_metadata(config["sample_metadata"]))
+        IMS_rotation_angle=lambda wildcards: get_column_entry_from_metadata_two_conditions(wildcards.project_name, wildcards.imzml_base+".imzML", "IMS_rotation_angle", "project_name", "imzml_filename", read_sample_metadata(config["sample_metadata"])),
+        sample_core_names=lambda wildcards: sample_core_names(wildcards)
     input:
         postIMSmask_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced_mask.ome.tiff",
         imzml=lambda wildcards: os.path.join("results",wildcards.project_name,"data","IMS", f"{wildcards.imzml_base}.imzML"),
-        sample_metadata=config["sample_metadata"],
         IMCmask=lambda wildcards: expand("results/{{project_name}}/data/IMC_mask/{sample}_transformed.ome.tiff",sample=get_column_entry_from_metadata_two_conditions(wildcards.imzml_base+".imzML", wildcards.project_name, "sample_name", "imzml_filename", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True))
     output:
         IMS_to_postIMS_matches="results/{project_name}/data/IMS/{project_name}_{imzml_base}_IMS_to_postIMS_matches.csv",

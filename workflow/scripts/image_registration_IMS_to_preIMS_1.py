@@ -52,7 +52,8 @@ if isinstance(imc_mask_files, str):
     imc_mask_files = [imc_mask_files]
 # sample_metadata = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/config/sample_metadata.csv"
 # sample_metadata = "/home/retger/Downloads/sample_metadata.csv"
-sample_metadata = snakemake.input["sample_metadata"]
+# sample_metadata = snakemake.input["sample_metadata"]
+sample_core_names = snakemake.params["sample_core_names"]
 
 # output_table = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/IMS_to_postIMS_matches.csv"
 output_table = snakemake.output["IMS_to_postIMS_matches"]
@@ -72,16 +73,13 @@ imc_samplenames = [ os.path.splitext(os.path.splitext(os.path.split(f)[1])[0])[0
 # imc_projects = ["cirrhosis_TMA"]*len(imc_samplenames)
 imc_projects = [ os.path.split(os.path.split(os.path.split(os.path.split(f)[0])[0])[0])[1] for f in imc_mask_files]
 
-
-with open(sample_metadata, 'r') as fil:
-    sample_metadata_df = pd.read_csv(fil)
+sample_core_names_ls = sample_core_names.split("|-|-|")
+core_names_alt = np.array([s.split("|-_-|")[1] for s in sample_core_names_ls])
+sample_names = np.array([s.split("|-_-|")[0] for s in sample_core_names_ls])
 
 core_names = list()
-for i in range(len(imc_samplenames)):
-    inds_arr = np.logical_and(sample_metadata_df["project_name"] == imc_projects[i], sample_metadata_df["sample_name"] == imc_samplenames[i])
-    df_sub = sample_metadata_df.loc[inds_arr]
-    core_names.append(df_sub["core_name"].tolist()[0])
-
+for s in imc_samplenames:
+    core_names.append(core_names_alt[sample_names==s][0])
 
 
 logging.info("Read postIMS mask")
