@@ -11,7 +11,7 @@
 #' imspeaks_filename <- file.path("inst", "extdata", "IMS_test_combined_peaks.h5")
 #' imscoords_filename <- file.path("inst", "extdata", "postIMS_to_IMS_test_combined-IMSML-coords.h5")
 #' pd <- get_peak_data(imspeaks_filename, imscoords_filename, 30)
-get_peak_data <- function(imspeaks_filename, imscoords_filename, maldi_pixelsize) {
+get_peak_data <- function(imspeaks_filename, imscoords_filename, maldi_pixelsize, idx_by_location=FALSE) {
   if (length(imspeaks_filename)>1){
     stop(call. = FALSE, "Multiple imspeaks files given!")
   }
@@ -29,34 +29,62 @@ get_peak_data <- function(imspeaks_filename, imscoords_filename, maldi_pixelsize
   colnames(pd) <- as.character(signif(mz, 7))
   pd$ims_idx <- seq_len(dim(pd)[1]) - 1
   coords <- rhdf5::h5read(imspeaks_filename, "coord")
-  pd$ims_x <- coords[, 1]
-  pd$ims_y <- coords[, 2]
+  pd$ims_x <- coords[, 2]
+  pd$ims_y <- coords[, 1]
 
   # check if IMS was registered to microscopy
   if ("xy_micro_physical" %in% rhdf5::h5ls(imscoords_filename)$name) {
     tmpimsxy <- rhdf5::h5read(imscoords_filename, "xy_original") |>
       t() |>
       as.data.frame() |>
-      dplyr::rename(ims_x = V2, ims_y = V1) |>
+      dplyr::rename(ims_x = V1, ims_y = V2) |>
       dplyr::mutate(ims_xy = paste0(ims_x, "_", ims_y))
 
-    pdout <- dplyr::filter(pd, paste0(ims_x, "_", ims_y) %in% tmpimsxy$ims_xy)
+    pdf <- paste0(pd$ims_x, "_", pd$ims_y) %in% tmpimsxy$ims_xy
+    pdout <- pd[pdf,]
 
     imsphy <- rhdf5::h5read(imscoords_filename, "xy_micro_physical") |>
       t() |>
       as.data.frame() |>
-      dplyr::rename(ims_x_phy = V2, ims_y_phy = V1)
+      dplyr::rename(ims_x_phy = V1, ims_y_phy = V2)
 
     imsxy <- cbind(tmpimsxy, imsphy)
     if (dim(pdout)[1] != dim(imsxy)[1]) {
-      pdout <- dplyr::filter(pd, paste0(ims_y, "_", ims_x) %in% imsxy$ims_xy)
+      do_flip <- FALSE
+      pdf <- paste0(pd$ims_y, "_", pd$ims_x) %in% tmpimsxy$ims_xy
+      pdout <- pd[pdf,]
       pdout$ims_x_phy <- imsxy$ims_y_phy
       pdout$ims_y_phy <- imsxy$ims_x_phy
     } else {
+      do_flip <- TRUE 
       pdout$ims_x_phy <- imsxy$ims_x_phy
       pdout$ims_y_phy <- imsxy$ims_y_phy
     }
     stopifnot(dim(pdout)[1] == dim(imsxy)[1])
+    if (idx_by_location){
+      subdf <- pd
+      pd_sub <- subdf
+      sp::coordinates(subdf) <- c("ims_x", "ims_y")
+      sp::gridded(subdf) <- TRUE
+      dst <- 3
+      nl2 <- BiocNeighbors::findNeighbors(sp::coordinates(subdf), dst)
+      wm <- nl2$index
+      class(wm) <- c("nb", "list")
+      dj <- spdep::n.comp.nb(wm)
+      pd$region_id <- dj$comp.id
+      reg <- unique(pd$region_id[pdf])
+      stopifnot(length(reg) == 1)
+      pdout2 <- pd[pd$region_id == reg,]
+      pdout2$ims_idx <- seq_len(dim(pdout2)[1]) - 1
+      pdout2 <- pdout2[,c("ims_idx","ims_x","ims_y")]
+      if(do_flip){
+        tmp <- pdout2$ims_x
+        pdout2$ims_x <- pdout2$ims_y
+        pdout2$ims_y <- tmp 
+      }
+      pdout$ims_idx <- NULL
+      pdout <- dplyr::left_join(pdout,pdout2, by = dplyr::join_by(ims_x, ims_y))
+    }
 
     # if microscopy was registered to IMS
   } else {
@@ -74,7 +102,7 @@ get_peak_data <- function(imspeaks_filename, imscoords_filename, maldi_pixelsize
     pdout$ims_x_phy <- padimsxy$ims_x * maldi_pixelsize
     pdout$ims_y_phy <- padimsxy$ims_y * maldi_pixelsize
   }
-  pdout$ims_idx <- seq_len(dim(pdout)[1]) - 1
+  # pdout$ims_idx <- seq_len(dim(pdout)[1]) - 1
   pdout
 }
 
@@ -101,18 +129,28 @@ create_imsc <- function(imspeaks_filename, imscoords_filename,
                         celloverlap_filename, cellcentroids_filename,
                         maldi_pixelsize,
                         sample_id_colname = "sample_id",
-                        complete_maldi = FALSE) {
+                        complete_maldi = FALSE,
+                        idx_by_location = FALSE) {
   force(maldi_pixelsize)
   if (!all(file.exists(imscoords_filename))) {
     stop(call. = FALSE, paste0("file '", imscoords_filename[!file.exists(imscoords_filename)], "' does not exist"))
   }
+  if (length(idx_by_location) == 1 & length(imscoords_filename) > 1){
+    idx_by_location <- rep(idx_by_location,length(imscoords_filename))
+  } else{
+    stopifnot(length(idx_by_location) == length(imscoords_filename))
+  }
+
   if (length(imspeaks_filename)>1){
     stop(call. = FALSE, "Multiple imspeaks files are given!")
   }
   if(length(imscoords_filename) == 1){
     pd <- get_peak_data(imspeaks_filename, imscoords_filename, maldi_pixelsize)
   } else{
-    pdls <- lapply(imscoords_filename, function(x) get_peak_data(imspeaks_filename, x, maldi_pixelsize))
+    pdls <- lapply(seq_along(imscoords_filename), function(i) get_peak_data(imspeaks_filename, imscoords_filename[i], maldi_pixelsize,idx_by_location=idx_by_location[i]))
+    for(i in seq_along(pdls)){
+      pdls[[i]]$sample_id <- names(imscoords_filename)[i]
+    }
     pd <- do.call(rbind,pdls)
   }
 
@@ -164,11 +202,11 @@ create_imsc <- function(imspeaks_filename, imscoords_filename,
       warning("Multiple regions of IMS associated with single IMC found!")
     }
     combined_df <- celldf |>
-      dplyr::right_join(pd_sub[pd_sub$region_id %in% reg, ], by = "ims_idx")
+      dplyr::right_join(pd_sub[pd_sub$region_id %in% reg, ], by = dplyr::join_by("ims_idx","sample_id"))
     combined_df_split <- base::split(combined_df, combined_df[["region_id"]])
   } else {
     combined_df <- celldf |>
-      dplyr::inner_join(pd, by = "ims_idx") |>
+      dplyr::inner_join(pd, by = dplyr::join_by("ims_idx","sample_id")) |>
       dplyr::mutate(region_id = !!dplyr::sym(sample_id_colname))
     combined_df_split <- base::split(combined_df, combined_df[[sample_id_colname]])
   }
