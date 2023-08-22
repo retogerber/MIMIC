@@ -85,9 +85,7 @@ get_peak_data <- function(imspeaks_filename, imscoords_filename, maldi_pixelsize
 #' @param celloverlap_filename filename of csv file containing IMC cells overlap with IMS pixels
 #' @param cellcentroids_filenames filename of csv file containing cell centroids
 #' @param malid_pixelsize size of IMS pixels
-#' @param spe_cellcolname column name of cell identifier in spe
 #' @param sample_id_colname column name of sample identifier in spe
-#' @param additional_colData character vector, column names of colData(spe) to include
 #' @param complete_maldi logical, should all IMS pixels be returned? default is to only return pixels containing cells
 #'
 #' @return data.frame
@@ -102,9 +100,7 @@ get_peak_data <- function(imspeaks_filename, imscoords_filename, maldi_pixelsize
 create_imsc <- function(imspeaks_filename, imscoords_filename,
                         celloverlap_filename, cellcentroids_filename,
                         maldi_pixelsize,
-                        spe_cellcolname = "ObjectNumber",
                         sample_id_colname = "sample_id",
-                        additional_colData = "sample_id",
                         complete_maldi = FALSE) {
   force(maldi_pixelsize)
   if (!all(file.exists(imscoords_filename))) {
@@ -119,18 +115,6 @@ create_imsc <- function(imspeaks_filename, imscoords_filename,
     pdls <- lapply(imscoords_filename, function(x) get_peak_data(imspeaks_filename, x, maldi_pixelsize))
     pd <- do.call(rbind,pdls)
   }
-
-  # if (any(additional_colData %in% c("cell_idx", "ims_idx"))) {
-  #   stop(call. = FALSE, "values of 'additional_colData' are not
-  #                        allowed to include 'cell_idx' or 'ims_idx'")
-  # }
-
-  # if (length(spe[[spe_cellcolname]]) != length(unique(paste0(spe[[spe_cellcolname]], spe[[sample_id_colname]])))) {
-  #   stop(call. = FALSE, paste0(
-  #     "cell ids specified with 'spe_cellcolname=",
-  #     spe_cellcolname, "' are not unique"
-  #   ))
-  # }
 
   if (!all(file.exists(celloverlap_filename))) {
     stop(call. = FALSE, paste0("file '", celloverlap_filename, "' does not exist"))
@@ -159,16 +143,8 @@ create_imsc <- function(imspeaks_filename, imscoords_filename,
     tmpcelldf <- tmpcelldf[tmpcentdf, on = .(cell_idx), nomatch = NULL]
     as.data.frame(tmpcelldf)
   })
-  celldf <- do.call(rbind, celldf_ls)
-
-  # cold <- as.data.frame(colData(spe)[, additional_colData, drop = FALSE])
   # combine data
-  # speco <- SpatialExperiment::spatialCoords(spe) |>
-  #   as.data.frame() |>
-  #   dplyr::mutate(cell_idx = spe[[spe_cellcolname]]) |>
-  #   cbind(cold) |>
-  #   dplyr::inner_join(celldf, by = c("cell_idx", sample_id_colname), multiple = "all")
-  speco <- celldf
+  celldf <- do.call(rbind, celldf_ls)
 
   if (complete_maldi) {
     subdf <- pd
@@ -187,11 +163,11 @@ create_imsc <- function(imspeaks_filename, imscoords_filename,
     if (length(celloverlap_filename) == 1 & length(reg) > 1) {
       warning("Multiple regions of IMS associated with single IMC found!")
     }
-    combined_df <- speco |>
+    combined_df <- celldf |>
       dplyr::right_join(pd_sub[pd_sub$region_id %in% reg, ], by = "ims_idx")
     combined_df_split <- base::split(combined_df, combined_df[["region_id"]])
   } else {
-    combined_df <- speco |>
+    combined_df <- celldf |>
       dplyr::inner_join(pd, by = "ims_idx") |>
       dplyr::mutate(region_id = !!dplyr::sym(sample_id_colname))
     combined_df_split <- base::split(combined_df, combined_df[[sample_id_colname]])

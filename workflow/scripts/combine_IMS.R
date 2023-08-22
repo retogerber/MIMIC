@@ -34,6 +34,8 @@ names(celloverlap_filename) <- basename(celloverlap_filename) |>
   gsub(pattern="_cell_overlap_IMS.csv",replacement="") |>
   gsub(pattern=paste0(project_name,"_"),replacement="")
 
+print("Cell overlap filenames:")
+print(celloverlap_filename)
 
 # cellcentroids_filename <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/cell_overlap/test_split_ims_Cirrhosis-TMA-5_New_Detector_002_cell_centroids.csv"
 # cellcentroids_filename <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/cell_overlap/test_combined_Cirrhosis-TMA-5_New_Detector_001_cell_centroids.csv"
@@ -42,9 +44,16 @@ names(cellcentroids_filename) <- basename(cellcentroids_filename) |>
   gsub(pattern="_cell_centroids.csv",replacement="") |>
   gsub(pattern=paste0(project_name,"_"),replacement="")
 
+print("Cell centroids filenames:")
+print(cellcentroids_filename)
 
-imcims_df <- create_imsc(imspeaks_filename, imscoords_filename, celloverlap_filename, cellcentroids_filename,  maldi_pixelsize = maldi_step_size,
-  additional_colData = c("sample_id"), complete_maldi = TRUE
+imcims_df <- create_imsc(
+  imspeaks_filename, 
+  imscoords_filename, 
+  celloverlap_filename, 
+  cellcentroids_filename,  
+  maldi_pixelsize = maldi_step_size,
+  complete_maldi = TRUE
 )
 
 imcims_df[["maldi_pixel_size"]] <- maldi_pixel_size
