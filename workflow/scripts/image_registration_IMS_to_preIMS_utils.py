@@ -1,4 +1,5 @@
 import numpy as np
+from typing import Union
 import cv2
 import skimage
 from segment_anything import SamPredictor
@@ -206,4 +207,54 @@ def composite2affine(composite_transform, result_center=None):
         t = np.dot(A_curr, t + c - c_curr) + t_curr + c_curr - c
 
     return sitk.AffineTransform(A.flatten(), t, c)
+
+
+def create_imz_coords(imzimg: np.ndarray, mask: Union[None, np.ndarray], imzrefcoords: np.ndarray, bbox, rotmat):
+    # create coordsmatrices for IMS
+    indmatx = np.zeros(imzimg.shape)
+    for i in range(imzimg.shape[0]):
+        indmatx[i,:] = list(range(imzimg.shape[1]))
+    indmatx = indmatx.astype(np.uint32)
+    indmaty = np.zeros(imzimg.shape)
+    for i in range(imzimg.shape[1]):
+        indmaty[:,i] = list(range(imzimg.shape[0]))
+    indmaty = indmaty.astype(np.uint32)
+
+    xminimz = bbox[0]
+    yminimz = bbox[1]
+    xmaximz = bbox[2]
+    ymaximz = bbox[3]
+
+    # create coordinates for registration
+    if mask is None:
+        imzxcoords = indmatx[xminimz:xmaximz,yminimz:ymaximz].flatten()
+        imzycoords = indmaty[xminimz:xmaximz,yminimz:ymaximz].flatten()
+    else: 
+        imzxcoords = indmatx[xminimz:xmaximz,yminimz:ymaximz][mask]
+        imzycoords = indmaty[xminimz:xmaximz,yminimz:ymaximz][mask]
+    imzcoords = np.stack([imzycoords, imzxcoords],axis=1)
+
+    center_point=np.max(imzrefcoords,axis=0)/2
+    imzrefcoords = np.dot(rotmat, (imzrefcoords - center_point).T).T + center_point
+
+    # filter for coordinates that are in data
+    in_ref = []
+    for i in range(imzcoords.shape[0]):
+        in_ref.append(np.any(np.logical_and(imzcoords[i,0] == imzrefcoords[:,0],imzcoords[i,1] == imzrefcoords[:,1])))
+
+    in_ref = np.array(in_ref)
+    imzcoords = imzcoords[in_ref,:]
+    return imzcoords
+
+def get_rotmat_from_angle(rot):
+    # rotate IMS coordinates 
+    if rot in [-180, 180]:
+        rotmat = np.asarray([[-1, 0], [0, -1]])
+    elif rot in [90, -270]:
+        rotmat = np.asarray([[0, 1], [-1, 0]])
+    elif rot in [-90, 270]:
+        rotmat = np.asarray([[0, -1], [1, 0]])
+    else:
+        rotmat = np.asarray([[1, 0], [0, 1]])
+    return rotmat
 

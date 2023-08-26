@@ -1,24 +1,19 @@
 import pandas as pd
 import gc
 import cv2
-import napari
-import pycpd 
 import SimpleITK as sitk
 import napari_imsmicrolink
-from napari_imsmicrolink.utils.json import NpEncoder
 import skimage
 import numpy as np
 import json
 import matplotlib.pyplot as plt
-from image_registration_IMS_to_preIMS_utils import readimage_crop, prepare_image_for_sam, create_ring_mask, composite2affine, saveimage_tile, normalize_image, get_image_shape
+from image_registration_IMS_to_preIMS_utils import readimage_crop, prepare_image_for_sam, create_ring_mask, composite2affine, saveimage_tile, normalize_image, get_image_shape, create_imz_coords,get_rotmat_from_angle
 from sklearn.neighbors import KDTree
 from scipy.sparse import lil_array
 from scipy.sparse.csgraph import connected_components
 from scipy.ndimage import distance_transform_edt
 import shapely
 import shapely.affinity
-from pathlib import Path
-from typing import Union
 import sys,os
 import logging, traceback
 logging.basicConfig(filename=snakemake.log["stdout"],
@@ -31,7 +26,7 @@ sys.excepthook = handle_exception
 sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
 sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 
-
+# threads = 2
 threads = int(snakemake.threads)
 cv2.setNumThreads(threads)
 logging.info("Start")
@@ -44,11 +39,13 @@ stepsize = float(snakemake.params["IMS_pixelsize"])
 # pixelsize = 8 
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
 # resolution = 1
+# resolution = 0.22537
 resolution = float(snakemake.params["IMC_pixelsize"])
 # rotation_imz = 180
 # rotation_imz = 0
 rotation_imz = float(snakemake.params["IMS_rotation_angle"])
 assert(rotation_imz in [-270,-180,-90,0,90,180,270])
+rotmat = get_rotmat_from_angle(rotation_imz)
 logging.info("Rotation angle: "+str(rotation_imz))
 logging.info("IMS stepsize: "+str(stepsize))
 logging.info("IMS pixelsize: "+str(pixelsize))
@@ -86,15 +83,11 @@ imc_mask_file = snakemake.input["IMCmask"]
 # output_table = "/home/retger/Downloads/NASH_HCC_TMA_NASH_HCC_TMA_IMS_IMS_to_postIMS_matches.csv"
 output_table = snakemake.input["IMS_to_postIMS_matches"]
 
-# ims_to_postIMS_regerror = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_001_IMS_to_postIMS_reg_auto_metrics.json"
-ims_to_postIMS_regerror = snakemake.output["IMS_to_postIMS_error"]
-ims_to_postIMS_regerror_image = snakemake.output["IMS_to_postIMS_error_image"]
+masks_transform_filename = snakemake.output["masks_transform"]
+gridsearch_transform_filename = snakemake.output["gridsearch_transform"]
 
-# ims_to_postIMS_matching_points_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_001_IMS_to_postIMS_reg_auto_matching_points.png"
-
-# coordsfile_out = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/postIMS_to_IMS_test_split_pre-IMSML-coords.h5"
-coordsfile_out = snakemake.output["imsml_coords_fp"]
-output_dir = os.path.dirname(coordsfile_out)
+postIMS_ablation_centroids_filename = snakemake.output["postIMS_ablation_centroids"]
+metadata_to_save_filename = snakemake.output["metadata"]
 
 imspixel_inscale = 4
 imspixel_outscale = 2
@@ -128,12 +121,12 @@ logging.info("Read postIMS region bounding box")
 # read crop bbox
 dfmeta = pd.read_csv(output_table)
 imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed","")
+imc_project = os.path.split(os.path.split(os.path.split(os.path.split(imc_mask_file)[0])[0])[0])[1]
 # imc_project = "cirrhosis_TMA"
 # imc_project="test_split_ims"
 # imc_project="test_combined"
 # imc_project="NASH_HCC_TMA"
 # imc_project = "Lipid_TMA_3781"
-imc_project = os.path.split(os.path.split(os.path.split(os.path.split(imc_mask_file)[0])[0])[0])[1]
 
 project_name = "postIMS_to_IMS_"+imc_project+"-"+imc_samplename
 # project_name = "postIMS_to_IMS_"+imc_project+"_"+imc_samplename
@@ -613,54 +606,6 @@ logging.info("Number of unique IMS pixels detected (both): "+str(centsred.shape[
 # # plt.scatter(centsred[:,1]*stepsize/resolution,centsred[:,0]*stepsize/resolution, c="blue")
 # plt.scatter(centsred2[:,1]*stepsize/resolution,centsred2[:,0]*stepsize/resolution)
 # plt.show()
-
-# rotate IMS coordinates 
-if rotation_imz in [-180, 180]:
-    rotmat = np.asarray([[-1, 0], [0, -1]])
-elif rotation_imz in [90, -270]:
-    rotmat = np.asarray([[0, 1], [-1, 0]])
-elif rotation_imz in [-90, 270]:
-    rotmat = np.asarray([[0, -1], [1, 0]])
-else:
-    rotmat = np.asarray([[1, 0], [0, 1]])
-
-def create_imz_coords(imzimg: np.ndarray, mask: Union[None, np.ndarray], imzrefcoords: np.ndarray, bbox, rotmat):
-    # create coordsmatrices for IMS
-    indmatx = np.zeros(imzimg.shape)
-    for i in range(imzimg.shape[0]):
-        indmatx[i,:] = list(range(imzimg.shape[1]))
-    indmatx = indmatx.astype(np.uint32)
-    indmaty = np.zeros(imzimg.shape)
-    for i in range(imzimg.shape[1]):
-        indmaty[:,i] = list(range(imzimg.shape[0]))
-    indmaty = indmaty.astype(np.uint32)
-
-    xminimz = bbox[0]
-    yminimz = bbox[1]
-    xmaximz = bbox[2]
-    ymaximz = bbox[3]
-
-    # create coordinates for registration
-    if mask is None:
-        imzxcoords = indmatx[xminimz:xmaximz,yminimz:ymaximz].flatten()
-        imzycoords = indmaty[xminimz:xmaximz,yminimz:ymaximz].flatten()
-    else: 
-        imzxcoords = indmatx[xminimz:xmaximz,yminimz:ymaximz][mask]
-        imzycoords = indmaty[xminimz:xmaximz,yminimz:ymaximz][mask]
-    imzcoords = np.stack([imzycoords, imzxcoords],axis=1)
-
-    center_point=np.max(imzrefcoords,axis=0)/2
-    imzrefcoords = np.dot(rotmat, (imzrefcoords - center_point).T).T + center_point
-
-    # filter for coordinates that are in data
-    in_ref = []
-    for i in range(imzcoords.shape[0]):
-        in_ref.append(np.any(np.logical_and(imzcoords[i,0] == imzrefcoords[:,0],imzcoords[i,1] == imzrefcoords[:,1])))
-
-    in_ref = np.array(in_ref)
-    imzcoords = imzcoords[in_ref,:]
-    return imzcoords
-
 logging.info("IMS bbox:")
 # subset region for IMS
 imz_bbox = skimage.measure.regionprops((imzregions == regionimz).astype(np.uint8))[0].bbox
@@ -1164,342 +1109,26 @@ else:
 del n_points_ls, n_points_arr
 gc.collect()
 
-logging.info(f"Rotation: {rot:6.4f}, xshift: {xsh}, yshift: {ysh}")
+logging.info(f"Parameters: rotation: {rot}, x shift: {xsh}, yshift: {ysh}")
+
 tmp_transform.SetParameters((rot,xsh,ysh))
-tmpimzrot = np.array([tmp_transform.TransformPoint(imzcoordsfilttrans[i,:]) for i in range(imzcoordsfilttrans.shape[0])])
 
-tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_fine_registration.svg"
-plt.close()
-plt.scatter(tmpimzrot[:,0], tmpimzrot[:,1],color="red",alpha=0.5)
-plt.scatter(centsred[:,0], centsred[:,1],color="blue",alpha=0.5)
-plt.title("matching points")
-# plt.show()
-fig = plt.gcf()
-fig.set_size_inches(20,20)
-fig.savefig(tmpfilename)
+logging.info("Save results")
+
+sitk.WriteTransform(tmp_transform, gridsearch_transform_filename)
+sitk.WriteTransform(tinv, masks_transform_filename)
+
+np.savetxt(postIMS_ablation_centroids_filename,centsred,delimiter=',')
 
 
-
-logging.info("Find matching IMS and postIMS points")
-# eval matching points
-kdt = KDTree(tmpimzrot, leaf_size=30, metric='euclidean')
-centsred_distances, indices = kdt.query(centsred, k=1, return_distance=True)
-centsred_has_match = centsred_distances.flatten()<0.5
-kdt = KDTree(centsred, leaf_size=30, metric='euclidean')
-imz_distances, indices = kdt.query(tmpimzrot, k=1, return_distance=True)
-imz_has_match = imz_distances.flatten()<0.5
-
-centsredfilt = centsred[centsred_has_match,:]
-imzcoordsfilt = imzcoordsfilttrans[imz_has_match,:]
-
-# matches = skimage.feature.match_descriptors(centsredfilt, tmpimzrot[imz_has_match,:], max_distance=1)
-# dst = centsredfilt[matches[:,0],:]
-# src = imzcoordsfilt[matches[:,1],:]
-# import random
-# random.seed(45)
-# # model_robust, inliers = skimage.measure.ransac((src, dst), skimage.transform.EuclideanTransform, min_samples=21, residual_threshold=0.02, max_trials=10000)
-# model_robust, inliers = skimage.measure.ransac((src, dst), skimage.transform.AffineTransform, min_samples=21, residual_threshold=0.02, max_trials=1000)
-# model_robust
-# R_reg = model_robust.params[:2,:2]
-# t_reg = model_robust.translation
-# postIMScoordsout = np.matmul(centsredfilt,R_reg)+t_reg
-
-
-
-logging.info("Run point cloud registration")
-reg = pycpd.RigidRegistration(Y=centsredfilt.astype(float), X=imzcoordsfilt.astype(float), w=0, s=1, scale=False)
-postIMScoordsout, (s_reg, R_reg, t_reg) = reg.register()
-
-#reg = pycpd.AffineRegistration(Y=centsredfilt.astype(float), X=imzcoordsfilt.astype(float), w=0, s=1, scale=False)
-#postIMScoordsout, (R_reg, t_reg) = reg.register()
-tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_pycpd_registration.svg"
-plt.close()
-plt.scatter(imzcoordsfilt[:,0]*stepsize, imzcoordsfilt[:,1]*stepsize,color="red",alpha=0.5)
-plt.scatter(postIMScoordsout[:,0]*stepsize, postIMScoordsout[:,1]*stepsize,color="blue",alpha=0.5)
-plt.title("matching points")
-# plt.show()
-fig = plt.gcf()
-fig.set_size_inches(20,20)
-fig.savefig(tmpfilename)
-
-
-# Invert Transformation
-R_reg_inv = np.array([[1-(R_reg[1,1]-1),-R_reg[0,1]],[-R_reg[1,0],1-(R_reg[0,0]-1)]])
-
-# imzcoordsfilttrans2 = np.matmul(imzcoordsfilttrans,R_reg_inv) + -t_reg
-
-pycpd_transform = sitk.AffineTransform(2)
-pycpd_transform.SetCenter(np.array([0.0,0.0]).astype(np.double))
-pycpd_transform.SetMatrix(R_reg_inv.T.flatten().astype(np.double))
-pycpd_transform.SetTranslation(-t_reg)
-
-
-tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_pycpd_registration_all.svg"
-plt.close()
-imzcoordsfilttrans2 = np.array([pycpd_transform.TransformPoint(imzcoordsfilttrans[i,:].astype(float)) for i in range(imzcoordsfilttrans.shape[0])])
-plt.scatter(imzcoordsfilttrans2[:,0]*stepsize/resolution, imzcoordsfilttrans2[:,1]*stepsize/resolution,color="red",alpha=0.5)
-plt.scatter(centsred[:,0]*stepsize/resolution, centsred[:,1]*stepsize/resolution,color="blue",alpha=0.5)
-# plt.show()
-
-fig = plt.gcf()
-fig.set_size_inches(20,20)
-fig.savefig(tmpfilename)
-
-# combined transformation steps
-tm = sitk.CompositeTransform(2)
-tm.AddTransform(pycpd_transform)
-tm.AddTransform(tinv)
-pycpd_transform_comb = composite2affine(tm, [0,0])
-pycpd_transform_comb.GetParameters()
-
-
-imzcoords_all = create_imz_coords(imzimg, None, imzrefcoords, imz_bbox, rotmat)
-imzcoords_in = imzcoords_all + init_translation
-imzcoordstransformed = np.array([pycpd_transform_comb.TransformPoint(imzcoords_in[i,:].astype(float)) for i in range(imzcoords_in.shape[0])])
-tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_pycpd_registration_image.png"
-plt.close()
-plt.scatter(imzcoordstransformed[:,1]*stepsize/resolution, imzcoordstransformed[:,0]*stepsize/resolution,color="red", s=100)
-plt.scatter(centsred[:,1]*stepsize/resolution, centsred[:,0]*stepsize/resolution,color="blue", s=100)
-plt.imshow(postIMSmpre)
-plt.title("matching points")
-fig = plt.gcf()
-fig.set_size_inches(20,20)
-fig.savefig(tmpfilename)
-# plt.show()
-
-
-logging.info("Init Transform (Euler2D):")
-logging.info(f"Translation: {init_transform.GetTranslation()}")
-logging.info(f"Rotation: {init_transform.GetMatrix()}")
-logging.info(f"Center: {init_transform.GetCenter()}")
-logging.info("SITK Transform (Euler2D):")
-logging.info(f"Translation: {transform.GetTranslation()}")
-logging.info(f"Rotation: {transform.GetMatrix()}")
-logging.info(f"Center: {transform.GetCenter()}")
-logging.info("SITK Transform Inverse (Euler2D):")
-logging.info(f"Translation: {tinv.GetTranslation()}")
-logging.info(f"Rotation: {tinv.GetMatrix()}")
-logging.info(f"Center: {tinv.GetCenter()}")
-logging.info("pycpd Transform (Euler2D):")
-logging.info(f"Translation: {pycpd_transform.GetTranslation()}")
-logging.info(f"Rotation: {pycpd_transform.GetMatrix()}")
-logging.info(f"Center: {pycpd_transform.GetCenter()}")
-del transform
-
-logging.info("Final pycpd registration:")
-logging.info(f"Number of points IMS: {imzcoordsfilt.shape[0]}")
-logging.info(f"Number of points postIMS: {postIMScoordsout.shape[0]}")
-logging.info(f"Translation: {pycpd_transform_comb.GetTranslation()}")
-logging.info(f"Rotation: {pycpd_transform_comb.GetMatrix()}")
-
-logging.info("Get mean error after registration")
-kdt = KDTree(imzcoordstransformed, leaf_size=30, metric='euclidean')
-distances, indices = kdt.query(centsred, k=1, return_distance=True)
-mean_error = np.mean(distances)*stepsize
-logging.info("Error: "+ str(mean_error))
-logging.info("Number of points: "+ str(len(distances)))
-
-# mean error
-reg_measure_dic = {
-    "IMS_to_postIMS_part_error": str(mean_error),
-    "n_points_part": str(len(distances))
+postIMS_bbox = (xmin, ymin, xmax, ymax)
+metadata_to_save = {
+    'IMS_bbox': list(imz_bbox), 
+    'postIMS_bbox': list(postIMS_bbox),
+    'IMS_regions': [int(p) for p in imzuqregs],
+    'Matching_IMS_region': regionimz
     }
-
-logging.info("Initiate napari_imsmicrolink widget to save data")
-## data wrangling to get correct output
-vie = napari_imsmicrolink._dock_widget.IMSMicroLink(napari.Viewer(show=False))
-vie.ims_pixel_map = napari_imsmicrolink.data.ims_pixel_map.PixelMapIMS(imzmlfile)
-vie.ims_pixel_map.ims_res = stepsize
-vie._tform_c.tform_ctl.target_mode_combo.setItemText(int(0),'Microscopy')
-vie._data.micro_d.res_info_input.setText(str(resolution))
-for regi in imzuqregs[imzuqregs != regionimz]:
-    vie.ims_pixel_map.delete_roi(roi_name = str(regi), remove_padding=False)
-
-logging.info("Create Transformation matrix")
-# initial rotation of imz
-tm1 = sitk.Euler2DTransform()
-tm1.SetTranslation([0,0])
-transparamtm1 = ((np.asarray(imzimg.shape).astype(np.double))/2*stepsize-stepsize/2).astype(np.double)
-tm1.SetCenter(transparamtm1)
-tm1.SetMatrix(rotmat.flatten().astype(np.double))
-logging.info(f"1. Transformation: {tm1.GetName()}")
-logging.info(tm1.GetParameters())
-
-# Translation because of IMS crop
-tm2 = sitk.TranslationTransform(2)
-yshift = init_translation[1]*stepsize
-xshift = init_translation[0]*stepsize
-tm2.SetParameters(np.array([xshift,yshift]).astype(np.double))
-logging.info(f"2. Transformation: {tm2.GetName()}")
-logging.info(tm2.GetParameters())
-
-# Registration of points 
-# tm3 = sitk.Euler2DTransform()
-tm3 = sitk.AffineTransform(2)
-tm3.SetCenter(np.array([0,0]).astype(np.double))
-tm3_rotmat = pycpd_transform_comb.GetMatrix()
-tm3.SetMatrix(tm3_rotmat)
-tm3_translation = np.array(pycpd_transform_comb.GetTranslation())*stepsize
-tm3.SetTranslation(tm3_translation)
-logging.info(f"3. Transformation: {tm3.GetName()}")
-logging.info(tm3.GetParameters())
-
-
-# Translation because of postIMS crop
-tm4 = sitk.TranslationTransform(2)
-yshift = ymin
-xshift = xmin
-tm4.SetParameters(np.array([xshift,yshift]).astype(np.double))
-logging.info(f"4. Transformation: {tm4.GetName()}")
-logging.info(tm4.GetParameters())
-
-
-
-# combine transforms to single affine transform
-tm = sitk.CompositeTransform(2)
-tm.AddTransform(tm4)
-tm.AddTransform(tm3)
-tm.AddTransform(tm2)
-tm.AddTransform(tm1)
-tmfl = composite2affine(tm, [0,0])
-logging.info(f"Combined Transformation: {tmfl.GetName()}")
-logging.info(tmfl.GetParameters())
-
-# Since axis are flipped, rotate transformation
-tmfl.SetTranslation(np.flip(np.array(tmfl.GetTranslation())))
-tmpmat = tmfl.GetMatrix()
-# tmfl.SetMatrix(np.array([tmpmat[:2],tmpmat[2:]]).T.flatten())
-tmfl.SetMatrix(np.array([[tmpmat[3],tmpmat[2]],[tmpmat[1],tmpmat[0]]]).flatten())
-
-# tmfl.GetTranslation()
-# pmap_coord_data.keys()
-# xs = np.array(pmap_coord_data['x_padded'].tolist())*stepsize
-# ys = np.array(pmap_coord_data['y_padded'].tolist())*stepsize
-# tmpcoords = np.stack([xs,ys],axis=1)
-
-# tmpcoordstrans = np.array([tmfl.TransformPoint(tmpcoords[i,:].astype(float)) for i in range(tmpcoords.shape[0])])
-# tmpcoordstrans
-
-# np.min(tmpcoordstrans,axis=0)-np.array([ymin,xmin])
-# np.max(tmpcoordstrans,axis=0)-np.array([ymax,xmax])
-
-# # check match
-# postIMScut = readimage_crop(postIMS_file, [int(xmin/resolution), int(ymin/resolution), int(xmax/resolution), int(ymax/resolution)])
-# for i in range(-3,4,1):
-#     for j in range(-3,4,1):
-#         xinds = (tmpcoordstrans[:,1]/resolution+i-xmin/resolution).astype(int)
-#         yinds = (tmpcoordstrans[:,0]/resolution+j-ymin/resolution).astype(int)
-#         xb = np.logical_and(xinds >= 0, xinds <= (postIMScut.shape[0]-1))
-#         yb = np.logical_and(yinds >= 0, yinds <= (postIMScut.shape[1]-1))
-#         inds = np.logical_and(xb,yb)
-#         xinds = xinds[inds]
-#         yinds = yinds[inds]
-#         postIMScut[xinds,yinds,:] = [0,0,255]
-
-
-# import matplotlib.pyplot as plt
-# plt.imshow(postIMScut)
-# plt.show()
-
-
-
-logging.info("Apply transformation")
-vie.image_transformer.affine_transform = tmfl
-vie.image_transformer.inverse_affine_transform = tmfl.GetInverse()
-vie.image_transformer.output_spacing = [resolution, resolution]
-vie.image_transformer._get_np_matrices()
-vie.microscopy_image = napari_imsmicrolink.data.tifffile_reader.TiffFileRegImage(postIMS_file)
-vie._add_ims_data()
-vie._data.ims_d.res_info_input.setText(str(stepsize))
-
-logging.info("Write data")
-vie._write_data(
-    project_name = project_name,
-    output_dir = output_dir,
-    output_filetype = ".h5"
-)
-
-project_metadata, pmap_coord_data = vie._generate_pmap_coords_and_meta(project_name)
-(
-    transformed_coords_ims,
-    transformed_coords_micro,
-    transformed_coords_micro_px,
-) = vie._transform_ims_coords_to_microscopy()
-
-print(pmap_coord_data)
-print(transformed_coords_ims)
-print(transformed_coords_micro)
-pmap_coord_data["x_micro_ims_px"] = transformed_coords_ims[:, 0]
-pmap_coord_data["y_micro_ims_px"] = transformed_coords_ims[:, 1]
-pmap_coord_data["x_micro_physical"] = transformed_coords_micro[:, 0]
-pmap_coord_data["y_micro_physical"] = transformed_coords_micro[:, 1]
-pmap_coord_data["x_micro_px"] = transformed_coords_micro_px[:, 0]
-pmap_coord_data["y_micro_px"] = transformed_coords_micro_px[:, 1]
-
-
-logging.info("Get mean error after registration")
-centsredfilttrans = centsredfilt*stepsize+np.array([xshift,yshift])
-imzcoordstrans = np.stack([np.array(pmap_coord_data["y_micro_physical"].to_list()).T,np.array(pmap_coord_data["x_micro_physical"].to_list()).T], axis=1)
-
-kdt = KDTree(centsredfilttrans, leaf_size=30, metric='euclidean')
-distances, indices = kdt.query(imzcoordstrans, k=1, return_distance=True)
-point_to_keep = distances[:,0]<0.5*stepsize
-imzcoordstransfilt = imzcoordstrans[point_to_keep,:]
-vie.image_transformer.target_pts = centsredfilttrans
-vie.image_transformer.source_pts = imzcoordstransfilt
-logging.info("Error: "+ str(np.mean(distances[point_to_keep,0])))
-logging.info("Number of points: "+ str(np.sum(point_to_keep)))
-reg_measure_dic['IMS_to_postIMS_error'] = str(np.mean(distances[point_to_keep,0]))
-reg_measure_dic['n_points'] = str(np.sum(point_to_keep))
-json.dump(reg_measure_dic, open(ims_to_postIMS_regerror,"w"))
-
-
-pmeta_out_fp = Path(output_dir) / f"{project_name}-IMSML-meta.json"
-logging.info("Save data")
-with open(pmeta_out_fp, "w") as json_out:
-    json.dump(project_metadata, json_out, indent=1, cls=NpEncoder)
-
-coords_out_fp = Path(output_dir) / f"{project_name}-IMSML-coords.h5"
-napari_imsmicrolink.utils.coords.pmap_coords_to_h5(pmap_coord_data, coords_out_fp)
-
-
-# check match
-postIMScut = readimage_crop(postIMS_file, [int(xmin/resolution), int(ymin/resolution), int(xmax/resolution), int(ymax/resolution)])
-for i in [-2,-1,0,1,2]:
-    for j in [-2,-1,0,1,2]:
-        xindsc = (centsred[:,0]/resolution*stepsize).astype(int)
-        yindsc = (centsred[:,1]/resolution*stepsize).astype(int)
-        xb = np.logical_and(xindsc >= 0, xindsc <= (postIMScut.shape[0]-1))
-        yb = np.logical_and(yindsc >= 0, yindsc <= (postIMScut.shape[1]-1))
-        inds = np.logical_and(xb,yb)
-        xindsc = xindsc[inds]
-        yindsc = yindsc[inds]
-        postIMScut[xindsc,yindsc,:] = [255,0,0]
-        xinds = (np.array(pmap_coord_data["y_micro_physical"].to_list())/resolution+i-xmin/resolution).astype(int)
-        yinds = (np.array(pmap_coord_data["x_micro_physical"].to_list())/resolution+j-ymin/resolution).astype(int)
-        xb = np.logical_and(xinds >= 0, xinds <= (postIMScut.shape[0]-1))
-        yb = np.logical_and(yinds >= 0, yinds <= (postIMScut.shape[1]-1))
-        inds = np.logical_and(xb,yb)
-        xinds = xinds[inds]
-        yinds = yinds[inds]
-        coled = postIMScut[xinds,yinds,0]==255
-        postIMScut[xinds[np.logical_not(coled)],yinds[np.logical_not(coled)],:] = [0,0,255]
-        postIMScut[xinds[coled],yinds[coled],:] = [255,0,255]
-
-
-# add imc location
-imcmask = readimage_crop(imc_mask_file, [int(xmin), int(ymin), int(xmax), int(ymax)])
-imcmaskch = skimage.morphology.convex_hull_image(imcmask>0)
-imcmaskchi = skimage.morphology.isotropic_erosion(imcmaskch, 1)
-imcmaskb = np.logical_and(np.logical_not(imcmaskchi),imcmaskch)
-imcmaskbr = skimage.transform.resize(imcmaskb, postIMScut.shape, preserve_range = True)[:,:,0]
-postIMScut[imcmaskbr] = [255,255,255]
-
-
-saveimage_tile(postIMScut, ims_to_postIMS_regerror_image, resolution)
-
-# import matplotlib.pyplot as plt
-# plt.imshow(postIMScut)
-# plt.show()
+with open(metadata_to_save_filename, "w") as fp:
+    json.dump(metadata_to_save , fp) 
 
 logging.info("Finished")
