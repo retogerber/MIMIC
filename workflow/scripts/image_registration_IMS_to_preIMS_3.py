@@ -1,5 +1,3 @@
-import pandas as pd
-import gc
 import cv2
 import napari
 import pycpd 
@@ -10,15 +8,11 @@ import skimage
 import numpy as np
 import json
 import matplotlib.pyplot as plt
-from image_registration_IMS_to_preIMS_utils import readimage_crop, prepare_image_for_sam, create_ring_mask, composite2affine, saveimage_tile, normalize_image, get_image_shape, create_imz_coords,get_rotmat_from_angle
+from image_registration_IMS_to_preIMS_utils import readimage_crop,  create_ring_mask, composite2affine, saveimage_tile,  create_imz_coords,get_rotmat_from_angle
 from sklearn.neighbors import KDTree
-from scipy.sparse import lil_array
-from scipy.sparse.csgraph import connected_components
-from scipy.ndimage import distance_transform_edt
 import shapely
 import shapely.affinity
 from pathlib import Path
-from typing import Union
 import sys,os
 import logging, traceback
 logging.basicConfig(filename=snakemake.log["stdout"],
@@ -31,43 +25,57 @@ sys.excepthook = handle_exception
 sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
 sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 
-stepsize = 30
-stepsize = 10
+threads = int(snakemake.threads)
+sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(threads)
+
+# stepsize = 30
+# stepsize = 10
 stepsize = float(snakemake.params["IMS_pixelsize"])
-pixelsize = 24
-pixelsize = 8 
+# pixelsize = 24
+# pixelsize = 8 
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
-resolution = 1
-resolution = 0.22537
+# resolution = 1
+# resolution = 0.22537
 resolution = float(snakemake.params["IMC_pixelsize"])
-rotation_imz = 180
-rotation_imz = 0
+# rotation_imz = 180
+# rotation_imz = 0
 rotation_imz = float(snakemake.params["IMS_rotation_angle"])
 assert(rotation_imz in [-270,-180,-90,0,90,180,270])
 rotmat = get_rotmat_from_angle(rotation_imz)
 
-imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/IMS_test_split_pre.imzML"
+logging.info("Rotation angle: "+str(rotation_imz))
+logging.info("IMS stepsize: "+str(stepsize))
+logging.info("IMS pixelsize: "+str(pixelsize))
+logging.info("Microscopy pixelsize: "+str(resolution))
+
+# imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/IMS_test_split_pre.imzML"
 # imzmlfile = "/home/retger/Downloads/pos_mode_lipids_tma_02022023_imzml.imzML"
 imzmlfile = snakemake.input["imzml"]
 
-imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
+# imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/Lipid_TMA_37819_025_transformed.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 
 imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed","")
+# imc_project = "Lipid_TMA"
 imc_project = os.path.split(os.path.split(os.path.split(os.path.split(imc_mask_file)[0])[0])[0])[1]
 project_name = "postIMS_to_IMS_"+imc_project+"-"+imc_samplename
 
+# postIMS_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS.ome.tiff"
 postIMS_file = snakemake.input["postIMS_downscaled"]
 
 # masks_transform_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_masks_transform.txt"
+# masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_masks_transform.txt"
 masks_transform_filename = snakemake.input["masks_transform"]
 # gridsearch_transform_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_gridsearch_transform.txt"
+# gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_gridsearch_transform.txt"
 gridsearch_transform_filename = snakemake.input["gridsearch_transform"]
 
 # postIMS_ablation_centroids_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_postIMS_ablation_centroids.csv"
+# postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_postIMS_ablation_centroids.csv"
 postIMS_ablation_centroids_filename = snakemake.input["postIMS_ablation_centroids"]
 # metadata_to_save_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_step1_metadata.json"
+# metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_step1_metadata.json"
 metadata_to_save_filename = snakemake.input["metadata"]
 
 
@@ -80,6 +88,7 @@ coordsfile_out = snakemake.output["imsml_coords_fp"]
 output_dir = os.path.dirname(coordsfile_out)
 
 
+logging.info("Read data")
 
 with open(metadata_to_save_filename, 'r') as fp:
     metadata = json.load(fp)
@@ -110,8 +119,16 @@ def command_iteration(method):
         + f"= {method.GetMetricValue():10.8f} "
         + f": {method.GetOptimizerPosition()}"
     )
+
+
+def get_sigma(threshold:float = (stepsize-pixelsize)/resolution, 
+              p:float = 0.99):
+    return 1/(5.5556*(1-((1-p)/p)**0.1186)/threshold)
+
+
 ########### sitk registration of points
 ### Get points
+logging.info("Prepare first registration")
 imzringmask = create_ring_mask(imzimg[xminimz:xmaximz,yminimz:ymaximz], imspixel_outscale, imspixel_inscale+1)
 imzcoords = create_imz_coords(imzimg, imzringmask, imzrefcoords, imz_bbox, rotmat)
 init_translation = -np.array([xminimz,yminimz]).astype(int)
@@ -136,33 +153,44 @@ imzcoordsfilt = imzcoordsfilttrans[imz_has_match,:]
 def image_from_points(shape, points, sigma=0, half_pixel_size = 1):
     img = np.zeros(shape, dtype=bool)
     for i in range(points.shape[0]):
-        xc = int(points[i,0])
-        xr = [xc-half_pixel_size,xc+half_pixel_size]
-        if xr[0]<0:
-            xr[0]=0
-        if (xr[1]+1)>img.shape[0]:
-            xr[1]=img.shape[0]-1
-        yc = int(points[i,1])
-        yr = [yc-half_pixel_size,yc+half_pixel_size]
-        if yr[0]<0:
-            yr[0]=0
-        if (yr[1]+1)>img.shape[1]:
-            yr[1]=img.shape[1]-1
-        img[xr[0]:(xr[1]+1),yr[0]:(yr[1]+1)] = True
+        xr = int(points[i,0])
+        if xr<0:
+            xr=0
+        if (xr)>img.shape[0]:
+            xr=img.shape[0]-1
+        yr = int(points[i,1])
+        if yr<0:
+            yr=0
+        if (yr)>img.shape[1]:
+            yr=img.shape[1]-1
+        img[xr,yr] = True
+    img = cv2.morphologyEx(src=img.astype(np.uint8), op = cv2.MORPH_DILATE, kernel = skimage.morphology.disk(half_pixel_size)).astype(bool)
     img = cv2.GaussianBlur(img.astype(np.uint8)*255,ksize=[0,0],sigmaX=sigma)
     return img/np.max(img)*255
 
-postIMSpimg1 = image_from_points(postIMS_shape, centsredfilt/resolution*stepsize, int(3/resolution), int(1/resolution))
 
-IMSpimg1 = image_from_points(postIMS_shape, imzcoordsfilt/resolution*stepsize, int(3/resolution), int(1/resolution))
+postIMSpimg1 = image_from_points(postIMS_shape, centsredfilt/resolution*stepsize, get_sigma((stepsize-pixelsize)/resolution/2, 0.99), int(stepsize/3/resolution))
+
+IMSpimg1 = image_from_points(postIMS_shape, imzcoordsfilt/resolution*stepsize, get_sigma((stepsize-pixelsize)/resolution/2,0.99), int(stepsize/3/resolution))
 
 # plt.imshow(IMSpimg1.astype(float)-postIMSpimg1.astype(float))
 # plt.show()
 
 ## First registration, Euler2D
 ## only boundary points
+logging.info("Run first registration")
 fixed = sitk.GetImageFromArray(IMSpimg1.astype(float))
+fixedmask = create_ring_mask(imzimg[xminimz:xmaximz,yminimz:ymaximz], imspixel_outscale+5, imspixel_inscale+8)
+fixedmask = skimage.transform.resize(fixedmask,postIMS_shape)
+fixedmask = sitk.GetImageFromArray(fixedmask.astype(np.uint8)*200)
+fixedmask = sitk.BinaryThreshold(fixedmask,lowerThreshold=127, upperThreshold=255)
 moving = sitk.GetImageFromArray(postIMSpimg1.astype(float))
+movingmask = cv2.morphologyEx(src=(postIMSpimg1>0).astype(np.uint8), op = cv2.MORPH_DILATE, kernel = skimage.morphology.square(int(stepsize/resolution)*8)).astype(bool)
+movingmask = sitk.GetImageFromArray(movingmask.astype(np.uint8)*200)
+movingmask = sitk.BinaryThreshold(movingmask,lowerThreshold=127, upperThreshold=255)
+# plt.imshow(movingmask*255-postIMSpimg1)
+# plt.show()
+
 
 init_transform = sitk.Euler2DTransform()
 init_transform.SetTranslation(np.array(tmp_transform.GetTranslation())/resolution*stepsize)
@@ -175,14 +203,26 @@ init_transform.SetAngle(tmp_transform.GetAngle())
 R = sitk.ImageRegistrationMethod()
 R.SetMetricAsMeanSquares()
 R.SetMetricSamplingStrategy(R.REGULAR)
-R.SetMetricSamplingPercentage(0.01)
+R.SetMetricSamplingPercentage(0.05)
+R.SetMetricFixedMask(fixedmask)
+R.SetMetricMovingMask(movingmask)
 R.SetInterpolator(sitk.sitkNearestNeighbor)
-es_stepsize = np.ceil(1/resolution*3)
-R.SetOptimizerAsExhaustive([2, round(stepsize/resolution*1.5/es_stepsize), round(stepsize/resolution*1.5/es_stepsize)])
-R.SetOptimizerScales([np.pi / 288, es_stepsize, es_stepsize])
+# es_stepsize = np.ceil(1/resolution)
+es_stepsize = 1/resolution*(stepsize/2)
+# R.SetOptimizerAsExhaustive([7, round(stepsize/resolution*1.25/es_stepsize), round(stepsize/resolution*1.25/es_stepsize)])
+n_halfsteps = [3, round(stepsize/resolution*1.5/es_stepsize), round(stepsize/resolution*1.5/es_stepsize)]
+R.SetOptimizerAsExhaustive(n_halfsteps)
+R.SetOptimizerScales([np.pi / 720, es_stepsize, es_stepsize])
 R.SetInitialTransform(init_transform)
-R.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration(R))
+def progress_bar_simple(method, maxiter=1000):
+    if int(method.GetOptimizerIteration())%int(maxiter/80) == 0:
+        print(f"{method.GetOptimizerIteration():5} / {maxiter:5}")
+R.AddCommand(sitk.sitkIterationEvent, lambda: progress_bar_simple(R, maxiter=np.prod(np.array(n_halfsteps)*2+1)))
+# R.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration(R))
 transform = R.Execute(fixed, moving)
+transform.GetParameters()
+logging.info(f"Gridsearch parameters: {transform.GetParameters()}")
+
 
 def resample_image(transform, fixed, moving_np):
     resampler = sitk.ResampleImageFilter()
@@ -195,9 +235,13 @@ postIMSro_trans = resample_image(init_transform, fixed, postIMSpimg1)
 # plt.imshow(IMSpimg1.astype(float)-postIMSro_trans.astype(float))
 # plt.show()
 
+tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_gridsearch_registration.ome.tiff"
+logging.info(f"Save Image difference as: {tmpfilename}")
+saveimage_tile(postIMSro_trans.astype(float)-IMSpimg1.astype(float), tmpfilename, resolution)
 
 
 ## Prepare second registration
+logging.info("Prepare second registration")
 init_transform_scaled = sitk.Euler2DTransform()
 init_transform_scaled.SetTranslation(np.array(init_transform.GetTranslation())*resolution/stepsize)
 init_transform_scaled.SetMatrix(init_transform.GetMatrix())
@@ -209,11 +253,11 @@ tmpimzrot2 = np.array([init_transform_scaled.TransformPoint(imzcoordsfilttrans[i
 
 kdt = KDTree(centsredfilt, leaf_size=30, metric='euclidean')
 imz_distances, indices = kdt.query(tmpimzrot2, k=1, return_distance=True)
-imz_has_match = imz_distances.flatten()<1
+imz_has_match = imz_distances.flatten()<1.5
 imzcoordsfilt = imzcoordsfilttrans[imz_has_match,:]
 
-postIMSpimg2 = image_from_points(postIMS_shape, centsredfilt/resolution*stepsize, int(5/resolution), int(1/resolution))
-IMSpimg2 = image_from_points(postIMS_shape, imzcoordsfilt/resolution*stepsize, int(5/resolution), int(1/resolution))
+postIMSpimg2 = image_from_points(postIMS_shape, centsredfilt/resolution*stepsize, get_sigma((stepsize-pixelsize)/resolution*2), int(1/resolution))
+IMSpimg2 = image_from_points(postIMS_shape, imzcoordsfilt/resolution*stepsize, get_sigma((stepsize-pixelsize)/resolution*2), int(1/resolution))
 postIMSro_trans = resample_image(transform, fixed, postIMSpimg2)
 
 # plt.imshow(IMSpimg2.astype(float)-postIMSro_trans.astype(float))
@@ -221,9 +265,9 @@ postIMSro_trans = resample_image(transform, fixed, postIMSpimg2)
 
 
 
-
 ## Second registration, Affine
 ## only boundary
+logging.info("Run second registration")
 fixed = sitk.GetImageFromArray(IMSpimg2.astype(float))
 moving = sitk.GetImageFromArray(postIMSpimg2.astype(float))
 
@@ -232,7 +276,8 @@ init_transform2.SetMatrix(transform.GetMatrix())
 init_transform2.SetTranslation(transform.GetTranslation())
 init_transform2.SetCenter((np.max(centsred,axis=0)-np.min(centsred,axis=0))/2/resolution*stepsize+np.min(centsred,axis=0)/resolution*stepsize)
 R = sitk.ImageRegistrationMethod()
-R.SetMetricAsCorrelation()
+R.SetMetricAsMeanSquares()
+# R.SetMetricAsCorrelation()
 R.SetMetricSamplingStrategy(R.REGULAR)
 R.SetMetricSamplingPercentage(0.25)
 R.SetInterpolator(sitk.sitkNearestNeighbor)
@@ -246,14 +291,19 @@ R.SetInitialTransform(init_transform2)
 R.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration(R))
 
 transform2 = R.Execute(fixed, moving)
+logging.info(f"Full registration parameters: {transform2.GetParameters()}")
 
 postIMSro_trans = resample_image(transform2, fixed, postIMSpimg2)
 # plt.imshow(IMSpimg2.astype(float)-postIMSro_trans.astype(float))
 # plt.show()
 
+tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_full_registration.ome.tiff"
+logging.info(f"Save Image difference as: {tmpfilename}")
+saveimage_tile(postIMSro_trans.astype(float)-IMSpimg2.astype(float), tmpfilename, resolution)
 
 ## Third registration, Affine
 ## only points in IMC region
+logging.info("Prepare third registration")
 imcmask = readimage_crop(imc_mask_file, [int(xmin), int(ymin), int(xmax), int(ymax)])
 imcmaskch = skimage.morphology.convex_hull_image(imcmask>0)
 imcmaskch = skimage.transform.resize(imcmaskch,postIMS_shape)
@@ -279,21 +329,25 @@ imzcoordsfilttrans = np.array([tinv.TransformPoint(imzcoords_in[i,:].astype(floa
 # tmpimzrot3 = np.array([init_transform_scaled2.TransformPoint(tmpimzrot2[i,:]) for i in range(tmpimzrot2.shape[0])])
 
 
-postIMSpimg3 = image_from_points(postIMS_shape, centsred/resolution*stepsize, int(2/resolution), int(1/resolution))
+postIMSpimg3 = image_from_points(postIMS_shape, centsred/resolution*stepsize,get_sigma((stepsize-pixelsize)/resolution), int(1/resolution))
 postIMSpimg3compl = postIMSpimg3.copy()
 postIMSpimg3[~imcmaskch] = postIMSpimg3[~imcmaskch]/2
 
 # IMSpimg3 = image_from_points(postIMSmpre.shape, tmpimzrot3/resolution*stepsize, 6, int(1/resolution))
-IMSpimg3 = image_from_points(postIMS_shape, imzcoordsfilttrans/resolution*stepsize, int(2/resolution), int(1/resolution))
+IMSpimg3 = image_from_points(postIMS_shape, imzcoordsfilttrans/resolution*stepsize, get_sigma((stepsize-pixelsize)/resolution), int(1/resolution))
 IMSpimg3compl = IMSpimg3.copy()
 IMSpimg3[~imcmaskch] = IMSpimg3[~imcmaskch]/2
 
-postIMSro_trans = resample_image(transform2, fixed, postIMSpimg3compl)
+# postIMSro_trans = resample_image(transform2, fixed, postIMSpimg3compl)
 # plt.imshow(IMSpimg3compl.astype(float)-postIMSro_trans.astype(float))
 # plt.show()
 
+# postIMSro_trans = resample_image(transform2, fixed, postIMSpimg3)
+# plt.imshow(IMSpimg3.astype(float)-postIMSro_trans.astype(float))
+# plt.show()
 
 
+logging.info("Run third registration")
 fixed = sitk.GetImageFromArray(IMSpimg3.astype(float))
 moving = sitk.GetImageFromArray(postIMSpimg3.astype(float))
 
@@ -303,18 +357,17 @@ init_transform3.SetCenter((np.max(centsred,axis=0)-np.min(centsred,axis=0))/2/re
 R = sitk.ImageRegistrationMethod()
 R.SetMetricAsMeanSquares()
 R.SetMetricSamplingStrategy(R.REGULAR)
-R.SetMetricSamplingPercentage(1)
+R.SetMetricSamplingPercentage(0.25)
 R.SetInterpolator(sitk.sitkNearestNeighbor)
 R.SetOptimizerAsGradientDescent(
     learningRate=1, numberOfIterations=1000, 
-    convergenceMinimumValue=1e-6, convergenceWindowSize=10
-    # estimateLearningRate=R.EachIteration
+    convergenceMinimumValue=1e-6, convergenceWindowSize=10,
+    estimateLearningRate=R.EachIteration
 )
 R.SetOptimizerScalesFromIndexShift()
 R.SetInitialTransform(init_transform3)
 R.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration(R))
 
-logging.info("Run registration")
 transform3 = R.Execute(fixed, moving)
 
 postIMSro_trans = resample_image(transform3, fixed, postIMSpimg3compl)
@@ -324,6 +377,10 @@ IMSpimg3compl[~imcmaskch] = IMSpimg3compl[~imcmaskch]/2
 # plt.show()
 
 
+logging.info(f"Partial registration parameters: {transform3.GetParameters()}")
+tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_partial_registration.ome.tiff"
+logging.info(f"Save Image difference as: {tmpfilename}")
+saveimage_tile(postIMSro_trans.astype(float)-IMSpimg3compl.astype(float), tmpfilename, resolution)
 
 
 transform3_inv = sitk.AffineTransform(2)
@@ -384,11 +441,11 @@ imzcoordsfilt = imzcoordsfilttrans2[imz_has_match,:]
 
 
 logging.info("Run point cloud registration")
-reg = pycpd.RigidRegistration(Y=centsredfilt.astype(float), X=imzcoordsfilt.astype(float), w=0, s=1, scale=False)
-postIMScoordsout, (s_reg, R_reg, t_reg) = reg.register()
+# reg = pycpd.RigidRegistration(Y=centsredfilt.astype(float), X=imzcoordsfilt.astype(float), w=0, s=1, scale=False)
+# postIMScoordsout, (s_reg, R_reg, t_reg) = reg.register()
 
-# reg = pycpd.AffineRegistration(Y=centsredfilt.astype(float), X=imzcoordsfilt.astype(float), w=0, s=1, scale=False)
-# postIMScoordsout, (R_reg, t_reg) = reg.register()
+reg = pycpd.AffineRegistration(Y=centsredfilt.astype(float), X=imzcoordsfilt.astype(float), w=0, s=1, scale=False)
+postIMScoordsout, (R_reg, t_reg) = reg.register()
 tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_pycpd_registration.svg"
 plt.close()
 plt.scatter(imzcoordsfilt[:,0]*stepsize, imzcoordsfilt[:,1]*stepsize,color="red",alpha=0.5)
@@ -402,7 +459,8 @@ fig.savefig(tmpfilename)
 
 # Invert Transformation
 if R_reg[1,0]!=R_reg[0,1]:
-    R_reg_inv = np.array([[1-(R_reg[1,1]-1),-R_reg[0,1]],[-R_reg[1,0],1-(R_reg[0,0]-1)]])
+    # R_reg_inv = np.array([[1-(R_reg[1,1]-1),-R_reg[0,1]],[-R_reg[1,0],1-(R_reg[0,0]-1)]])
+    R_reg_inv = np.array([[1-(R_reg[0,0]-1),-R_reg[1,0]],[-R_reg[0,1],1-(R_reg[1,1]-1)]])
 else:
     R_reg_inv = np.array([[R_reg[0,0],-R_reg[0,1]],[-R_reg[1,0],R_reg[1,1]]])
 
@@ -410,7 +468,7 @@ else:
 
 pycpd_transform = sitk.AffineTransform(2)
 pycpd_transform.SetCenter(np.array([0.0,0.0]).astype(np.double))
-pycpd_transform.SetMatrix(R_reg_inv.T.flatten().astype(np.double))
+pycpd_transform.SetMatrix(R_reg_inv.flatten().astype(np.double))
 pycpd_transform.SetTranslation(-t_reg)
 
 
@@ -420,7 +478,6 @@ imzcoordsfilttrans3 = np.array([pycpd_transform.TransformPoint(imzcoordsfilttran
 plt.scatter(imzcoordsfilttrans3[:,1]*stepsize/resolution, imzcoordsfilttrans3[:,0]*stepsize/resolution,color="red",alpha=0.5)
 plt.scatter(centsred[:,1]*stepsize/resolution, centsred[:,0]*stepsize/resolution,color="blue",alpha=0.5)
 # plt.show()
-
 fig = plt.gcf()
 fig.set_size_inches(20,20)
 fig.savefig(tmpfilename)
@@ -439,8 +496,8 @@ imzcoords_in = imzcoords_all + init_translation
 imzcoordstransformed = np.array([pycpd_transform_comb.TransformPoint(imzcoords_in[i,:].astype(float)) for i in range(imzcoords_in.shape[0])])
 tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_pycpd_registration_image.png"
 plt.close()
-plt.scatter(imzcoordstransformed[:,1]*stepsize/resolution, imzcoordstransformed[:,0]*stepsize/resolution,color="red", s=100)
-plt.scatter(centsred[:,1]*stepsize/resolution, centsred[:,0]*stepsize/resolution,color="blue", s=100)
+plt.scatter(imzcoordstransformed[:,1]*stepsize/resolution, imzcoordstransformed[:,0]*stepsize/resolution,color="red")
+plt.scatter(centsred[:,1]*stepsize/resolution, centsred[:,0]*stepsize/resolution,color="blue")
 # plt.imshow(postIMSmpre)
 plt.title("matching points")
 fig = plt.gcf()
