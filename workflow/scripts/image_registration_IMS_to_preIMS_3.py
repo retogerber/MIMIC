@@ -443,18 +443,22 @@ imzcoordsfilt = imzcoordsfilttrans2[imz_has_match,:]
 logging.info("Run point cloud registration")
 # reg = pycpd.RigidRegistration(Y=centsredfilt.astype(float), X=imzcoordsfilt.astype(float), w=0, s=1, scale=False)
 # postIMScoordsout, (s_reg, R_reg, t_reg) = reg.register()
-
-reg = pycpd.AffineRegistration(Y=centsredfilt.astype(float), X=imzcoordsfilt.astype(float), w=0, s=1, scale=False)
-postIMScoordsout, (R_reg, t_reg) = reg.register()
-tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_pycpd_registration.svg"
-plt.close()
-plt.scatter(imzcoordsfilt[:,0]*stepsize, imzcoordsfilt[:,1]*stepsize,color="red",alpha=0.5)
-plt.scatter(postIMScoordsout[:,0]*stepsize, postIMScoordsout[:,1]*stepsize,color="blue",alpha=0.5)
-plt.title("matching points")
-# plt.show()
-fig = plt.gcf()
-fig.set_size_inches(20,20)
-fig.savefig(tmpfilename)
+n_points_ims_total = np.sum(np.array([poly.contains(shapely.geometry.Point(imzcoordsfilttrans2[i,:]/resolution*stepsize)) for i in range(len(imzcoordsfilttrans2))]))
+if (centsredfilt.shape[0] > 10) and (centsredfilt.shape[0] > (n_points_ims_total*0.1)):
+    reg = pycpd.AffineRegistration(Y=centsredfilt.astype(float), X=imzcoordsfilt.astype(float), w=0, s=1, scale=False)
+    postIMScoordsout, (R_reg, t_reg) = reg.register()
+    tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_pycpd_registration.svg"
+    plt.close()
+    plt.scatter(imzcoordsfilt[:,0]*stepsize, imzcoordsfilt[:,1]*stepsize,color="red",alpha=0.5)
+    plt.scatter(postIMScoordsout[:,0]*stepsize, postIMScoordsout[:,1]*stepsize,color="blue",alpha=0.5)
+    plt.title("matching points")
+    # plt.show()
+    fig = plt.gcf()
+    fig.set_size_inches(20,20)
+    fig.savefig(tmpfilename)
+else:
+    R_reg = np.array([[1,0],[0,1]])
+    t_reg = np.array([0,0])
 
 
 # Invert Transformation
@@ -526,7 +530,7 @@ del transform
 
 logging.info("Final pycpd registration:")
 logging.info(f"Number of points IMS: {imzcoordsfilt.shape[0]}")
-logging.info(f"Number of points postIMS: {postIMScoordsout.shape[0]}")
+logging.info(f"Number of points postIMS: {centsredfilt.shape[0]}")
 logging.info(f"Translation: {pycpd_transform_comb.GetTranslation()}")
 logging.info(f"Rotation: {pycpd_transform_comb.GetMatrix()}")
 
