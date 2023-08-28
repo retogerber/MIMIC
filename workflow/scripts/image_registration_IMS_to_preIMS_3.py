@@ -54,6 +54,7 @@ imzmlfile = snakemake.input["imzml"]
 
 # imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/Lipid_TMA_37819_025_transformed.ome.tiff"
+# imc_mask_file = "/home/retger/Downloads/Lipid_TMA_37819_009_transformed.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 
 imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed","")
@@ -66,16 +67,20 @@ postIMS_file = snakemake.input["postIMS_downscaled"]
 
 # masks_transform_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_masks_transform.txt"
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_masks_transform.txt"
+# masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_masks_transform.txt"
 masks_transform_filename = snakemake.input["masks_transform"]
 # gridsearch_transform_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_gridsearch_transform.txt"
+# gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_gridsearch_transform.txt"
 gridsearch_transform_filename = snakemake.input["gridsearch_transform"]
 
 # postIMS_ablation_centroids_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_postIMS_ablation_centroids.csv"
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_postIMS_ablation_centroids.csv"
+# postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_postIMS_ablation_centroids.csv"
 postIMS_ablation_centroids_filename = snakemake.input["postIMS_ablation_centroids"]
 # metadata_to_save_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_step1_metadata.json"
+# metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_step1_metadata.json"
 metadata_to_save_filename = snakemake.input["metadata"]
 
 
@@ -384,10 +389,16 @@ saveimage_tile(postIMSro_trans.astype(float)-IMSpimg3compl.astype(float), tmpfil
 
 
 transform3_inv = sitk.AffineTransform(2)
-transform3_inv.SetCenter(np.array(transform3.GetCenter())*resolution/stepsize)
-transform3_inv.SetTranslation(np.array(transform3.GetTranslation())*resolution/stepsize)
-transform3_inv.SetMatrix(transform3.GetMatrix())
+transform3_inv.SetCenter(np.flip(np.array(transform3.GetCenter()))*resolution/stepsize)
+transform3_inv.SetTranslation(np.flip(np.array(transform3.GetTranslation())*resolution/stepsize))
+transform3_inv.SetMatrix(transform3.GetInverse().GetMatrix())
+
+# transform3_inv = transform3.GetInverse().GetInverse()
+# transform3_inv.SetCenter(np.array(transform3_inv.GetCenter())*resolution/stepsize)
+# transform3_inv.SetTranslation(np.array(transform3_inv.GetTranslation())*resolution/stepsize)
+
 transform3_inv.GetParameters()
+transform3_inv.GetCenter()
 
 # tm = sitk.CompositeTransform(2)
 # tm.AddTransform(transform3_inv)
@@ -457,8 +468,8 @@ if (centsredfilt.shape[0] > 10) and (centsredfilt.shape[0] > (n_points_ims_total
     fig.set_size_inches(20,20)
     fig.savefig(tmpfilename)
 else:
-    R_reg = np.array([[1,0],[0,1]])
-    t_reg = np.array([0,0])
+    R_reg = np.array([[1.0,0.0],[0.0,1.0]])
+    t_reg = np.array([0.0,0.0])
 
 
 # Invert Transformation
