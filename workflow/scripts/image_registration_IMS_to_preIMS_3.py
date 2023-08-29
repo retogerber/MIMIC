@@ -155,6 +155,16 @@ imz_distances, indices = kdt.query(tmpimzrot, k=1, return_distance=True)
 imz_has_match = imz_distances.flatten()<3
 imzcoordsfilt = imzcoordsfilttrans[imz_has_match,:]
 
+tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_gridsearch_registration.svg"
+plt.close()
+plt.scatter(imzcoordsfilttrans[:,1], imzcoordsfilttrans[:,0],color="red",alpha=0.5)
+plt.scatter(centsred[:,1], centsred[:,0],color="blue",alpha=0.5)
+plt.title("matching points")
+fig = plt.gcf()
+fig.set_size_inches(20,20)
+fig.savefig(tmpfilename)
+# plt.show()
+
 def image_from_points(shape, points, sigma=0, half_pixel_size = 1):
     img = np.zeros(shape, dtype=bool)
     for i in range(points.shape[0]):
@@ -174,9 +184,9 @@ def image_from_points(shape, points, sigma=0, half_pixel_size = 1):
     return img/np.max(img)*255
 
 
-postIMSpimg1 = image_from_points(postIMS_shape, centsredfilt/resolution*stepsize, get_sigma((stepsize-pixelsize)/resolution/2, 0.99), int(stepsize/3/resolution))
+postIMSpimg1 = image_from_points(postIMS_shape, centsredfilt/resolution*stepsize, get_sigma((stepsize-pixelsize)/resolution/2, 0.99), int(stepsize/4/resolution))
 
-IMSpimg1 = image_from_points(postIMS_shape, imzcoordsfilt/resolution*stepsize, get_sigma((stepsize-pixelsize)/resolution/2,0.99), int(stepsize/3/resolution))
+IMSpimg1 = image_from_points(postIMS_shape, imzcoordsfilt/resolution*stepsize, get_sigma((stepsize-pixelsize)/resolution/2,0.99), int(stepsize/4/resolution))
 
 # plt.imshow(IMSpimg1.astype(float)-postIMSpimg1.astype(float))
 # plt.show()
@@ -208,16 +218,16 @@ init_transform.SetAngle(tmp_transform.GetAngle())
 R = sitk.ImageRegistrationMethod()
 R.SetMetricAsMeanSquares()
 R.SetMetricSamplingStrategy(R.REGULAR)
-R.SetMetricSamplingPercentage(0.05)
+R.SetMetricSamplingPercentage(0.1)
 R.SetMetricFixedMask(fixedmask)
 R.SetMetricMovingMask(movingmask)
 R.SetInterpolator(sitk.sitkNearestNeighbor)
 # es_stepsize = np.ceil(1/resolution)
-es_stepsize = 1/resolution*(stepsize/2)
+es_stepsize = 1/resolution*(stepsize/4)
 # R.SetOptimizerAsExhaustive([7, round(stepsize/resolution*1.25/es_stepsize), round(stepsize/resolution*1.25/es_stepsize)])
-n_halfsteps = [3, round(stepsize/resolution*1.5/es_stepsize), round(stepsize/resolution*1.5/es_stepsize)]
+n_halfsteps = [11, round(stepsize/resolution*1.5/es_stepsize), round(stepsize/resolution*1.5/es_stepsize)]
 R.SetOptimizerAsExhaustive(n_halfsteps)
-R.SetOptimizerScales([np.pi / 720, es_stepsize, es_stepsize])
+R.SetOptimizerScales([np.pi / 2880, es_stepsize, es_stepsize])
 R.SetInitialTransform(init_transform)
 def progress_bar_simple(method, maxiter=1000):
     if int(method.GetOptimizerIteration())%int(maxiter/80) == 0:
@@ -242,14 +252,14 @@ postIMSro_trans = resample_image(init_transform, fixed, postIMSpimg1)
 
 tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_gridsearch_registration.ome.tiff"
 logging.info(f"Save Image difference as: {tmpfilename}")
-saveimage_tile(postIMSro_trans.astype(float)-IMSpimg1.astype(float), tmpfilename, resolution)
+saveimage_tile(((postIMSro_trans.astype(float)-IMSpimg1.astype(float))+255)/2, tmpfilename, resolution)
 
 
 ## Prepare second registration
 logging.info("Prepare second registration")
 init_transform_scaled = sitk.Euler2DTransform()
-init_transform_scaled.SetTranslation(np.array(init_transform.GetTranslation())*resolution/stepsize)
-init_transform_scaled.SetMatrix(init_transform.GetMatrix())
+init_transform_scaled.SetTranslation(np.flip(np.array(init_transform.GetTranslation())*resolution/stepsize))
+init_transform_scaled.SetMatrix(init_transform.GetInverse().GetMatrix())
 tmpimzrot2 = np.array([init_transform_scaled.TransformPoint(imzcoordsfilttrans[i,:]) for i in range(imzcoordsfilttrans.shape[0])])
 # plt.scatter(tmpimzrot2[:,1],tmpimzrot2[:,0])
 # plt.scatter(centsredfilt[:,1],centsredfilt[:,0])
@@ -304,7 +314,7 @@ postIMSro_trans = resample_image(transform2, fixed, postIMSpimg2)
 
 tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_full_registration.ome.tiff"
 logging.info(f"Save Image difference as: {tmpfilename}")
-saveimage_tile(postIMSro_trans.astype(float)-IMSpimg2.astype(float), tmpfilename, resolution)
+saveimage_tile(((postIMSro_trans.astype(float)-IMSpimg2.astype(float))+255)/2, tmpfilename, resolution)
 
 ## Third registration, Affine
 ## only points in IMC region
@@ -385,7 +395,7 @@ IMSpimg3compl[~imcmaskch] = IMSpimg3compl[~imcmaskch]/2
 logging.info(f"Partial registration parameters: {transform3.GetParameters()}")
 tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_partial_registration.ome.tiff"
 logging.info(f"Save Image difference as: {tmpfilename}")
-saveimage_tile(postIMSro_trans.astype(float)-IMSpimg3compl.astype(float), tmpfilename, resolution)
+saveimage_tile(((postIMSro_trans.astype(float)-IMSpimg3compl.astype(float))+255)/2, tmpfilename, resolution)
 
 
 transform3_inv = sitk.AffineTransform(2)
@@ -455,7 +465,7 @@ logging.info("Run point cloud registration")
 # reg = pycpd.RigidRegistration(Y=centsredfilt.astype(float), X=imzcoordsfilt.astype(float), w=0, s=1, scale=False)
 # postIMScoordsout, (s_reg, R_reg, t_reg) = reg.register()
 n_points_ims_total = np.sum(np.array([poly.contains(shapely.geometry.Point(imzcoordsfilttrans2[i,:]/resolution*stepsize)) for i in range(len(imzcoordsfilttrans2))]))
-if (centsredfilt.shape[0] > 10) and (centsredfilt.shape[0] > (n_points_ims_total*0.1)):
+if (centsredfilt.shape[0] > 10) and (centsredfilt.shape[0] > (n_points_ims_total/4)):
     reg = pycpd.AffineRegistration(Y=centsredfilt.astype(float), X=imzcoordsfilt.astype(float), w=0, s=1, scale=False)
     postIMScoordsout, (R_reg, t_reg) = reg.register()
     tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_pycpd_registration.svg"
