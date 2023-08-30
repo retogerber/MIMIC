@@ -889,21 +889,22 @@ logging.info("Grid search for fine transformation")
 
 # create polygons of neighboring pixels, then combine to global polygon,
 # more exact than covex hull
-kdt = KDTree(imzcoordsfilttrans, leaf_size=30, metric='euclidean')
-imz_distances, indices = kdt.query(imzcoordsfilttrans, k=9, return_distance=True)
-close = imz_distances<np.sqrt(1)+0.01
-tmpch=[]
-for i in range(len(imzcoordsfilttrans)):
-    tmpind = indices[i,:][close[i,:]]
-    tmpch.append(shapely.geometry.MultiPoint(imzcoordsfilttrans[tmpind,:]).convex_hull)
-poly = shapely.unary_union(tmpch)
-del tmpch
-try:
-    poly = shapely.geometry.Polygon(poly.exterior)
-    logging.info("\tUse Grid")
-except:
-    logging.info("\tUse Convex hull")
-    poly = shapely.geometry.MultiPoint(imzcoordsfilttrans).convex_hull
+# kdt = KDTree(imzcoordsfilttrans, leaf_size=30, metric='euclidean')
+# imz_distances, indices = kdt.query(imzcoordsfilttrans, k=9, return_distance=True)
+# close = imz_distances<np.sqrt(1)+0.01
+# tmpch=[]
+# for i in range(len(imzcoordsfilttrans)):
+#     tmpind = indices[i,:][close[i,:]]
+#     tmpch.append(shapely.geometry.MultiPoint(imzcoordsfilttrans[tmpind,:]).convex_hull)
+# poly = shapely.unary_union(tmpch)
+# del tmpch
+# try:
+#     poly = shapely.geometry.Polygon(poly.exterior)
+#     logging.info("\tUse Grid")
+# except:
+#     logging.info("\tUse Convex hull")
+#     poly = shapely.geometry.MultiPoint(imzcoordsfilttrans).convex_hull
+poly = shapely.concave_hull(shapely.geometry.MultiPoint(imzcoordsfilttrans), ratio=0.001)
 poly = poly.buffer(0.15)
 # centsred points
 tpls = [shapely.geometry.Point(centsred[i,:]) for i in range(centsred.shape[0])]
@@ -947,7 +948,7 @@ weights = weights/np.sum(weights)*len(weights)
 
 # template transform
 tmp_transform = sitk.Euler2DTransform()
-tmp_transform.SetCenter((poly.bounds[2]-poly.bounds[0],poly.bounds[3]-poly.bounds[1]))
+tmp_transform.SetCenter(((poly.bounds[2]-poly.bounds[0])/2+poly.bounds[0],(poly.bounds[3]-poly.bounds[1])/2+poly.bounds[1]))
 
 # KDtree for distance calculations
 kdt = KDTree(centsred_tmp, leaf_size=30, metric='euclidean')
@@ -959,7 +960,7 @@ imz_indices = np.arange(imzcoordsfilttrans.shape[0])
 def score_init_transform(tz):
     xsh, ysh, rot = tz
     tmp_transform = sitk.Euler2DTransform()
-    tmp_transform.SetCenter((poly.bounds[2]-poly.bounds[0],poly.bounds[3]-poly.bounds[1]))
+    tmp_transform.SetCenter(((poly.bounds[2]-poly.bounds[0])/2+poly.bounds[0],(poly.bounds[3]-poly.bounds[1])/2+poly.bounds[1]))
     tmp_transform.SetParameters((rot,xsh,ysh))
     tpoly = shapely.affinity.rotate(poly,rot, use_radians=True)
     tpoly = shapely.affinity.translate(tpoly,xsh,ysh)
@@ -1112,6 +1113,19 @@ gc.collect()
 logging.info(f"Parameters: rotation: {rot}, x shift: {xsh}, yshift: {ysh}")
 
 tmp_transform.SetParameters((rot,xsh,ysh))
+
+tmpimzrot = np.array([tmp_transform.TransformPoint(imzcoordsfilttrans[i,:]) for i in range(imzcoordsfilttrans.shape[0])])
+
+tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_gridsearch_registration.svg"
+plt.close()
+plt.scatter(tmpimzrot[:,1], tmpimzrot[:,0],color="red",alpha=0.5)
+plt.scatter(centsred[:,1], centsred[:,0],color="blue",alpha=0.5)
+plt.title("matching points")
+fig = plt.gcf()
+fig.set_size_inches(20,20)
+fig.savefig(tmpfilename)
+# plt.show()
+
 
 logging.info("Save results")
 
