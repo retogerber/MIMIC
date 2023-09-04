@@ -7,7 +7,7 @@ import skimage
 import numpy as np
 import json
 import matplotlib.pyplot as plt
-from image_registration_IMS_to_preIMS_utils import readimage_crop, prepare_image_for_sam, create_ring_mask, composite2affine, saveimage_tile, normalize_image, get_image_shape, create_imz_coords,get_rotmat_from_angle
+from image_registration_IMS_to_preIMS_utils import readimage_crop, prepare_image_for_sam, create_ring_mask, composite2affine, saveimage_tile, normalize_image, get_image_shape, create_imz_coords,get_rotmat_from_angle, concave_boundary_from_grid
 from sklearn.neighbors import KDTree
 from scipy.sparse import lil_array
 from scipy.sparse.csgraph import connected_components
@@ -904,7 +904,11 @@ logging.info("Grid search for fine transformation")
 # except:
 #     logging.info("\tUse Convex hull")
 #     poly = shapely.geometry.MultiPoint(imzcoordsfilttrans).convex_hull
-poly = shapely.concave_hull(shapely.geometry.MultiPoint(imzcoordsfilttrans), ratio=0.001)
+
+try:
+    poly = concave_boundary_from_grid(centsred)
+except:
+    poly = shapely.concave_hull(shapely.geometry.MultiPoint(imzcoordsfilttrans), ratio=0.001)
 poly = poly.buffer(0.15)
 # centsred points
 tpls = [shapely.geometry.Point(centsred[i,:]) for i in range(centsred.shape[0])]

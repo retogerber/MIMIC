@@ -8,7 +8,7 @@ import skimage
 import numpy as np
 import json
 import matplotlib.pyplot as plt
-from image_registration_IMS_to_preIMS_utils import readimage_crop,  create_ring_mask, composite2affine, saveimage_tile,  create_imz_coords,get_rotmat_from_angle
+from image_registration_IMS_to_preIMS_utils import readimage_crop,  create_ring_mask, composite2affine, saveimage_tile,  create_imz_coords,get_rotmat_from_angle, concave_boundary_from_grid, concave_boundary_from_grid_holes, indices_sequence_from_ordered_points, get_angle, angle_code_from_point_sequence, image_from_points, get_sigma
 from sklearn.neighbors import KDTree
 import shapely
 import shapely.affinity
@@ -50,11 +50,13 @@ logging.info("Microscopy pixelsize: "+str(resolution))
 
 # imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/IMS_test_split_pre.imzML"
 # imzmlfile = "/home/retger/Downloads/pos_mode_lipids_tma_02022023_imzml.imzML"
+# imzmlfile = "/home/retger/Downloads/test_images_ims_to_imc_workflow/hcc-tma-3_aaxl_20raster_06132022-total ion count.imzML"
 imzmlfile = snakemake.input["imzml"]
 
 # imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/Lipid_TMA_37819_025_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/Lipid_TMA_37819_009_transformed.ome.tiff"
+# imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_transformed.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 
 imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed","")
@@ -62,25 +64,29 @@ imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[
 imc_project = os.path.split(os.path.split(os.path.split(os.path.split(imc_mask_file)[0])[0])[0])[1]
 project_name = "postIMS_to_IMS_"+imc_project+"-"+imc_samplename
 
-# postIMS_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS.ome.tiff"
+# postIMS_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA_postIMS.ome.tiff"
 postIMS_file = snakemake.input["postIMS_downscaled"]
 
 # masks_transform_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_masks_transform.txt"
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_masks_transform.txt"
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_masks_transform.txt"
+# masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_masks_transform.txt"
 masks_transform_filename = snakemake.input["masks_transform"]
 # gridsearch_transform_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_gridsearch_transform.txt"
+# gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_gridsearch_transform.txt"
 gridsearch_transform_filename = snakemake.input["gridsearch_transform"]
 
 # postIMS_ablation_centroids_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_postIMS_ablation_centroids.csv"
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_postIMS_ablation_centroids.csv"
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_postIMS_ablation_centroids.csv"
+# postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_postIMS_ablation_centroids.csv"
 postIMS_ablation_centroids_filename = snakemake.input["postIMS_ablation_centroids"]
 # metadata_to_save_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_step1_metadata.json"
+# metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_step1_metadata.json"
 metadata_to_save_filename = snakemake.input["metadata"]
 
 
@@ -115,6 +121,7 @@ imzimg = imz._make_pixel_map_at_ims(randomize=False, map_type="minimized")
 imzimg = skimage.transform.rotate(imzimg,rotation_imz, preserve_range=True)
 xminimz, yminimz, xmaximz, ymaximz = imz_bbox
 imzrefcoords = np.stack([imz.y_coords_min,imz.x_coords_min],axis=1)
+del imz
 
 centsred = np.loadtxt(postIMS_ablation_centroids_filename, delimiter=',')
 
@@ -124,65 +131,6 @@ def command_iteration(method):
         + f"= {method.GetMetricValue():10.8f} "
         + f": {method.GetOptimizerPosition()}"
     )
-
-
-def get_sigma(threshold:float = (stepsize-pixelsize)/resolution, 
-              p:float = 0.99):
-    """Estimate a sigma for gaussian filter, i.e. density (p) at distance (threshold)"""
-    return 1/(5.5556*(1-((1-p)/p)**0.1186)/threshold)
-
-
-def image_from_points(shape, points: np.ndarray, sigma: float=1.0, half_pixel_size: int = 1):
-    """Create image from set of points, given an image shape"""
-    img = np.zeros(shape, dtype=bool)
-    for i in range(points.shape[0]):
-        xr = int(points[i,0])
-        if xr<0:
-            xr=0
-        if (xr)>img.shape[0]:
-            xr=img.shape[0]-1
-        yr = int(points[i,1])
-        if yr<0:
-            yr=0
-        if (yr)>img.shape[1]:
-            yr=img.shape[1]-1
-        img[xr,yr] = True
-    img = cv2.morphologyEx(src=img.astype(np.uint8), op = cv2.MORPH_DILATE, kernel = skimage.morphology.disk(half_pixel_size)).astype(bool)
-    img = cv2.GaussianBlur(img.astype(np.uint8)*255,ksize=[0,0],sigmaX=sigma)
-    return img/np.max(img)*255
-
-
-# from: https://stackoverflow.com/a/26392655
-def get_angle(p0, p1=np.array([0,0]), p2=None):
-    ''' compute angle (in degrees) for p0p1p2 corner
-    Inputs:
-        p0,p1,p2 - points in the form of [x,y]
-    '''
-    if p2 is None:
-        p2 = p1 + np.array([1, 0])
-    v0 = np.array(p0) - np.array(p1)
-    v1 = np.array(p2) - np.array(p1)
-
-    angle = np.math.atan2(np.linalg.det([v0,v1]),np.dot(v0,v1))
-    return np.degrees(angle)
-
-def angle_code_from_point_sequence(points: np.ndarray):
-    """For a set of ordered points assign a code based on angle to following point"""
-    angles = np.array([get_angle(points[j,:]-points[j+1,:],[0,0],[1,0]) for j in range(len(points)-1)])
-    angdiffs = np.array([np.abs(angles-180), np.abs(angles-90), np.abs(angles), np.abs(angles+90), np.abs(angles+180)]).T
-    angdiffsmin = np.min(angdiffs,axis=1)
-    angle_codes = np.array([np.where(angdiffs[j,:]==angdiffsmin[j])[0][0] for j in range(len(angdiffsmin))])
-    return "".join(list(np.array(["L","B","R","T","L"])[angle_codes]))
-
-def indices_sequence_from_ordered_points(ind: int, nn1: int, nn2: int, max_len: int):
-    """Create indices list for ordered sets"""
-    if ind-nn1 <0:
-        tmpinds = np.concatenate([np.arange((ind-nn1)%max_len,max_len),np.arange(0,ind+nn2+1)])
-    elif ind+nn2 >= max_len:
-        tmpinds = np.concatenate([np.arange(ind-nn1,max_len),np.arange(0,(ind+nn2)%max_len+1)])
-    else:
-        tmpinds = np.arange(ind-nn1,ind+nn2+1)
-    return tmpinds
 
 
 ########### sitk registration of points
@@ -197,26 +145,25 @@ tmpimzrot = np.array([tmp_transform.TransformPoint(imzcoordsfilttrans[i,:]) for 
 
 
 logging.info("Create polygons")
-IMSpoly = shapely.concave_hull(shapely.geometry.MultiPoint(tmpimzrot), ratio=0.001).buffer(0.15, cap_style='square', join_style='mitre')
-IMSpoly_small = shapely.concave_hull(shapely.geometry.MultiPoint(tmpimzrot), ratio=0.001).buffer(-1.15, cap_style='square', join_style='mitre')
-postIMSpoly = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.01).buffer(0.15, cap_style='square', join_style='mitre')
-postIMSpoly_small = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.01).buffer(-0.15, cap_style='square', join_style='mitre')
-shapely.prepare(IMSpoly)
-shapely.prepare(IMSpoly_small)
-shapely.prepare(postIMSpoly)
-shapely.prepare(postIMSpoly_small)
-# import shapely.plotting
-# plt.scatter(tmpimzrot[:,0], tmpimzrot[:,1],color="red",alpha=0.5)
-# plt.scatter(centsred[:,0], centsred[:,1],color="blue",alpha=0.5)
-# shapely.plotting.plot_polygon(IMSpoly)
-# shapely.plotting.plot_polygon(IMSpoly_small)
-# shapely.plotting.plot_polygon(postIMSpoly)
-# plt.show()
+IMSpoly = concave_boundary_from_grid(tmpimzrot, direction=2).buffer(0.15, cap_style='square', join_style='mitre')
+
+IMSpoly_small = concave_boundary_from_grid(tmpimzrot, direction=2).buffer(-1.15, cap_style='square', join_style='mitre')
+
+try:
+    tch = concave_boundary_from_grid_holes(centsred)
+    postIMSpoly_outer = tch.buffer(0.15, cap_style='square', join_style='mitre')
+    postIMSpoly_inner = tch.buffer(-0.15, cap_style='square', join_style='mitre')
+    ordered_centsred_border_all = np.array(tch.xy).T[:-1,:]
+except:
+    postIMSpoly_outer = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.001).buffer(0.15, cap_style='square', join_style='mitre')
+    postIMSpoly_inner = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.001).buffer(-0.15, cap_style='square', join_style='mitre')
+    postIMSpoly = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.001)
+    ordered_centsred_border_all = np.array(postIMSpoly.exterior.coords.xy).T[:-1,:]
 
 logging.info("Filter points at boundary of polygon")
 tpls_all = [shapely.geometry.Point(centsred[i,:]) for i in range(centsred.shape[0])]
-pconts1 = np.array([postIMSpoly.contains(tpls_all[i]) for i in range(len(tpls_all))])
-pconts2 = np.array([postIMSpoly_small.contains(tpls_all[i]) for i in range(len(tpls_all))])
+pconts1 = np.array([postIMSpoly_outer.contains(tpls_all[i]) for i in range(len(tpls_all))])
+pconts2 = np.array([postIMSpoly_inner.contains(tpls_all[i]) for i in range(len(tpls_all))])
 centsred_border_all = centsred[np.logical_and(pconts1,~pconts2)]
 inds_centsred_border_all = np.arange(centsred.shape[0])[np.logical_and(pconts1,~pconts2)]
 tpls = [shapely.geometry.Point(centsred[i,:]) for i in range(centsred.shape[0])]
@@ -226,18 +173,16 @@ centsred_border = centsred[np.logical_and(np.logical_and(pconts1,~pconts2),np.lo
 inds_centsred_border = np.arange(centsred.shape[0])[np.logical_and(np.logical_and(pconts1,~pconts2),np.logical_and(pconts3,~pconts4))]
 
 
-postIMSpoly = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.01)
-ordered_centsred_border_all = np.array(postIMSpoly.exterior.coords.xy).T[:-1,:]
-
 logging.info("Match postIMS to IMS points based on angles to neighbors")
 logging.info(f"\t   ID\tmatches\ttested\ttotal")
-print(f"\t   ID\tmatches\ttested\ttotal")
 kdt = KDTree(ordered_centsred_border_all, leaf_size=30, metric='euclidean')
 distances, indices = kdt.query(centsred_border, k=1, return_distance=True)
 nn1s=[0,1,2,3,4,5,6,7,8,9,10]
 nn2s=[0,1,2,3,4,5,6,7,8,9,10]
 min_n=5
 max_n=14
+max_dist_diff=0.2
+max_angle_diff=15
 from itertools import product
 nn_combinations = np.array(list(product(nn1s, nn2s)))
 tl = np.array([p[0]+p[1] for p in nn_combinations])
@@ -255,16 +200,18 @@ for k in range(len(nn_combinations)):
         if tmp.shape[0]==(nn1+nn2+1):
             dists = np.array([np.sqrt(np.sum((tmp[j,:]-tmp[j+1,:])**2)) for j in range(len(tmp)-1)])
             angles = np.array([get_angle(tmp[j,:]-tmp[j+1,:],[0,0],[1,0]) for j in range(len(tmp)-1)])
-            to_keep_dist = np.logical_and(dists > 0.9, dists < 1.1)
+            to_keep_dist = np.logical_and(dists > 1-max_dist_diff, dists < 1+max_dist_diff)
             absangles = np.abs(np.array(angles))
             to_keep_angle = np.logical_or(
-                    np.logical_or(absangles < 9, absangles > 171),
-                    np.logical_and(absangles > 81, absangles < 99),
+                    np.logical_or(absangles < 0+max_angle_diff, absangles > 180-max_angle_diff),
+                    np.logical_and(absangles > 90-max_angle_diff, absangles < 90+max_angle_diff),
             )
             to_keep = np.logical_and(to_keep_angle, to_keep_dist)
             if np.all(to_keep):
                 ind_to_keep.append(i)
-
+    if len(ind_to_keep) == 0:
+        logging.info(f"\t{nn1:02}_{nn2:02}\t{0:6}\t{0:6}\t{len(indices.flatten()):6}")
+        continue
     codes = []
     # create codes
     for i in ind_to_keep:
@@ -273,33 +220,35 @@ for k in range(len(nn_combinations)):
         tmp = ordered_centsred_border_all[tmpinds,:]
         codes.append(angle_code_from_point_sequence(tmp))
 
-    # Find neighboring IMS pixels
+    # find neighboring ims pixels
     tmppoints = ordered_centsred_border_all[indices.flatten()[np.array(ind_to_keep)],:]
     kdt = KDTree(tmpimzrot, leaf_size=30, metric='euclidean')
     distances, indices_tmp = kdt.query(tmppoints, k=9, return_distance=True)
     is_close = distances<1.75
     close_ims = [tmpimzrot[indices_tmp[i,:][is_close[i,:]],:] for i in range(len(tmppoints))]
 
-    IMSpoly = shapely.concave_hull(shapely.geometry.MultiPoint(tmpimzrot), ratio=0.001)
-    ordered_imz_border_all = np.array(IMSpoly.exterior.coords.xy).T[:-1,:]
+    # imspoly = shapely.concave_hull(shapely.geometry.multipoint(tmpimzrot), ratio=0.001)
+    imspoly = concave_boundary_from_grid(tmpimzrot, direction=2, max_allowed_counter_steps=10000)
+    ordered_imz_border_all = np.array(imspoly.exterior.coords.xy).T[:-1,:]
     kdt = KDTree(ordered_imz_border_all, leaf_size=30, metric='euclidean')
 
-    # create codes for neighboring IMS pixels
-    IMS_codes = []
+    # create codes for neighboring ims pixels
+    ims_codes = []
     for j in range(len(close_ims)):
-        IMS_codes.append([])
+        ims_codes.append([])
         for i in range(len(close_ims[j])):
             tmpind = kdt.query(close_ims[j][i,:].reshape(1,-1), k=1, return_distance=False)[0][0]
             tmpinds = indices_sequence_from_ordered_points(tmpind,nn1,nn2,len(ordered_imz_border_all))
             tmp = ordered_imz_border_all[tmpinds,:]
-            IMS_codes[j].append(angle_code_from_point_sequence(tmp))
+            ims_codes[j].append(angle_code_from_point_sequence(tmp))
 
     # compare matchings
-    matches = [np.where(np.array(IMS_codes[i]) == codes[i])[0] for i in range(len(codes))]
+    matches = [np.where(np.array(ims_codes[i]) == codes[i])[0] for i in range(len(codes))]
     n_matches = np.array([len(p) for p in matches])
     close_ims_inds = np.arange(len(close_ims))[n_matches==1]
 
     logging.info(f"\t{nn1:02}_{nn2:02}\t{np.sum(n_matches==1):6}\t{len(ind_to_keep):6}\t{len(indices.flatten()):6}")
+    print(f"\t{nn1:02}_{nn2:02}\t{np.sum(n_matches==1):6}\t{len(ind_to_keep):6}\t{len(indices.flatten()):6}")
     # save
     results_matching_array[np.array(ind_to_keep)[np.array(n_matches)==1],np.array(nn1s)==nn1,np.array(nn2s)==nn2] = np.array([indices_tmp[i,:][matches[i][0]] for i in close_ims_inds])
 
@@ -324,6 +273,7 @@ from scipy.spatial.distance import cdist
 tmppts = np.array(IMSpoly.exterior.coords.xy).T
 hdist = cdist(tmppts, tmppts, metric='euclidean')
 refdistmax = hdist.max()
+centroid = np.mean(tmppts,axis=0)
 
 all_maxlens = np.unique(maxlens)
 logging.info(f"Unique length of matching codes: {all_maxlens}")
@@ -331,7 +281,7 @@ points_found = True
 if len(all_maxlens)==0:
     points_found = False
 else:
-    scores = np.zeros((len(all_maxlens),2))
+    scores = np.zeros((len(all_maxlens),3))
     for i in range(len(all_maxlens)):
         tmp_matches_filt = matches_filt.copy()
         tmp_matches_filt[tmp_matches_filt] = maxlens >= all_maxlens[i]
@@ -341,6 +291,13 @@ else:
         centsred_borderfilt = centsred_border[tmp_matches_filt,:]
         hdist = cdist(centsred_borderfilt, centsred_borderfilt, metric='euclidean')
         scores[i,1] =  hdist.max()
+        tpts = centsred_border[tmp_matches_filt]
+        angles= np.array([get_angle(p1, centroid) for p1 in tpts])+180
+        angles = np.sort(angles)
+        angdiff = np.abs(np.diff(angles))
+        angdiff = np.concatenate([angdiff,np.array((angles[0]-angles[-1])%360).reshape(1)])
+        scores[i,2] = np.max(angdiff)
+
     logging.info(f"n_points\tmax_distance") 
     logging.info(scores)
     threshold_npts = 10
@@ -350,7 +307,11 @@ else:
     logging.info(scores[tmpsub,:])
 
     if np.sum(tmpsub)>0:
-        maxlen_to_use = np.max(all_maxlens[tmpsub])
+        score_comb = 1-scores[tmpsub,2]/360 + scores[tmpsub,1]/refdistmax +   scores[tmpsub,0]/np.max(scores[tmpsub,0])
+        score_comb*=all_maxlens
+
+        maxlen_to_use = all_maxlens[np.argmax(score_comb[tmpsub])]
+        # maxlen_to_use = np.max(all_maxlens[tmpsub])
         matches_filt[matches_filt] = maxlens >= maxlen_to_use
         matching_inds = np.array([np.unique(results_matching_array[matches_filt,:,:][i,:,:][~np.isnan(results_matching_array[matches_filt,:,:][i,:,:])])[0] for i in range(np.sum(matches_filt))]).astype(np.uint32)
         centsred_borderfilt = centsred_border[matches_filt,:]
@@ -404,7 +365,8 @@ if points_found:
     fig.savefig(tmpfilename)
     # plt.show()
 
-    IMSpoly = shapely.concave_hull(shapely.geometry.MultiPoint(imzcoordsfilttrans), ratio=0.001).buffer(0.15, cap_style='square', join_style='mitre')
+    # IMSpoly = shapely.concave_hull(shapely.geometry.MultiPoint(imzcoordsfilttrans), ratio=0.001).buffer(0.15, cap_style='square', join_style='mitre')
+    IMSpoly = concave_boundary_from_grid(imzcoordsfilttrans, direction=2)
     shapely.prepare(IMSpoly)
 
     tpls = [shapely.geometry.Point(postIMScoordsout[i,:]) for i in range(postIMScoordsout.shape[0])]
