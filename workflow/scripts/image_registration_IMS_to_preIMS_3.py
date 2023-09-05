@@ -154,22 +154,33 @@ try:
     postIMSpoly_outer = tch.buffer(0.15, cap_style='square', join_style='mitre')
     postIMSpoly_inner = tch.buffer(-0.15, cap_style='square', join_style='mitre')
     ordered_centsred_border_all = np.array(tch.xy).T[:-1,:]
-except:
-    postIMSpoly_outer = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.001).buffer(0.15, cap_style='square', join_style='mitre')
-    postIMSpoly_inner = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.001).buffer(-0.15, cap_style='square', join_style='mitre')
-    postIMSpoly = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.001)
+except Exception as error:
+    logging.info(f"Error in concave_boundary_from_grid_holes: {error}")
+    postIMSpoly_outer = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.01).buffer(0.15, cap_style='square', join_style='mitre')
+    postIMSpoly_inner = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.01).buffer(-0.15, cap_style='square', join_style='mitre')
+    postIMSpoly = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.01)
     ordered_centsred_border_all = np.array(postIMSpoly.exterior.coords.xy).T[:-1,:]
 
+logging.info(f"shape boundary points: {ordered_centsred_border_all.shape}")
 logging.info("Filter points at boundary of polygon")
 tpls_all = [shapely.geometry.Point(centsred[i,:]) for i in range(centsred.shape[0])]
 pconts1 = np.array([postIMSpoly_outer.contains(tpls_all[i]) for i in range(len(tpls_all))])
+logging.info(f"pconts1 n nan: {np.unique(np.isnan(pconts1), return_counts=True)}")
+pconts1[np.isnan(pconts1)] = False
 pconts2 = np.array([postIMSpoly_inner.contains(tpls_all[i]) for i in range(len(tpls_all))])
+pconts2[np.isnan(pconts2)] = False
+logging.info(f"pconts2 n nan: {np.unique(np.isnan(pconts2), return_counts=True)}")
 centsred_border_all = centsred[np.logical_and(pconts1,~pconts2)]
 inds_centsred_border_all = np.arange(centsred.shape[0])[np.logical_and(pconts1,~pconts2)]
 tpls = [shapely.geometry.Point(centsred[i,:]) for i in range(centsred.shape[0])]
 pconts3 = np.array([IMSpoly.contains(tpls[i]) for i in range(len(tpls))])
+logging.info(f"pconts3 n nan: {np.unique(np.isnan(pconts3), return_counts=True)}")
+pconts3[np.isnan(pconts3)] = False
 pconts4 = np.array([IMSpoly_small.contains(tpls[i]) for i in range(len(tpls))])
+logging.info(f"pconts4 n nan: {np.unique(np.isnan(pconts4), return_counts=True)}")
+pconts3[np.isnan(pconts4)] = False
 centsred_border = centsred[np.logical_and(np.logical_and(pconts1,~pconts2),np.logical_and(pconts3,~pconts4))]
+logging.info(f"number of points at border: {centsred_border.shape[0]}")
 inds_centsred_border = np.arange(centsred.shape[0])[np.logical_and(np.logical_and(pconts1,~pconts2),np.logical_and(pconts3,~pconts4))]
 
 
@@ -279,6 +290,7 @@ all_maxlens = np.unique(maxlens)
 logging.info(f"Unique length of matching codes: {all_maxlens}")
 points_found = True
 if len(all_maxlens)==0:
+    logging.info("No matching points found")
     points_found = False
 else:
     scores = np.zeros((len(all_maxlens),3))
@@ -298,7 +310,7 @@ else:
         angdiff = np.concatenate([angdiff,np.array((angles[0]-angles[-1])%360).reshape(1)])
         scores[i,2] = np.max(angdiff)
 
-    logging.info(f"n_points\tmax_distance") 
+    logging.info(f"n_points\tmax_distance\tmax_angle") 
     logging.info(scores)
     threshold_npts = 10
     threshold_prop_maxdist = 0.75
@@ -308,15 +320,17 @@ else:
 
     if np.sum(tmpsub)>0:
         score_comb = 1-scores[tmpsub,2]/360 + scores[tmpsub,1]/refdistmax +   scores[tmpsub,0]/np.max(scores[tmpsub,0])
-        score_comb*=all_maxlens
+        score_comb*=all_maxlens[tmpsub]
 
-        maxlen_to_use = all_maxlens[np.argmax(score_comb[tmpsub])]
+        maxlen_to_use = all_maxlens[np.argmax(score_comb)]
+        logging.info(f"Maxlen used: {maxlen_to_use}")
         # maxlen_to_use = np.max(all_maxlens[tmpsub])
         matches_filt[matches_filt] = maxlens >= maxlen_to_use
         matching_inds = np.array([np.unique(results_matching_array[matches_filt,:,:][i,:,:][~np.isnan(results_matching_array[matches_filt,:,:][i,:,:])])[0] for i in range(np.sum(matches_filt))]).astype(np.uint32)
         centsred_borderfilt = centsred_border[matches_filt,:]
         tmpimzrotfilt = tmpimzrot[matching_inds,:]
     else:
+        logging.info("No parameters fullfil criteria!")
         points_found = False
 
 if points_found:
@@ -372,13 +386,17 @@ if points_found:
     tpls = [shapely.geometry.Point(postIMScoordsout[i,:]) for i in range(postIMScoordsout.shape[0])]
     pconts = np.array([IMSpoly.contains(tpls[i]) for i in range(len(tpls))])
     if np.sum(pconts)/len(pconts) < 0.98:
-        logging.info(f"{np.sum(pconts):6}/{len(pconts):6} points ({np.sum(pconts)/len(pconts):1.4}) lie outside of IMS polygon: Registration is not used!") 
+        logging.info(f"only {np.sum(pconts):6}/{len(pconts):6} points ({np.sum(pconts)/len(pconts):1.4}) lie inside of IMS polygon: Registration is not used!") 
         R_reg = np.array([[1.0,0.0],[0.0,1.0]])
         t_reg = np.array([0.0,0.0])
 else:
     logging.info(f"Criteria not met, don't run pycpd registration") 
     R_reg = np.array([[1.0,0.0],[0.0,1.0]])
     t_reg = np.array([0.0,0.0])
+    init_transform = tmp_transform.GetInverse()
+    init_transform_inverse = tmp_transform
+    pycpd_transform_inverse = sitk.AffineTransform(2)
+    pycpd_transform = sitk.AffineTransform(2)
 
 
 def resample_image(transform, fixed, moving_np):
@@ -510,6 +528,7 @@ else:
     # Identity transform
     transform_scaled_inverse = sitk.AffineTransform(2)
     transform_scaled = sitk.AffineTransform(2)
+    transform = sitk.AffineTransform(2)
 
 
 

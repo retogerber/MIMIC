@@ -448,8 +448,9 @@ def concave_boundary_from_grid(points: np.ndarray, max_dist: float=1.1, max_angl
         po = shapely.LineString(pts)
     return po
 
-def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, max_angle_diff: float=25, max_allowed_counter_steps: int=5, centroid = np.array([0,0])):
+def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, max_angle_diff: float=25, max_allowed_counter_steps: int=5, centroid = np.array([0,0]), maxit: int=1000):
     polyout = shapely.LineString()
+    all_points = points.copy()
     centroid = np.array(shapely.geometry.Polygon(points).convex_hull.centroid.coords.xy).T[0]
     pinit = shapely.Polygon(points).convex_hull
     pinit1 = pinit.buffer(1)
@@ -459,9 +460,14 @@ def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, ma
     pconts2 = np.array([pinit2.contains_properly(tpls_all[i]) for i in range(len(tpls_all))])
     points = points[np.logical_and(pconts1,~pconts2)]
 
-    while points.shape[0]>0:
+    n_points_ls = [points.shape[0]]
+    iter = 0
+    print("n_points:")
+    while points.shape[0]>1 and iter<maxit:
+        iter+=1
         p1 = concave_boundary_from_grid(points,max_dist=max_dist, max_angle_diff=max_angle_diff, max_allowed_counter_steps=max_allowed_counter_steps, centroid=centroid)
         p2 = concave_boundary_from_grid(points,max_dist=max_dist, max_angle_diff=max_angle_diff,direction=2,max_allowed_counter_steps=max_allowed_counter_steps, centroid=centroid)
+        print(f"{iter}: p1 empty? {p1.is_empty}, p2 empty? {p2.is_empty}")
         if p1.is_empty and p2.is_empty:
             border_points = np.unique(np.array(shapely.geometry.Polygon(points).convex_hull.exterior.coords.xy).T, axis=0)
             init_point = border_points[border_points[:,0] == np.max(border_points[:,0]),:]
@@ -469,6 +475,7 @@ def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, ma
             kdt = KDTree(points, leaf_size=30, metric='euclidean')
             init_point_ind = kdt.query(init_point.reshape(1,-1), k=1, return_distance=False)[0][0]
             points = np.delete(points, init_point_ind, axis=0)
+            n_points_ls.append(points.shape[0])
         else: 
             if p1.geom_type == "Polygon":
                 c1 = p1.exterior.coords.xy
@@ -483,6 +490,7 @@ def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, ma
                 lcoords=np.array(c1).T
             else:
                 lcoords=np.array(c2).T
+            print(f"{iter}: n_found: {lcoords.shape[0]}")
 
             if polyout.is_empty:
                 polyout = shapely.LineString(lcoords)
@@ -509,13 +517,16 @@ def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, ma
                 # plt.show()
 
             tr = 20 if len(newcoords)>=40 else len(newcoords)
-            angles = np.array([get_angle(newcoords[i,:], centroid, newcoords[-j,:]) for i in range(tr) for j in range(tr)])
-            angles[angles<=0]=-angles[angles<=0]+180
+            tmpc1 = newcoords[:tr,:]
+            tmpc2 = newcoords[-tr:,:][::-1]
+            angles = np.array([get_angle(tmpc1[i,:], centroid, tmpc2[j,:]) for i in range(tr) for j in range(tr)])
+            if tmpc1[0,1] > tmpc2[0,1]:
+                angles = angles%360
+            else:
+                angles = angles+180
             indm = angles.argmax()
             j=int(indm%tr)
             i=int(indm//tr)
-            get_angle(newcoords[i,:], centroid, newcoords[-j,:])
-            np.max(angles)
             if j == 0:
                 newcoords_filt = newcoords[i:,:]
             else:
@@ -524,9 +535,18 @@ def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, ma
             po = shapely.Polygon(np.concatenate([newcoords_filt,centroid.reshape(1,-1)]))
             # shapely.plotting.plot_polygon(po)
             # plt.show()
-            pot = po.buffer(0.1, cap_style='square', join_style='bevel')
+            bsize = np.sum(np.array(n_points_ls)==n_points_ls[-1])*0.2
+            print(f"{iter}: buffer size: {bsize}")
+            pot = po.buffer(bsize, cap_style='square', join_style='bevel')
             tpls_all = [shapely.geometry.Point(points[i,:]) for i in range(points.shape[0])]
-            pconts1 = np.array([pot.contains_properly(tpls_all[i]) for i in range(len(tpls_all))])
+            pconts1 = np.array([pot.contains(tpls_all[i]) for i in range(len(tpls_all))])
             points = points[~pconts1]
+            n_points_ls.append(points.shape[0])
+
+        print(f"{iter}: n_points: {points.shape[0]:5}")
+    print("")
+    if iter >= maxit:
+        print(f"Maximum number of iterations ({maxit}) achieved, return concave hull") 
+        polyout = shapely.concave_hull(shapely.geometry.MultiPoint(all_points), ratio=0.01)
     return polyout
 

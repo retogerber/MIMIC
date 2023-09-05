@@ -906,9 +906,10 @@ logging.info("Grid search for fine transformation")
 #     poly = shapely.geometry.MultiPoint(imzcoordsfilttrans).convex_hull
 
 try:
-    poly = concave_boundary_from_grid(centsred)
+    poly = concave_boundary_from_grid(imzcoordsfilttrans)
 except:
-    poly = shapely.concave_hull(shapely.geometry.MultiPoint(imzcoordsfilttrans), ratio=0.001)
+    logging.info("concave_boundary_from_grid failed! using alpha hull")
+    poly = shapely.concave_hull(shapely.geometry.MultiPoint(imzcoordsfilttrans), ratio=0.01)
 poly = poly.buffer(0.15)
 # centsred points
 tpls = [shapely.geometry.Point(centsred[i,:]) for i in range(centsred.shape[0])]
