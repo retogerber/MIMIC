@@ -29,9 +29,11 @@ threads = int(snakemake.threads)
 sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(threads)
 
 # stepsize = 30
+# stepsize = 20
 # stepsize = 10
 stepsize = float(snakemake.params["IMS_pixelsize"])
 # pixelsize = 24
+# pixelsize = 16
 # pixelsize = 8 
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
 # resolution = 1
@@ -57,6 +59,7 @@ imzmlfile = snakemake.input["imzml"]
 # imc_mask_file = "/home/retger/Downloads/Lipid_TMA_37819_025_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/Lipid_TMA_37819_009_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_transformed.ome.tiff"
+# imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_transformed.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 
 imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed","")
@@ -71,22 +74,26 @@ postIMS_file = snakemake.input["postIMS_downscaled"]
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_masks_transform.txt"
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_masks_transform.txt"
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_masks_transform.txt"
+# masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_masks_transform.txt"
 masks_transform_filename = snakemake.input["masks_transform"]
 # gridsearch_transform_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_gridsearch_transform.txt"
+# gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_gridsearch_transform.txt"
 gridsearch_transform_filename = snakemake.input["gridsearch_transform"]
 
 # postIMS_ablation_centroids_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_postIMS_ablation_centroids.csv"
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_postIMS_ablation_centroids.csv"
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_postIMS_ablation_centroids.csv"
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_postIMS_ablation_centroids.csv"
+# postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_postIMS_ablation_centroids.csv"
 postIMS_ablation_centroids_filename = snakemake.input["postIMS_ablation_centroids"]
 # metadata_to_save_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_step1_metadata.json"
+# metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_step1_metadata.json"
 metadata_to_save_filename = snakemake.input["metadata"]
 
 
@@ -145,19 +152,58 @@ tmpimzrot = np.array([tmp_transform.TransformPoint(imzcoordsfilttrans[i,:]) for 
 
 
 logging.info("Create polygons")
-IMSpoly = concave_boundary_from_grid(tmpimzrot, direction=2).buffer(0.15, cap_style='square', join_style='mitre')
-
-IMSpoly_small = concave_boundary_from_grid(tmpimzrot, direction=2).buffer(-1.15, cap_style='square', join_style='mitre')
+IMSpoly = concave_boundary_from_grid(tmpimzrot, direction=2).buffer(1.5, cap_style='square', join_style='mitre')
+IMSpoly_small = concave_boundary_from_grid(tmpimzrot, direction=2).buffer(-1.5, cap_style='square', join_style='mitre')
 
 try:
-    tch = concave_boundary_from_grid_holes(centsred)
-    postIMSpoly_outer = tch.buffer(0.15, cap_style='square', join_style='mitre')
-    postIMSpoly_inner = tch.buffer(-0.15, cap_style='square', join_style='mitre')
-    ordered_centsred_border_all = np.array(tch.xy).T[:-1,:]
+    tch1 = concave_boundary_from_grid_holes(centsred)
+    tch1 = shapely.Polygon(np.array(tch1.exterior.coords.xy).T)
+    gc1 = shapely.make_valid(tch1)
+    if type(gc1) is shapely.geometry.collection.GeometryCollection:
+        n = shapely.get_num_geometries(gc1)
+        gs = [shapely.get_geometry(gc1,i) for i in range(n)]
+        ts = [type(gs[i]) is shapely.geometry.polygon.Polygon for i in range(len(gs))]
+        if np.sum(ts)==1:
+            tch11 = gs[np.array(ts).argmax()]
+        else:
+            tch11=tch1
+    elif type(gc1) is shapely.geometry.polygon.Polygon:
+        tch11 = gc1
+    else:
+        tch11 = tch1
+
+    tch2 = concave_boundary_from_grid_holes(centsred,direction=2)
+    tch2 = shapely.Polygon(np.array(tch2.exterior.coords.xy).T)
+    gc2 = shapely.make_valid(tch2)
+    if type(gc2) is shapely.geometry.collection.GeometryCollection:
+        n = shapely.get_num_geometries(gc2)
+        gs = [shapely.get_geometry(gc2,i) for i in range(n)]
+        ts = [type(gs[i]) is shapely.geometry.polygon.Polygon for i in range(len(gs))]
+        if np.sum(ts)==1:
+            tch22 = gs[np.array(ts).argmax()]
+        else:
+            tch22=tch2
+    elif type(gc2) is shapely.geometry.polygon.Polygon:
+        tch22 = gc2
+    else:
+        tch22 = tch2
+
+    tch = shapely.union(tch11,tch22)
+    if not tch.is_valid:
+        tch = tch11
+    # shapely.plotting.plot_polygon(tch)
+    # plt.show()
+
+    postIMSpoly_outer = tch.buffer(0.5, cap_style='square', join_style='mitre')
+    postIMSpoly_inner = tch.buffer(-0.5, cap_style='square', join_style='mitre')
+    if tch.geom_type == "Polygon":
+        ordered_centsred_border_all = np.array(tch.exterior.coords.xy).T[:-1,:]
+    else:
+        ordered_centsred_border_all = np.array(tch.xy).T[:-1,:]
 except Exception as error:
     logging.info(f"Error in concave_boundary_from_grid_holes: {error}")
-    postIMSpoly_outer = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.01).buffer(0.15, cap_style='square', join_style='mitre')
-    postIMSpoly_inner = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.01).buffer(-0.15, cap_style='square', join_style='mitre')
+    postIMSpoly_outer = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.01).buffer(0.5, cap_style='square', join_style='mitre')
+    postIMSpoly_inner = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.01).buffer(-0.5, cap_style='square', join_style='mitre')
     postIMSpoly = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.01)
     ordered_centsred_border_all = np.array(postIMSpoly.exterior.coords.xy).T[:-1,:]
 
@@ -168,8 +214,8 @@ pconts1 = np.array([postIMSpoly_outer.contains(tpls_all[i]) for i in range(len(t
 logging.info(f"pconts1 n nan: {np.unique(np.isnan(pconts1), return_counts=True)}")
 pconts1[np.isnan(pconts1)] = False
 pconts2 = np.array([postIMSpoly_inner.contains(tpls_all[i]) for i in range(len(tpls_all))])
-pconts2[np.isnan(pconts2)] = False
 logging.info(f"pconts2 n nan: {np.unique(np.isnan(pconts2), return_counts=True)}")
+pconts2[np.isnan(pconts2)] = False
 centsred_border_all = centsred[np.logical_and(pconts1,~pconts2)]
 inds_centsred_border_all = np.arange(centsred.shape[0])[np.logical_and(pconts1,~pconts2)]
 tpls = [shapely.geometry.Point(centsred[i,:]) for i in range(centsred.shape[0])]
@@ -182,7 +228,6 @@ pconts3[np.isnan(pconts4)] = False
 centsred_border = centsred[np.logical_and(np.logical_and(pconts1,~pconts2),np.logical_and(pconts3,~pconts4))]
 logging.info(f"number of points at border: {centsred_border.shape[0]}")
 inds_centsred_border = np.arange(centsred.shape[0])[np.logical_and(np.logical_and(pconts1,~pconts2),np.logical_and(pconts3,~pconts4))]
-
 
 logging.info("Match postIMS to IMS points based on angles to neighbors")
 logging.info(f"\t   ID\tmatches\ttested\ttotal")
@@ -239,7 +284,10 @@ for k in range(len(nn_combinations)):
     close_ims = [tmpimzrot[indices_tmp[i,:][is_close[i,:]],:] for i in range(len(tmppoints))]
 
     # imspoly = shapely.concave_hull(shapely.geometry.multipoint(tmpimzrot), ratio=0.001)
-    imspoly = concave_boundary_from_grid(tmpimzrot, direction=2, max_allowed_counter_steps=10000)
+    imspoly = concave_boundary_from_grid(tmpimzrot, direction=2)
+    # shapely.plotting.plot_polygon(imspoly)
+    # shapely.plotting.plot_polygon(tch)
+    # plt.show()
     ordered_imz_border_all = np.array(imspoly.exterior.coords.xy).T[:-1,:]
     kdt = KDTree(ordered_imz_border_all, leaf_size=30, metric='euclidean')
 
@@ -319,8 +367,8 @@ else:
     logging.info(scores[tmpsub,:])
 
     if np.sum(tmpsub)>0:
-        score_comb = 1-scores[tmpsub,2]/360 + scores[tmpsub,1]/refdistmax +   scores[tmpsub,0]/np.max(scores[tmpsub,0])
-        score_comb*=all_maxlens[tmpsub]
+        score_comb = 5*(1-scores[tmpsub,2]/360) + scores[tmpsub,1]/refdistmax +   scores[tmpsub,0]/np.max(scores[tmpsub,0])
+        score_comb*=np.sqrt(all_maxlens[tmpsub])
 
         maxlen_to_use = all_maxlens[np.argmax(score_comb)]
         logging.info(f"Maxlen used: {maxlen_to_use}")
@@ -380,7 +428,7 @@ if points_found:
     # plt.show()
 
     # IMSpoly = shapely.concave_hull(shapely.geometry.MultiPoint(imzcoordsfilttrans), ratio=0.001).buffer(0.15, cap_style='square', join_style='mitre')
-    IMSpoly = concave_boundary_from_grid(imzcoordsfilttrans, direction=2)
+    IMSpoly = concave_boundary_from_grid(imzcoordsfilttrans, direction=2).buffer(0.15)
     shapely.prepare(IMSpoly)
 
     tpls = [shapely.geometry.Point(postIMScoordsout[i,:]) for i in range(postIMScoordsout.shape[0])]

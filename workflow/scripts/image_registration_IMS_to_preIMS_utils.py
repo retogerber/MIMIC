@@ -319,13 +319,36 @@ def indices_sequence_from_ordered_points(ind: int, nn1: int, nn2: int, max_len: 
     return tmpinds
 
 
-def concave_boundary_from_grid(points: np.ndarray, max_dist: float=1.1, max_angle_diff: float=9, direction=1, max_allowed_counter_steps: int=5, centroid = None):
+def concave_boundary_from_grid(points: np.ndarray, max_dist: float=1.1, max_angle_diff: float=9, direction=1, max_allowed_counter_steps: int=5, centroid = None, init_point = None, which_border="right"):
+    """
+    boundary from regular grid points
+    
+    points: 2D numpy array of points
+    max_dist: maximum distance to admit as neighbors
+    max_angle_diff: maximum deviation (in either direction) of angle from theoretical values (0,90,180,270)
+    direction: 1 (anti-clockwise ) or 2 (clockwise)
+    max_allowed_counter_steps: maximum number of steps going in opposite direction before stopping
+    centroid: centroid position of points
+    maxit: maximum number of iterations before stopping
+    init_point: initial point on boundary
+    which_border: location of initial_point
+    """
     if points.shape[0]<5:
         return shapely.LineString(points)
+    
+    # setup initial points
     border_points = np.unique(np.array(shapely.geometry.Polygon(points).convex_hull.exterior.coords.xy).T, axis=0)
-    init_point = border_points[border_points[:,0] == np.max(border_points[:,0]),:]
-    init_point = init_point.flatten()
-    init_point2 = init_point+np.array([1,0])
+    if init_point is None:
+        init_point = border_points[border_points[:,0] == np.max(border_points[:,0]),:]
+        init_point = init_point.flatten()
+    if which_border=="right":
+        init_point2 = init_point+np.array([1,0])
+    elif which_border=="top":
+        init_point2 = init_point+np.array([0,1])
+    elif which_border=="left":
+        init_point2 = init_point+np.array([-1,0])
+    else:
+        init_point2 = init_point+np.array([0,-1])
     kdt = KDTree(points, leaf_size=30, metric='euclidean')
     if centroid is None:
         centroid = np.array(shapely.geometry.Polygon(points).convex_hull.centroid.coords.xy).T[0]
@@ -334,10 +357,15 @@ def concave_boundary_from_grid(points: np.ndarray, max_dist: float=1.1, max_angl
     boundary_points=[init_point_ind]
     possible_angles = np.array([-180,-90,0,90,180])
     while True:
+        # find neighbors
         distances, indices = kdt.query(init_point.reshape(1,-1), k=5, return_distance=True)
         nis = indices[0,1:][distances[0,1:] < max_dist]
+
+        # no neighbors
         if len(nis)==0:
             break
+
+        # filter neighbors by angle
         angles = np.array([get_angle(init_point2,init_point,points[j,:]) for j in nis])
         absangles = np.abs(np.array(angles))
         to_keep_angle = np.logical_or(
@@ -345,8 +373,12 @@ def concave_boundary_from_grid(points: np.ndarray, max_dist: float=1.1, max_angl
                 np.logical_and(absangles > 90-max_angle_diff, absangles < 90+max_angle_diff),
         )
         angles = angles[to_keep_angle]
+
+        # no neighbors with matching angle
         if len(angles)==0:
             break
+
+        # correct angle to theoretical value
         angdiffs = np.array([np.abs(possible_angles-a) for a in angles])
         angdiffsmin = np.min(angdiffs,axis=1)
         angle_codes = np.array([np.where(angdiffs[j,:]==angdiffsmin[j])[0][0] for j in range(len(angdiffsmin))])
@@ -361,22 +393,21 @@ def concave_boundary_from_grid(points: np.ndarray, max_dist: float=1.1, max_angl
 
         next_ind = nis[to_keep_angle][ind1][0]
         angle_to_init_tmp = get_angle(init_point, centroid, points[next_ind,:])
-        # full rotation
-        if next_ind == boundary_points[0]:
-            boundary_points.append(next_ind)
-            # print("b1")
-            break
-        # other
+
+        # if chosen point is alread in list 
         if next_ind in np.array(boundary_points):
 
+            # if total sum is close to 360, means full circle
+            angle_total_sum = np.abs(np.sum(angle_to_init))
             # check if not palindrome, i.e. linear out and back
             tls = boundary_points + [next_ind]
-            if not np.any(np.array([tls[-i:]==tls[-i:][::-1] for i in range(3,len(boundary_points)+2,2)])):
-                # print("b2")
+
+            # not full circle (around centroid), but small loop
+            if not np.any(np.array([tls[-i:]==tls[-i:][::-1] for i in range(3,len(boundary_points)+2,2)])) and angle_total_sum < 350:
                 break 
 
+        # chosen point already in set more than once (e.g. if already once there allowed to add another time)
         if np.sum(np.array(boundary_points) == next_ind)>1:
-            # print("b3")
             break
 
         if len(angle_to_init)>=max_allowed_counter_steps:
@@ -392,25 +423,27 @@ def concave_boundary_from_grid(points: np.ndarray, max_dist: float=1.1, max_angl
             else:
                 max_cons_wrong_angles=0
 
+            # if too many steps in wrong direction
             if max_cons_wrong_angles >= max_allowed_counter_steps:
-                # print("b4")
                 break
-        init_point2=init_point
-        init_point=points[next_ind,:]
+
+        # add points
         angle_to_init.append(angle_to_init_tmp)
         boundary_points.append(next_ind)
-
-   
-    # if boundary_points[0]!=boundary_points[-1] or len(boundary_points)==1:
-    #     boundary_points.append(centroid_ind)
-    #     boundary_points.append(boundary_points[0])
+        # prepare for next iteration
+        init_point2=init_point
+        init_point=points[next_ind,:]
 
     pts = points[np.array(boundary_points),:]
+    # if full circle
     if len(boundary_points)==1:
         return shapely.LineString()
-    if len(boundary_points)<4:
+    elif len(boundary_points)<5:
         return shapely.LineString(pts)
+    elif boundary_points[0]==boundary_points[-1]:
+        return shapely.Polygon(pts)
 
+    # try to remove intersections
     tpts = points[np.array(boundary_points[-2:]),:]
     tpts[1]+=(tpts[0]-tpts[1])*1e-3
     t1=shapely.geometry.LineString(tpts)
@@ -427,7 +460,6 @@ def concave_boundary_from_grid(points: np.ndarray, max_dist: float=1.1, max_angl
         tmpb = boundary_points[:len(boundary_points)-2-i] + boundary_points[-2:]
         pts = points[np.array(tmpb),:]
         if len(tmpb)==4:
-            # print("b5")
             break
         i+=1
         tpts = points[np.array(tmpb[-2:]),:]
@@ -448,105 +480,205 @@ def concave_boundary_from_grid(points: np.ndarray, max_dist: float=1.1, max_angl
         po = shapely.LineString(pts)
     return po
 
-def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, max_angle_diff: float=25, max_allowed_counter_steps: int=5, centroid = np.array([0,0]), maxit: int=1000):
+def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, max_angle_diff: float=25, max_allowed_counter_steps: int=5, centroid = None, maxit: int=1000, direction=1):
+    """
+    boundary from regular grid points with missing points
+
+    points: 2D numpy array of points
+    max_dist: maximum distance to admit as neighbors
+    max_angle_diff: maximum deviation (in either direction) of angle from theoretical values (0,90,180,270)
+    max_allowed_counter_steps: maximum number of steps going in opposite direction before stopping
+    centroid: centroid position of points
+    maxit: maximum number of iterations before stopping
+    direction: 1 (anti-clockwise ) or 2 (clockwise)
+    """
+
     polyout = shapely.LineString()
     all_points = points.copy()
-    centroid = np.array(shapely.geometry.Polygon(points).convex_hull.centroid.coords.xy).T[0]
+    if centroid is None:
+        centroid = np.array(shapely.geometry.Polygon(points).convex_hull.centroid.coords.xy).T[0]
+    # filter points to contain only points at boundary (for speedup)
     pinit = shapely.Polygon(points).convex_hull
-    pinit1 = pinit.buffer(1)
-    pinit2 = pinit.buffer(-5)
+    pinit1 = pinit.buffer(max_dist)
+    pinit2 = pinit.buffer(-10*max_dist)
     tpls_all = [shapely.geometry.Point(points[i,:]) for i in range(points.shape[0])]
     pconts1 = np.array([pinit1.contains_properly(tpls_all[i]) for i in range(len(tpls_all))])
     pconts2 = np.array([pinit2.contains_properly(tpls_all[i]) for i in range(len(tpls_all))])
     points = points[np.logical_and(pconts1,~pconts2)]
 
-    n_points_ls = [points.shape[0]]
+    # set initial starting point (right border)
+    border_points = np.unique(np.array(shapely.geometry.Polygon(points).convex_hull.exterior.coords.xy).T, axis=0)
+    tmpb = border_points[border_points[:,0] > (np.max(border_points[:,0])-1),:]
+    global_init_point = tmpb[tmpb[:,1]==np.min(tmpb[:,1])][0]
+
+    # iterate
     iter = 0
-    print("n_points:")
     while points.shape[0]>1 and iter<maxit:
         iter+=1
-        p1 = concave_boundary_from_grid(points,max_dist=max_dist, max_angle_diff=max_angle_diff, max_allowed_counter_steps=max_allowed_counter_steps, centroid=centroid)
-        p2 = concave_boundary_from_grid(points,max_dist=max_dist, max_angle_diff=max_angle_diff,direction=2,max_allowed_counter_steps=max_allowed_counter_steps, centroid=centroid)
-        print(f"{iter}: p1 empty? {p1.is_empty}, p2 empty? {p2.is_empty}")
-        if p1.is_empty and p2.is_empty:
-            border_points = np.unique(np.array(shapely.geometry.Polygon(points).convex_hull.exterior.coords.xy).T, axis=0)
-            init_point = border_points[border_points[:,0] == np.max(border_points[:,0]),:]
-            init_point = init_point.flatten()
+        # get new initial point, closest (angle wise) to global initial point
+        tmppoints = np.concatenate([points,centroid.reshape(1,-1)])
+        border_points = np.unique(np.array(shapely.geometry.Polygon(tmppoints).convex_hull.exterior.coords.xy).T, axis=0)
+        wcent = np.sum(border_points == centroid,axis=1).argmax()
+        border_points = np.delete(border_points,wcent,axis=0)
+        angles_points = np.array([get_angle(global_init_point, centroid, border_points[i,:]) for i in range(border_points.shape[0])])
+        if direction==1:
+            angles_points=angles_points%360
+        else:
+            angles_points=-angles_points%360
+        angles_points[angles_points==360]=0
+        init_point = border_points[angles_points == np.min(angles_points),:][0]
+        init_point_angle = angles_points[angles_points == np.min(angles_points)][0]
+        # get direction of second initial point
+        if init_point_angle<45:
+            which_border="right"
+        elif init_point_angle<135:
+            which_border="top" if direction==1 else "bottom"
+        elif init_point_angle<225:
+            which_border="left"
+        elif init_point_angle<315:
+            which_border="bottom" if direction==1 else "top"
+        else:
+            which_border="right"
+        
+        # find points 
+        p1 = concave_boundary_from_grid(
+            points,
+            max_dist=max_dist, 
+            max_angle_diff=max_angle_diff,
+            max_allowed_counter_steps=max_allowed_counter_steps,
+            centroid=centroid,
+            init_point=init_point,
+            which_border=which_border, 
+            direction=direction)
+
+        # shapely.plotting.plot_line(p1)
+        # plt.scatter(points[:,0],points[:,1],alpha=0.1)
+        # plt.scatter(border_points[:,0],border_points[:,1])
+        # plt.scatter(init_point[0],init_point[1], c="red")
+        # plt.scatter(global_init_point[0],global_init_point[1], c="blue")
+        # plt.show()
+
+        # if no neighboring points to initial point are found, remove inital point
+        if p1.is_empty:
             kdt = KDTree(points, leaf_size=30, metric='euclidean')
             init_point_ind = kdt.query(init_point.reshape(1,-1), k=1, return_distance=False)[0][0]
             points = np.delete(points, init_point_ind, axis=0)
-            n_points_ls.append(points.shape[0])
         else: 
             if p1.geom_type == "Polygon":
-                c1 = p1.exterior.coords.xy
+                lcoords = np.array(p1.exterior.coords.xy).T
             else: 
-                c1 = p1.xy
-            if p2.geom_type == "Polygon":
-                c2 = p2.exterior.coords.xy
-            else: 
-                c2 = p2.xy
+                lcoords = np.array(p1.xy).T
 
-            if len(c1[0]) > len(c2[0]):
-                lcoords=np.array(c1).T
-            else:
-                lcoords=np.array(c2).T
-            print(f"{iter}: n_found: {lcoords.shape[0]}")
-
+            # first iteration create object
             if polyout.is_empty:
                 polyout = shapely.LineString(lcoords)
                 newcoords=lcoords
             else:
+                # add new points to existing points
                 refcoords = np.array(polyout.xy).T
-                kdt = KDTree(refcoords, leaf_size=30, metric='euclidean')
-                distances, indices = kdt.query(lcoords[[0,-1],:], k=1, return_distance=True)
-                nearind = np.array([0,-1])[(distances==np.min(distances)).reshape(1,-1)[0]][0]
-                refind = indices[(distances==np.min(distances)).reshape(1,-1)[0]][0][0]
-                # print(f"nearind: {nearind}, refind: {refind}")
-                if nearind == -1:
-                    if refind < refcoords.shape[0]/2:
-                        newcoords = np.concatenate([lcoords,refcoords])
-                    else: 
-                        newcoords = np.concatenate([refcoords,lcoords[::-1]])
+                angles_points = np.array([get_angle(global_init_point, centroid, refcoords[i,:]) for i in range(refcoords.shape[0])])
+                if direction==1:
+                    angles_points=angles_points%360
                 else:
-                    if refind < refcoords.shape[0]/2:
-                        newcoords = np.concatenate([lcoords[::-1],refcoords])
-                    else:
-                        newcoords = np.concatenate([refcoords,lcoords])
-                polyout = shapely.LineString(newcoords)
-                # shapely.plotting.plot_line(polyout)
+                    angles_points=-angles_points%360
+                angles_ind = angles_points > np.quantile(angles_points,0.55)
+                tmprefcoords = refcoords[angles_ind,]
+                angles_ls = []
+                for i in range(tmprefcoords.shape[0]): 
+                    for j in range(lcoords.shape[0]):
+                        tmpang = get_angle(tmprefcoords[i,:], centroid, lcoords[j,:])
+                        tmpang = tmpang%360 if direction==1 else -tmpang%360
+                        angles_ls.append([tmpang,i,j])
+                angles_mat=np.array(angles_ls)
+                indm = angles_mat[:,0].argmin()
+                i = int(angles_mat[indm,1])
+                j = int(angles_mat[indm,2])
+                i = np.arange(refcoords.shape[0])[angles_ind][i]
+                # refcoords[i,:]
+                # lcoords[j,:]
+                # get_angle(refcoords[i,:], centroid, lcoords[j,:])
+                
+                newcoords = np.concatenate([refcoords,refcoords[i:,:][::-1],lcoords[:(j+1),:][::-1],lcoords])
+                # tmppolyout = shapely.LineString(newcoords)
+                # shapely.plotting.plot_line(tmppolyout)
                 # plt.show()
+                polyout = shapely.LineString(newcoords)
 
-            tr = 20 if len(newcoords)>=40 else len(newcoords)
+
+            # filter points
+            # find points spanning maximum angle
+            tr = int(newcoords.shape[0]/4-5) if len(newcoords)>=40 else int(len(newcoords))
             tmpc1 = newcoords[:tr,:]
             tmpc2 = newcoords[-tr:,:][::-1]
-            angles = np.array([get_angle(tmpc1[i,:], centroid, tmpc2[j,:]) for i in range(tr) for j in range(tr)])
-            if tmpc1[0,1] > tmpc2[0,1]:
-                angles = angles%360
-            else:
-                angles = angles+180
-            indm = angles.argmax()
-            j=int(indm%tr)
-            i=int(indm//tr)
+
+            angles_ls = []
+            for i in range(tmpc1.shape[0]): 
+                for j in range(tmpc2.shape[0]):
+                    tmpang = get_angle(tmpc1[i,:], centroid, tmpc2[j,:])
+                    tmpang = tmpang%360 if direction==1 else -tmpang%360
+                    angles_ls.append([tmpang,i,j])
+            angles_mat=np.array(angles_ls)
+            if tr==newcoords.shape[0]:
+                angles_mat[angles_mat[:,0]>180,0]=0
+            indm = angles_mat[:,0].argmax()
+            i = int(angles_mat[indm,1])
+            j = int(angles_mat[indm,2])
             if j == 0:
                 newcoords_filt = newcoords[i:,:]
             else:
-                newcoords_filt = newcoords[i:-j,:]
+                newcoords_filt = newcoords[i:(-j),:]
 
-            po = shapely.Polygon(np.concatenate([newcoords_filt,centroid.reshape(1,-1)]))
+            # create new polygon
+            tmp = np.concatenate([newcoords_filt,centroid.reshape(1,-1),newcoords_filt[0,:].reshape(1,-1)])
+            # scale out
+            tmp2 = tmp+0.5*(tmp-centroid)
+            po = shapely.Polygon(tmp2).buffer(0.2)
+
+            # shapely.plotting.plot_line(polyout)
             # shapely.plotting.plot_polygon(po)
+            # plt.scatter(points[:,0],points[:,1],alpha=0.1)
+            # plt.scatter(newcoords_filt[0,0],newcoords_filt[0,1],c="red",alpha=0.5)
+            # plt.scatter(newcoords_filt[-1,0],newcoords_filt[-1,1],c="blue",alpha=0.5)
             # plt.show()
-            bsize = np.sum(np.array(n_points_ls)==n_points_ls[-1])*0.2
-            print(f"{iter}: buffer size: {bsize}")
-            pot = po.buffer(bsize, cap_style='square', join_style='bevel')
+
+            # filter points
             tpls_all = [shapely.geometry.Point(points[i,:]) for i in range(points.shape[0])]
-            pconts1 = np.array([pot.contains(tpls_all[i]) for i in range(len(tpls_all))])
+            pconts1 = np.array([po.contains(tpls_all[i]) for i in range(len(tpls_all))])
             points = points[~pconts1]
-            n_points_ls.append(points.shape[0])
 
         print(f"{iter}: n_points: {points.shape[0]:5}")
-    print("")
+    
     if iter >= maxit:
-        print(f"Maximum number of iterations ({maxit}) achieved, return concave hull") 
+        # return alpha hull
         polyout = shapely.concave_hull(shapely.geometry.MultiPoint(all_points), ratio=0.01)
+    
+    refcoords = np.array(polyout.xy).T
+    # if last point in list is not first point
+    if (refcoords[0,0]!=refcoords[-1,0]) and (refcoords[0,1]!=refcoords[-1,1]):
+        # combine points
+        ref_ind1 = np.arange(refcoords.shape[0]) > refcoords.shape[0]*0.9
+        tmprefcoords1 = refcoords[ref_ind1,:]
+        ref_ind2 = np.arange(refcoords.shape[0]) < refcoords.shape[0]*0.1
+        tmprefcoords2 = refcoords[ref_ind2,:]
+
+        # find points from start and end with minimal angle
+        angles_ls = []
+        for i in range(tmprefcoords1.shape[0]): 
+            for j in range(tmprefcoords2.shape[0]):
+                tmpang = get_angle(tmprefcoords1[i,:], centroid, tmprefcoords2[j,:])
+                tmpang = tmpang%360 if direction==1 else -tmpang%360
+                angles_ls.append([tmpang,i,j])
+        angles_mat=np.array(angles_ls)
+        indm = angles_mat[:,0].argmin()
+        i = int(angles_mat[indm,1])
+        i = np.arange(refcoords.shape[0])[ref_ind1][i]
+        j = int(angles_mat[indm,2])
+        j = np.arange(refcoords.shape[0])[ref_ind2][j]
+
+
+        # reshuffle points
+        newcoords = np.concatenate([refcoords[:(j+1),:][::-1],refcoords,refcoords[i:,::][::-1],])
+        polyout = shapely.Polygon(newcoords)
+
     return polyout
 
