@@ -661,6 +661,17 @@ def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, ma
         ref_ind2 = np.arange(refcoords.shape[0]) < refcoords.shape[0]*0.1
         tmprefcoords2 = refcoords[ref_ind2,:]
 
+        # filter by distance 
+        kdt = KDTree(tmprefcoords1, leaf_size=30, metric='euclidean')
+        distances, indices = kdt.query(tmprefcoords2, k=1)
+        indices_filt = indices[distances==np.min(distances)]
+
+        ref_ind11 = np.array([k in indices_filt for k in np.arange(len(tmprefcoords1))])
+        ref_ind22 = np.array([k in indices_filt for k in indices])
+
+        tmprefcoords1=tmprefcoords1[ref_ind11]
+        tmprefcoords2=tmprefcoords2[ref_ind22]
+
         # find points from start and end with minimal angle
         angles_ls = []
         for i in range(tmprefcoords1.shape[0]): 
@@ -671,14 +682,16 @@ def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, ma
         angles_mat=np.array(angles_ls)
         indm = angles_mat[:,0].argmin()
         i = int(angles_mat[indm,1])
-        i = np.arange(refcoords.shape[0])[ref_ind1][i]
+        i = np.arange(refcoords.shape[0])[ref_ind1][ref_ind11][i]
         j = int(angles_mat[indm,2])
-        j = np.arange(refcoords.shape[0])[ref_ind2][j]
-
+        j = np.arange(refcoords.shape[0])[ref_ind2][ref_ind22][j]
 
         # reshuffle points
         newcoords = np.concatenate([refcoords[:(j+1),:][::-1],refcoords,refcoords[i:,::][::-1],])
         polyout = shapely.Polygon(newcoords)
+    else:
+        polyout = shapely.Polygon(refcoords)
+
 
     return polyout
 

@@ -60,6 +60,7 @@ imzmlfile = snakemake.input["imzml"]
 # imc_mask_file = "/home/retger/Downloads/Lipid_TMA_37819_009_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_transformed.ome.tiff"
+# imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_024_transformed.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 
 imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed","")
@@ -75,12 +76,14 @@ postIMS_file = snakemake.input["postIMS_downscaled"]
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_masks_transform.txt"
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_masks_transform.txt"
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_masks_transform.txt"
+# masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_024_masks_transform.txt"
 masks_transform_filename = snakemake.input["masks_transform"]
 # gridsearch_transform_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_gridsearch_transform.txt"
+# gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_024_gridsearch_transform.txt"
 gridsearch_transform_filename = snakemake.input["gridsearch_transform"]
 
 # postIMS_ablation_centroids_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_postIMS_ablation_centroids.csv"
@@ -88,12 +91,14 @@ gridsearch_transform_filename = snakemake.input["gridsearch_transform"]
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_postIMS_ablation_centroids.csv"
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_postIMS_ablation_centroids.csv"
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_postIMS_ablation_centroids.csv"
+# postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_024_postIMS_ablation_centroids.csv"
 postIMS_ablation_centroids_filename = snakemake.input["postIMS_ablation_centroids"]
 # metadata_to_save_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_step1_metadata.json"
+# metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_024_step1_metadata.json"
 metadata_to_save_filename = snakemake.input["metadata"]
 
 
@@ -152,8 +157,15 @@ tmpimzrot = np.array([tmp_transform.TransformPoint(imzcoordsfilttrans[i,:]) for 
 
 
 logging.info("Create polygons")
-IMSpoly = concave_boundary_from_grid(tmpimzrot, direction=2).buffer(1.5, cap_style='square', join_style='mitre')
-IMSpoly_small = concave_boundary_from_grid(tmpimzrot, direction=2).buffer(-1.5, cap_style='square', join_style='mitre')
+tmpIMSpoly = concave_boundary_from_grid(tmpimzrot, direction=2)
+if tmpIMSpoly.geom_type == "LineString":
+    tmpIMSpoly = shapely.Polygon(tmpIMSpoly)
+IMSpoly = tmpIMSpoly.buffer(1.5, cap_style='square', join_style='mitre')
+IMSpoly_small = tmpIMSpoly.buffer(-1.5, cap_style='square', join_style='mitre')
+if tmpIMSpoly.geom_type == "Polygon":
+    ordered_imz_border_all = np.array(tmpIMSpoly.exterior.coords.xy).T[:-1,:]
+else:
+    ordered_imz_border_all = np.array(tmpIMSpoly.xy).T
 
 try:
     tch1 = concave_boundary_from_grid_holes(centsred)
@@ -207,6 +219,9 @@ except Exception as error:
     postIMSpoly = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.01)
     ordered_centsred_border_all = np.array(postIMSpoly.exterior.coords.xy).T[:-1,:]
 
+kdt_ordered_imz_border_all = KDTree(ordered_imz_border_all, leaf_size=30, metric='euclidean')
+kdt_tmpimzrot = KDTree(tmpimzrot, leaf_size=30, metric='euclidean')
+
 logging.info(f"shape boundary points: {ordered_centsred_border_all.shape}")
 logging.info("Filter points at boundary of polygon")
 tpls_all = [shapely.geometry.Point(centsred[i,:]) for i in range(centsred.shape[0])]
@@ -235,7 +250,7 @@ kdt = KDTree(ordered_centsred_border_all, leaf_size=30, metric='euclidean')
 distances, indices = kdt.query(centsred_border, k=1, return_distance=True)
 nn1s=[0,1,2,3,4,5,6,7,8,9,10]
 nn2s=[0,1,2,3,4,5,6,7,8,9,10]
-min_n=5
+min_n=6
 max_n=14
 max_dist_diff=0.2
 max_angle_diff=15
@@ -278,25 +293,17 @@ for k in range(len(nn_combinations)):
 
     # find neighboring ims pixels
     tmppoints = ordered_centsred_border_all[indices.flatten()[np.array(ind_to_keep)],:]
-    kdt = KDTree(tmpimzrot, leaf_size=30, metric='euclidean')
-    distances, indices_tmp = kdt.query(tmppoints, k=9, return_distance=True)
+    distances, indices_tmp = kdt_tmpimzrot.query(tmppoints, k=9, return_distance=True)
     is_close = distances<1.75
     close_ims = [tmpimzrot[indices_tmp[i,:][is_close[i,:]],:] for i in range(len(tmppoints))]
 
-    # imspoly = shapely.concave_hull(shapely.geometry.multipoint(tmpimzrot), ratio=0.001)
-    imspoly = concave_boundary_from_grid(tmpimzrot, direction=2)
-    # shapely.plotting.plot_polygon(imspoly)
-    # shapely.plotting.plot_polygon(tch)
-    # plt.show()
-    ordered_imz_border_all = np.array(imspoly.exterior.coords.xy).T[:-1,:]
-    kdt = KDTree(ordered_imz_border_all, leaf_size=30, metric='euclidean')
 
     # create codes for neighboring ims pixels
     ims_codes = []
     for j in range(len(close_ims)):
         ims_codes.append([])
         for i in range(len(close_ims[j])):
-            tmpind = kdt.query(close_ims[j][i,:].reshape(1,-1), k=1, return_distance=False)[0][0]
+            tmpind = kdt_ordered_imz_border_all.query(close_ims[j][i,:].reshape(1,-1), k=1, return_distance=False)[0][0]
             tmpinds = indices_sequence_from_ordered_points(tmpind,nn1,nn2,len(ordered_imz_border_all))
             tmp = ordered_imz_border_all[tmpinds,:]
             ims_codes[j].append(angle_code_from_point_sequence(tmp))
@@ -367,8 +374,7 @@ else:
     logging.info(scores[tmpsub,:])
 
     if np.sum(tmpsub)>0:
-        score_comb = 5*(1-scores[tmpsub,2]/360) + scores[tmpsub,1]/refdistmax +   scores[tmpsub,0]/np.max(scores[tmpsub,0])
-        score_comb*=np.sqrt(all_maxlens[tmpsub])
+        score_comb = (1-scores[tmpsub,2]/360)*np.sqrt(all_maxlens[tmpsub])
 
         maxlen_to_use = all_maxlens[np.argmax(score_comb)]
         logging.info(f"Maxlen used: {maxlen_to_use}")
@@ -428,7 +434,10 @@ if points_found:
     # plt.show()
 
     # IMSpoly = shapely.concave_hull(shapely.geometry.MultiPoint(imzcoordsfilttrans), ratio=0.001).buffer(0.15, cap_style='square', join_style='mitre')
-    IMSpoly = concave_boundary_from_grid(imzcoordsfilttrans, direction=2).buffer(0.15)
+    tmpIMSpoly = concave_boundary_from_grid(imzcoordsfilttrans, direction=2)
+    if tmpIMSpoly.geom_type == "LineString":
+        tmpIMSpoly = shapely.Polygon(tmpIMSpoly)
+    IMSpoly = tmpIMSpoly.buffer(0.15)
     shapely.prepare(IMSpoly)
 
     tpls = [shapely.geometry.Point(postIMScoordsout[i,:]) for i in range(postIMScoordsout.shape[0])]
