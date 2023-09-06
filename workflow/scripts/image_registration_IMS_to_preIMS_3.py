@@ -60,7 +60,7 @@ imzmlfile = snakemake.input["imzml"]
 # imc_mask_file = "/home/retger/Downloads/Lipid_TMA_37819_009_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_transformed.ome.tiff"
-# imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_024_transformed.ome.tiff"
+# imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_041_transformed.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 
 imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed","")
@@ -76,14 +76,14 @@ postIMS_file = snakemake.input["postIMS_downscaled"]
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_masks_transform.txt"
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_masks_transform.txt"
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_masks_transform.txt"
-# masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_024_masks_transform.txt"
+# masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_041_masks_transform.txt"
 masks_transform_filename = snakemake.input["masks_transform"]
 # gridsearch_transform_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_gridsearch_transform.txt"
-# gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_024_gridsearch_transform.txt"
+# gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_041_gridsearch_transform.txt"
 gridsearch_transform_filename = snakemake.input["gridsearch_transform"]
 
 # postIMS_ablation_centroids_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_postIMS_ablation_centroids.csv"
@@ -91,14 +91,14 @@ gridsearch_transform_filename = snakemake.input["gridsearch_transform"]
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_postIMS_ablation_centroids.csv"
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_postIMS_ablation_centroids.csv"
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_postIMS_ablation_centroids.csv"
-# postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_024_postIMS_ablation_centroids.csv"
+# postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_041_postIMS_ablation_centroids.csv"
 postIMS_ablation_centroids_filename = snakemake.input["postIMS_ablation_centroids"]
 # metadata_to_save_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_step1_metadata.json"
-# metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_024_step1_metadata.json"
+# metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_041_step1_metadata.json"
 metadata_to_save_filename = snakemake.input["metadata"]
 
 
@@ -157,7 +157,7 @@ tmpimzrot = np.array([tmp_transform.TransformPoint(imzcoordsfilttrans[i,:]) for 
 
 
 logging.info("Create polygons")
-tmpIMSpoly = concave_boundary_from_grid(tmpimzrot, direction=2)
+tmpIMSpoly = concave_boundary_from_grid_holes(tmpimzrot, direction=2)
 if tmpIMSpoly.geom_type == "LineString":
     tmpIMSpoly = shapely.Polygon(tmpIMSpoly)
 IMSpoly = tmpIMSpoly.buffer(1.5, cap_style='square', join_style='mitre')
@@ -434,14 +434,21 @@ if points_found:
     # plt.show()
 
     # IMSpoly = shapely.concave_hull(shapely.geometry.MultiPoint(imzcoordsfilttrans), ratio=0.001).buffer(0.15, cap_style='square', join_style='mitre')
-    tmpIMSpoly = concave_boundary_from_grid(imzcoordsfilttrans, direction=2)
-    if tmpIMSpoly.geom_type == "LineString":
-        tmpIMSpoly = shapely.Polygon(tmpIMSpoly)
-    IMSpoly = tmpIMSpoly.buffer(0.15)
-    shapely.prepare(IMSpoly)
+    tpts = np.array(tmpIMSpoly.exterior.coords.xy).T
+    imzcoordsfilttranstrans = np.array([tmp_transform_inverse.TransformPoint(tpts[i,:]) for i in range(tpts.shape[0])])
+    tmpIMSpolytrans = shapely.Polygon(imzcoordsfilttranstrans)
+    # plt.scatter(imzcoordsfilttrans[:,0], imzcoordsfilttrans[:,1],color="blue",alpha=0.5)
+    # plt.scatter(imzcoordsfilttranstrans[:,0], imzcoordsfilttranstrans[:,1],color="red",alpha=0.5)
+    # shapely.plotting.plot_polygon(tmpIMSpolytrans)
+    # plt.show()
+
+    IMSpolytrans = tmpIMSpolytrans.buffer(0.15)
+    shapely.prepare(IMSpolytrans)
+    # shapely.plotting.plot_polygon(IMSpolytrans)
+    # plt.show()
 
     tpls = [shapely.geometry.Point(postIMScoordsout[i,:]) for i in range(postIMScoordsout.shape[0])]
-    pconts = np.array([IMSpoly.contains(tpls[i]) for i in range(len(tpls))])
+    pconts = np.array([IMSpolytrans.contains(tpls[i]) for i in range(len(tpls))])
     if np.sum(pconts)/len(pconts) < 0.98:
         logging.info(f"only {np.sum(pconts):6}/{len(pconts):6} points ({np.sum(pconts)/len(pconts):1.4}) lie inside of IMS polygon: Registration is not used!") 
         R_reg = np.array([[1.0,0.0],[0.0,1.0]])
