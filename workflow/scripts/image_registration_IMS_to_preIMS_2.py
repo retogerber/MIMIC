@@ -7,7 +7,7 @@ import skimage
 import numpy as np
 import json
 import matplotlib.pyplot as plt
-from image_registration_IMS_to_preIMS_utils import readimage_crop, prepare_image_for_sam, create_ring_mask, composite2affine, saveimage_tile, normalize_image, get_image_shape, create_imz_coords,get_rotmat_from_angle, concave_boundary_from_grid
+from image_registration_IMS_to_preIMS_utils import readimage_crop, prepare_image_for_sam, create_ring_mask, composite2affine, saveimage_tile, normalize_image, get_image_shape, create_imz_coords,get_rotmat_from_angle, concave_boundary_from_grid, concave_boundary_from_grid_holes
 from sklearn.neighbors import KDTree
 from scipy.sparse import lil_array
 from scipy.sparse.csgraph import connected_components
@@ -906,11 +906,15 @@ logging.info("Grid search for fine transformation")
 #     poly = shapely.geometry.MultiPoint(imzcoordsfilttrans).convex_hull
 
 try:
-    poly = concave_boundary_from_grid(imzcoordsfilttrans)
-except:
-    logging.info("concave_boundary_from_grid failed! using alpha hull")
+    poly = concave_boundary_from_grid_holes(imzcoordsfilttrans, direction=2)
+    if poly.geom_type == "LineString":
+        poly = shapely.Polygon(poly)
+except Exception as error:
+    logging.info(f"concave_boundary_from_grid failed! using alpha hull: {error}")
+    logging.info(f"Using alpha hull")
     poly = shapely.concave_hull(shapely.geometry.MultiPoint(imzcoordsfilttrans), ratio=0.01)
 poly = poly.buffer(0.15)
+logging.info(f"area of polygon: {poly.area/(1000**2):6.5}mm")
 # centsred points
 tpls = [shapely.geometry.Point(centsred[i,:]) for i in range(centsred.shape[0])]
 # only keep points close to the border

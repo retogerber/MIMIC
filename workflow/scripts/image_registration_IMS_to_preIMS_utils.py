@@ -273,7 +273,7 @@ def image_from_points(shape, points: np.ndarray, sigma: float=1.0, half_pixel_si
         xr = int(points[i,0])
         if xr<0:
             xr=0
-        if (xr)>img.shape[0]:
+        if (xr)>=img.shape[0]:
             xr=img.shape[0]-1
         yr = int(points[i,1])
         if yr<0:
