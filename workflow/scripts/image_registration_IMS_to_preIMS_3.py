@@ -68,6 +68,7 @@ imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[
 imc_project = os.path.split(os.path.split(os.path.split(os.path.split(imc_mask_file)[0])[0])[0])[1]
 project_name = "postIMS_to_IMS_"+imc_project+"-"+imc_samplename
 
+# postIMS_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS.ome.tiff"
 # postIMS_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA_postIMS.ome.tiff"
 postIMS_file = snakemake.input["postIMS_downscaled"]
 
@@ -246,8 +247,10 @@ inds_centsred_border = np.arange(centsred.shape[0])[np.logical_and(np.logical_an
 
 logging.info("Match postIMS to IMS points based on angles to neighbors")
 logging.info(f"\t   ID\tmatches\ttested\ttotal")
-kdt = KDTree(ordered_centsred_border_all, leaf_size=30, metric='euclidean')
-distances, indices = kdt.query(centsred_border, k=1, return_distance=True)
+kdt_centsred_border = KDTree(centsred_border, leaf_size=30, metric='euclidean')
+kdt_ordered_centsred_border_all = KDTree(ordered_centsred_border_all, leaf_size=30, metric='euclidean')
+distances, all_indices = kdt_ordered_centsred_border_all.query(centsred_border, k=1, return_distance=True)
+indices = all_indices[distances==0].flatten()
 nn1s=[0,1,2,3,4,5,6,7,8,9,10]
 nn2s=[0,1,2,3,4,5,6,7,8,9,10]
 min_n=6
@@ -264,8 +267,8 @@ for k in range(len(nn_combinations)):
     nn2 = nn_combinations[k][1]
     ind_to_keep = []
     # for all points, test if have sufficient neighbors to create code
-    for i in range(len(indices.flatten())):
-        tmpind = indices.flatten()[i]
+    for i in range(len(indices)):
+        tmpind = indices[i]
         tmpinds = indices_sequence_from_ordered_points(tmpind,nn1,nn2,len(ordered_centsred_border_all))
         tmp = ordered_centsred_border_all[tmpinds,:]
         if tmp.shape[0]==(nn1+nn2+1):
@@ -281,22 +284,32 @@ for k in range(len(nn_combinations)):
             if np.all(to_keep):
                 ind_to_keep.append(i)
     if len(ind_to_keep) == 0:
-        logging.info(f"\t{nn1:02}_{nn2:02}\t{0:6}\t{0:6}\t{len(indices.flatten()):6}")
+        logging.info(f"\t{nn1:02}_{nn2:02}\t{0:6}\t{0:6}\t{len(indices):6}")
         continue
     codes = []
     # create codes
     for i in ind_to_keep:
-        tmpind = indices.flatten()[i]
+        tmpind = indices[i]
         tmpinds = indices_sequence_from_ordered_points(tmpind,nn1,nn2,len(ordered_centsred_border_all))
         tmp = ordered_centsred_border_all[tmpinds,:]
         codes.append(angle_code_from_point_sequence(tmp))
 
     # find neighboring ims pixels
-    tmppoints = ordered_centsred_border_all[indices.flatten()[np.array(ind_to_keep)],:]
-    distances, indices_tmp = kdt_tmpimzrot.query(tmppoints, k=9, return_distance=True)
-    is_close = distances<1.75
-    close_ims = [tmpimzrot[indices_tmp[i,:][is_close[i,:]],:] for i in range(len(tmppoints))]
+    tmppoints = ordered_centsred_border_all[indices[np.array(ind_to_keep)],:]
+    tmp_distances, indices_tmp = kdt_tmpimzrot.query(tmppoints, k=9, return_distance=True)
+    indices_tmp_ls = list(indices_tmp)
+    distances_ls = list(tmp_distances)
+    # filter by distance
+    indices_tmp_ls = [indices_tmp_ls[i][distances_ls[i]<1.75] for i in range(len(indices_tmp_ls))]
+    # filter by matching border point
+    indices_tmp_ls = [indices_tmp_ls[i][(kdt_ordered_imz_border_all.query(tmpimzrot[indices_tmp_ls[i]], k=1, return_distance=True)[0]==0).flatten()] for i in range(len(indices_tmp_ls))]
 
+    inds_to_keep = np.arange(len(indices_tmp_ls))[np.array([len(p) for p in indices_tmp_ls])>0]
+    indices_tmp_ls = [indices_tmp_ls[p] for p in inds_to_keep]
+    codes = np.array(codes)[inds_to_keep]
+    ind_to_keep = np.array(ind_to_keep)[inds_to_keep]
+
+    close_ims = [tmpimzrot[indices_tmp_ls[i]] for i in range(len(indices_tmp_ls))]
 
     # create codes for neighboring ims pixels
     ims_codes = []
@@ -310,13 +323,23 @@ for k in range(len(nn_combinations)):
 
     # compare matchings
     matches = [np.where(np.array(ims_codes[i]) == codes[i])[0] for i in range(len(codes))]
+
     n_matches = np.array([len(p) for p in matches])
     close_ims_inds = np.arange(len(close_ims))[n_matches==1]
 
-    logging.info(f"\t{nn1:02}_{nn2:02}\t{np.sum(n_matches==1):6}\t{len(ind_to_keep):6}\t{len(indices.flatten()):6}")
-    print(f"\t{nn1:02}_{nn2:02}\t{np.sum(n_matches==1):6}\t{len(ind_to_keep):6}\t{len(indices.flatten()):6}")
+    logging.info(f"\t{nn1:02}_{nn2:02}\t{np.sum(n_matches==1):6}\t{len(ind_to_keep):6}\t{len(indices):6}")
+    print(f"\t{nn1:02}_{nn2:02}\t{np.sum(n_matches==1):6}\t{len(ind_to_keep):6}\t{len(indices):6}")
+
+    # create matching points
+    ind_to_keep_filt = np.array(ind_to_keep)[np.array(n_matches)==1]
+    tmppoints_filt = ordered_centsred_border_all[indices[np.array(ind_to_keep_filt)],:]
+    ind_to_keep_filt_trans = kdt_centsred_border.query(tmppoints_filt,k=1)[1].flatten()
+    tptsinds = [indices_tmp_ls[i] for i in close_ims_inds]
+    matches_filt = np.array([matches[i] for i in np.arange(len(matches))[np.array(n_matches)==1]]).flatten()
+    tptsinds_filt = np.array([tptsinds[i][matches_filt[i]] for i in range(len(matches_filt))])
+
     # save
-    results_matching_array[np.array(ind_to_keep)[np.array(n_matches)==1],np.array(nn1s)==nn1,np.array(nn2s)==nn2] = np.array([indices_tmp[i,:][matches[i][0]] for i in close_ims_inds])
+    results_matching_array[ind_to_keep_filt_trans,np.array(nn1s)==nn1,np.array(nn2s)==nn2] = tptsinds_filt
 
 # find all points with at least 1 match
 matches = np.sum(~np.isnan(results_matching_array),axis=(1,2))>0
@@ -333,7 +356,6 @@ logging.info(f"Number of matches: {np.sum(matches_filt)}")
 combslens = np.outer(np.ones(len(nn1s)),np.array(nn1s)) + np.outer(np.array(nn2s),np.ones(len(nn2s)))
 maxlens = np.array([np.max(combslens[~np.isnan(results_matching_array[matches_filt,:,:][i,:,:])]) for i in range(np.sum(matches_filt))])
 
-
 # compute maximum possible distance of points in IMS
 from scipy.spatial.distance import cdist
 tmppts = np.array(IMSpoly.exterior.coords.xy).T
@@ -342,6 +364,17 @@ refdistmax = hdist.max()
 centroid = np.mean(tmppts,axis=0)
 
 all_maxlens = np.unique(maxlens)
+if np.sum(n_diff>1):
+    has_ambiguous = []
+    for i in range(np.sum(n_diff>1)):
+        tmpind = results_matching_array[n_diff>1,:,:][i,:,:]
+        tmpuqs = np.unique(tmpind[~np.isnan(tmpind)])
+        has_ambiguous.append(np.min(np.array([np.max(combslens[tmpind == tmpuqs[j]]) for j in range(len(tmpuqs))])))
+    maxlen_ambiguous = np.max(np.array(has_ambiguous))
+    all_maxlens = all_maxlens[all_maxlens>maxlen_ambiguous]
+
+
+
 logging.info(f"Unique length of matching codes: {all_maxlens}")
 points_found = True
 if len(all_maxlens)==0:
@@ -352,8 +385,7 @@ else:
     for i in range(len(all_maxlens)):
         tmp_matches_filt = matches_filt.copy()
         tmp_matches_filt[tmp_matches_filt] = maxlens >= all_maxlens[i]
-        matching_inds = np.array([np.unique(results_matching_array[tmp_matches_filt,:,:][i,:,:][~np.isnan(results_matching_array[tmp_matches_filt,:,:][i,:,:])])[0] for i in range(np.sum(tmp_matches_filt))]).astype(np.uint32)
-        scores[i,0] = len(matching_inds)
+        scores[i,0] = np.sum(tmp_matches_filt)
 
         centsred_borderfilt = centsred_border[tmp_matches_filt,:]
         hdist = cdist(centsred_borderfilt, centsred_borderfilt, metric='euclidean')
@@ -378,11 +410,17 @@ else:
 
         maxlen_to_use = all_maxlens[np.argmax(score_comb)]
         logging.info(f"Maxlen used: {maxlen_to_use}")
-        # maxlen_to_use = np.max(all_maxlens[tmpsub])
-        matches_filt[matches_filt] = maxlens >= maxlen_to_use
-        matching_inds = np.array([np.unique(results_matching_array[matches_filt,:,:][i,:,:][~np.isnan(results_matching_array[matches_filt,:,:][i,:,:])])[0] for i in range(np.sum(matches_filt))]).astype(np.uint32)
-        centsred_borderfilt = centsred_border[matches_filt,:]
+        tmp_matches_filt = matches_filt.copy()
+        tmp_matches_filt[tmp_matches_filt] = maxlens >= maxlen_to_use
+        tmpind_to_use = np.arange(tmp_matches_filt.shape[0])[tmp_matches_filt]
+
+        matching_inds = np.array([np.unique(results_matching_array[tmpind_to_use[i],:,:][~np.isnan(results_matching_array[tmpind_to_use[i],:,:])])[0] for i in range(len(tmpind_to_use))]).astype(np.uint32)
+
+        centsred_borderfilt = centsred_border[tmpind_to_use,:]
         tmpimzrotfilt = tmpimzrot[matching_inds,:]
+        # plt.scatter(centsred_borderfilt[:,0],centsred_borderfilt[:,1],c="blue")
+        # plt.scatter(tmpimzrotfilt[:,0],tmpimzrotfilt[:,1],c="red")
+        # plt.show()
     else:
         logging.info("No parameters fullfil criteria!")
         points_found = False

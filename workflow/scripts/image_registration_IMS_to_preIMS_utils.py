@@ -619,7 +619,7 @@ def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, ma
                     angles_ls.append([tmpang,i,j])
             angles_mat=np.array(angles_ls)
             if tr==newcoords.shape[0]:
-                angles_mat[angles_mat[:,0]>180,0]=0
+                angles_mat[angles_mat[:,0]>180,0]=-angles_mat[angles_mat[:,0]>180,0]%360
             indm = angles_mat[:,0].argmax()
             i = int(angles_mat[indm,1])
             j = int(angles_mat[indm,2])
@@ -634,6 +634,7 @@ def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, ma
             tmp2 = tmp+0.5*(tmp-centroid)
             po = shapely.Polygon(tmp2).buffer(0.2)
 
+            # import shapely.plotting
             # shapely.plotting.plot_line(polyout)
             # shapely.plotting.plot_polygon(po)
             # plt.scatter(points[:,0],points[:,1],alpha=0.1)
