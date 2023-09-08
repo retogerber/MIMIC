@@ -337,7 +337,12 @@ def concave_boundary_from_grid(points: np.ndarray, max_dist: float=1.1, max_angl
         return shapely.LineString(points)
     
     # setup initial points
-    border_points = np.unique(np.array(shapely.geometry.Polygon(points).convex_hull.exterior.coords.xy).T, axis=0)
+    tmpch = shapely.geometry.Polygon(points).convex_hull
+    if tmpch.geom_type == "Polygon":
+        border_points = np.unique(np.array(tmpch.exterior.coords.xy).T, axis=0)
+    else:
+        return shapely.LineString(points)
+
     if init_point is None:
         init_point = border_points[border_points[:,0] == np.max(border_points[:,0]),:]
         init_point = init_point.flatten()
