@@ -619,6 +619,9 @@ def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, ma
                     angles_ls.append([tmpang,i,j])
             angles_mat=np.array(angles_ls)
             if tr==newcoords.shape[0]:
+                ti = tr-1-angles_mat[angles_mat[:,0]>180,1]
+                angles_mat[angles_mat[:,0]>180,1] = tr-1-angles_mat[angles_mat[:,0]>180,2]
+                angles_mat[angles_mat[:,0]>180,2] = ti 
                 angles_mat[angles_mat[:,0]>180,0]=-angles_mat[angles_mat[:,0]>180,0]%360
             indm = angles_mat[:,0].argmax()
             i = int(angles_mat[indm,1])
