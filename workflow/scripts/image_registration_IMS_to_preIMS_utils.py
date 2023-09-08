@@ -608,28 +608,43 @@ def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, ma
             # filter points
             # find points spanning maximum angle
             tr = int(newcoords.shape[0]/4-5) if len(newcoords)>=40 else int(len(newcoords))
-            tmpc1 = newcoords[:tr,:]
-            tmpc2 = newcoords[-tr:,:][::-1]
 
-            angles_ls = []
-            for i in range(tmpc1.shape[0]): 
-                for j in range(tmpc2.shape[0]):
-                    tmpang = get_angle(tmpc1[i,:], centroid, tmpc2[j,:])
-                    tmpang = tmpang%360 if direction==1 else -tmpang%360
-                    angles_ls.append([tmpang,i,j])
-            angles_mat=np.array(angles_ls)
+            # small number of points
             if tr==newcoords.shape[0]:
-                ti = tr-1-angles_mat[angles_mat[:,0]>180,1]
-                angles_mat[angles_mat[:,0]>180,1] = tr-1-angles_mat[angles_mat[:,0]>180,2]
-                angles_mat[angles_mat[:,0]>180,2] = ti 
+                angles_ls = []
+                for i in range(newcoords.shape[0]): 
+                    for j in range(newcoords.shape[0]):
+                        tmpang = get_angle(newcoords[i,:], centroid, newcoords[j,:])
+                        tmpang = tmpang%360 if direction==1 else -tmpang%360
+                        angles_ls.append([tmpang,i,j])
+                angles_mat=np.array(angles_ls)
                 angles_mat[angles_mat[:,0]>180,0]=-angles_mat[angles_mat[:,0]>180,0]%360
-            indm = angles_mat[:,0].argmax()
-            i = int(angles_mat[indm,1])
-            j = int(angles_mat[indm,2])
-            if j == 0:
-                newcoords_filt = newcoords[i:,:]
+                indm = angles_mat[:,0].argmax()
+                i = int(angles_mat[indm,1])
+                j = int(angles_mat[indm,2])
+                if i>j:
+                    tt=j
+                    j=i
+                    i=tt
+                newcoords_filt = newcoords[i:(j+1),:]
             else:
-                newcoords_filt = newcoords[i:(-j),:]
+                tmpc1 = newcoords[:tr,:]
+                tmpc2 = newcoords[-tr:,:][::-1]
+
+                angles_ls = []
+                for i in range(tmpc1.shape[0]): 
+                    for j in range(tmpc2.shape[0]):
+                        tmpang = get_angle(tmpc1[i,:], centroid, tmpc2[j,:])
+                        tmpang = tmpang%360 if direction==1 else -tmpang%360
+                        angles_ls.append([tmpang,i,j])
+                angles_mat=np.array(angles_ls)
+                indm = angles_mat[:,0].argmax()
+                i = int(angles_mat[indm,1])
+                j = int(angles_mat[indm,2])
+                if j == 0:
+                    newcoords_filt = newcoords[i:,:]
+                else:
+                    newcoords_filt = newcoords[i:(-j),:]
 
             # create new polygon
             tmp = np.concatenate([newcoords_filt,centroid.reshape(1,-1),newcoords_filt[0,:].reshape(1,-1)])
