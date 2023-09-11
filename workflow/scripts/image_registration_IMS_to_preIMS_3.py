@@ -52,16 +52,17 @@ logging.info("Microscopy pixelsize: "+str(resolution))
 
 # imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/IMS_test_split_pre.imzML"
 # imzmlfile = "/home/retger/Downloads/pos_mode_lipids_tma_02022023_imzml.imzML"
+# imzmlfile = "/home/retger/Downloads/lipid_tma_negative_run1_02042023_imzml.imzML"
 # imzmlfile = "/home/retger/Downloads/test_images_ims_to_imc_workflow/hcc-tma-3_aaxl_20raster_06132022-total ion count.imzML"
 # imzmlfile = "/home/retger/Downloads/test_images_ims_to_imc_workflow/cirrhosis_TMA_IMS.imzML"
 imzmlfile = snakemake.input["imzml"]
 
 # imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/Lipid_TMA_37819_025_transformed.ome.tiff"
-# imc_mask_file = "/home/retger/Downloads/Lipid_TMA_37819_009_transformed.ome.tiff"
+# imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_040_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_transformed.ome.tiff"
-# imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_041_transformed.ome.tiff"
+# imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_008_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Cirrhosis_TMA_5_01262022_002.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 
@@ -77,35 +78,35 @@ postIMS_file = snakemake.input["postIMS_downscaled"]
 
 # masks_transform_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_masks_transform.txt"
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_masks_transform.txt"
-# masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_masks_transform.txt"
+# masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_040_masks_transform.txt"
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_masks_transform.txt"
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_masks_transform.txt"
-# masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_041_masks_transform.txt"
+# masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_008_masks_transform.txt"
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Cirrhosis_TMA_5_01262022_002_masks_transform.txt"
 masks_transform_filename = snakemake.input["masks_transform"]
 # gridsearch_transform_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_gridsearch_transform.txt"
-# gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_gridsearch_transform.txt"
+# gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_040_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_gridsearch_transform.txt"
-# gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_041_gridsearch_transform.txt"
+# gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_008_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Cirrhosis_TMA_5_01262022_002_gridsearch_transform.txt"
 gridsearch_transform_filename = snakemake.input["gridsearch_transform"]
 
 # postIMS_ablation_centroids_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_postIMS_ablation_centroids.csv"
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_postIMS_ablation_centroids.csv"
-# postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_postIMS_ablation_centroids.csv"
+# postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_040_postIMS_ablation_centroids.csv"
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_postIMS_ablation_centroids.csv"
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_postIMS_ablation_centroids.csv"
-# postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_041_postIMS_ablation_centroids.csv"
+# postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_008_postIMS_ablation_centroids.csv"
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Cirrhosis_TMA_5_01262022_002_postIMS_ablation_centroids.csv"
 postIMS_ablation_centroids_filename = snakemake.input["postIMS_ablation_centroids"]
 # metadata_to_save_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_step1_metadata.json"
-# metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_009_step1_metadata.json"
+# metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_040_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_step1_metadata.json"
-# metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_041_step1_metadata.json"
+# metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_008_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Cirrhosis_TMA_5_01262022_002_step1_metadata.json"
 metadata_to_save_filename = snakemake.input["metadata"]
 
@@ -211,6 +212,7 @@ try:
     tch = shapely.union(tch11,tch22)
     if not tch.is_valid:
         tch = tch11
+    # import shapely.plotting
     # shapely.plotting.plot_polygon(tch)
     # plt.show()
 
@@ -258,20 +260,30 @@ kdt_centsred_border = KDTree(centsred_border, leaf_size=30, metric='euclidean')
 kdt_ordered_centsred_border_all = KDTree(ordered_centsred_border_all, leaf_size=30, metric='euclidean')
 distances, all_indices = kdt_ordered_centsred_border_all.query(centsred_border, k=1, return_distance=True)
 indices = all_indices[distances==0].flatten()
-nn1s=list(range(21))
-nn2s=list(range(21))
+nn1s=list(range(31))
+nn2s=list(range(31))
 min_n=6
-max_n=20
+max_n=30
 max_dist_diff=0.2
 max_angle_diff=15
 from itertools import product
 nn_combinations = np.array(list(product(nn1s, nn2s)))
+nn_combinations = np.concatenate([nn_combinations,np.ones(nn_combinations.shape[0]).reshape(-1,1)*-1],axis=1).astype(int)
 tl = np.array([p[0]+p[1] for p in nn_combinations])
 nn_combinations = nn_combinations[np.logical_and(tl >= min_n,tl<=max_n)]
 results_matching_array = np.zeros((len(centsred_border),len(nn1s),len(nn2s)),dtype=np.uint32)*np.nan
 for k in range(len(nn_combinations)):
     nn1 = nn_combinations[k][0]
     nn2 = nn_combinations[k][1]
+    ind1 = nn_combinations[:,0]==nn1
+    ind2 = nn_combinations[:,1]<=nn2
+    ind3 = nn_combinations[:,0]<=nn1
+    ind4 = nn_combinations[:,1]==nn2
+    if np.any(nn_combinations[np.logical_or(np.logical_and(ind1,ind2),np.logical_and(ind3,ind4)),2]==0):
+        nn_combinations[k][2]=0
+        logging.info(f"\t{nn1:02}_{nn2:02}\t{0:6}\t{0:6}\t{len(indices):6} - skipped")
+        continue
+
     ind_to_keep = []
     # for all points, test if have sufficient neighbors to create code
     for i in range(len(indices)):
@@ -291,6 +303,7 @@ for k in range(len(nn_combinations)):
             if np.all(to_keep):
                 ind_to_keep.append(i)
     if len(ind_to_keep) == 0:
+        nn_combinations[k][2]=0
         logging.info(f"\t{nn1:02}_{nn2:02}\t{0:6}\t{0:6}\t{len(indices):6}")
         continue
     codes = []
@@ -333,7 +346,8 @@ for k in range(len(nn_combinations)):
 
     n_matches = np.array([len(p) for p in matches])
     if np.sum(n_matches==1) == 0:
-        logging.info(f"\t{nn1:02}_{nn2:02}\t{0:6}\t{0:6}\t{len(indices):6}")
+        logging.info(f"\t{nn1:02}_{nn2:02}\t{0:6}\t{len(ind_to_keep):6}\t{len(indices):6}")
+        nn_combinations[k][2]=0
         continue
 
     close_ims_inds = np.arange(len(close_ims))[n_matches==1]
@@ -351,6 +365,7 @@ for k in range(len(nn_combinations)):
     # save
     results_matching_array[ind_to_keep_filt_trans,np.array(nn1s)==nn1,np.array(nn2s)==nn2] = tptsinds_filt
 
+    nn_combinations[k][2]=1
 # find all points with at least 1 match
 matches = np.sum(~np.isnan(results_matching_array),axis=(1,2))>0
 
@@ -374,6 +389,7 @@ refdistmax = hdist.max()
 centroid = np.mean(tmppts,axis=0)
 
 all_maxlens = np.unique(maxlens)
+logging.info(f"Unique length of matching codes before filtering: {all_maxlens}")
 if np.sum(n_diff>1):
     has_ambiguous = []
     for i in range(np.sum(n_diff>1)):
@@ -385,7 +401,7 @@ if np.sum(n_diff>1):
 
 
 
-logging.info(f"Unique length of matching codes: {all_maxlens}")
+logging.info(f"Unique length of matching codes after filtering: {all_maxlens}")
 points_found = True
 if len(all_maxlens)==0:
     logging.info("No matching points found")
@@ -411,26 +427,57 @@ else:
     logging.info(scores)
     threshold_npts = 10
     threshold_prop_maxdist = 0.75
-    tmpsub = np.logical_and(scores[:,0]>threshold_npts, scores[:,1]>refdistmax*threshold_prop_maxdist)
+    threadsold_maxangle = 200
+    tmpsub = np.logical_and(scores[:,0]>threshold_npts, scores[:,1]>refdistmax*threshold_prop_maxdist, scores[:,2]<threadsold_maxangle)
     logging.info(f"Filtered with min number of points: {threshold_npts} and min max distance proportion: {threshold_prop_maxdist}")
     logging.info(scores[tmpsub,:])
 
     if np.sum(tmpsub)>0:
+
+        n_wrong_matches=np.zeros((scores[tmpsub,:].shape[0],2))
+        n_wrong_matches[:,0]=all_maxlens[tmpsub]
+        for i,tmpmaxlen in enumerate(all_maxlens[tmpsub]):
+            tmp_matches_filt = matches_filt.copy()
+            tmp_matches_filt[tmp_matches_filt] = maxlens >= tmpmaxlen 
+            tmpind_to_use = np.arange(tmp_matches_filt.shape[0])[tmp_matches_filt]
+
+            matching_inds = np.array([np.unique(results_matching_array[tmpind_to_use[i],:,:][~np.isnan(results_matching_array[tmpind_to_use[i],:,:])])[0] for i in range(len(tmpind_to_use))]).astype(np.uint32)
+
+            centsred_borderfilt = centsred_border[tmpind_to_use,:]
+            tmpimzrotfilt = tmpimzrot[matching_inds,:]
+
+            tmpdiffs = np.sqrt(np.sum((centsred_borderfilt - tmpimzrotfilt)**2,axis=1))
+            from scipy.spatial.distance import cdist
+            diffs_exp = np.stack([tmpdiffs,np.zeros(tmpdiffs.shape[0])],axis=1)
+            diffs=cdist(diffs_exp, diffs_exp, metric='cityblock')
+            dists=cdist(centsred_borderfilt, centsred_borderfilt, metric='euclidean')
+            dists[dists==0]=np.nan
+            n_wrong_matches[i,1] = np.sum(diffs>0.5+dists*0.1)
+
+        logging.info(f"Number of pairwise wrong matches: {n_wrong_matches}")
+
         score_comb = (1-scores[tmpsub,2]/360)*np.sqrt(all_maxlens[tmpsub])
+        score_comb[n_wrong_matches[:,1]>0] = 0
+        if np.any(score_comb>0):
+            maxlen_to_use = all_maxlens[np.argmax(score_comb)]
+            logging.info(f"Maxlen used: {maxlen_to_use}")
+            tmp_matches_filt = matches_filt.copy()
+            tmp_matches_filt[tmp_matches_filt] = maxlens >= maxlen_to_use
+            tmpind_to_use = np.arange(tmp_matches_filt.shape[0])[tmp_matches_filt]
 
-        maxlen_to_use = all_maxlens[np.argmax(score_comb)]
-        logging.info(f"Maxlen used: {maxlen_to_use}")
-        tmp_matches_filt = matches_filt.copy()
-        tmp_matches_filt[tmp_matches_filt] = maxlens >= maxlen_to_use
-        tmpind_to_use = np.arange(tmp_matches_filt.shape[0])[tmp_matches_filt]
+            matching_inds = np.array([np.unique(results_matching_array[tmpind_to_use[i],:,:][~np.isnan(results_matching_array[tmpind_to_use[i],:,:])])[0] for i in range(len(tmpind_to_use))]).astype(np.uint32)
 
-        matching_inds = np.array([np.unique(results_matching_array[tmpind_to_use[i],:,:][~np.isnan(results_matching_array[tmpind_to_use[i],:,:])])[0] for i in range(len(tmpind_to_use))]).astype(np.uint32)
+            centsred_borderfilt = centsred_border[tmpind_to_use,:]
+            tmpimzrotfilt = tmpimzrot[matching_inds,:]
 
-        centsred_borderfilt = centsred_border[tmpind_to_use,:]
-        tmpimzrotfilt = tmpimzrot[matching_inds,:]
-        # plt.scatter(centsred_borderfilt[:,0],centsred_borderfilt[:,1],c="blue")
-        # plt.scatter(tmpimzrotfilt[:,0],tmpimzrotfilt[:,1],c="red")
-        # plt.show()
+            # plt.scatter(tmpimzrot[:,0],tmpimzrot[:,1],c="red",alpha=0.2)
+            # plt.scatter(centsred_border[:,0],centsred_border[:,1],c="blue",alpha=0.2)
+            # plt.scatter(tmpimzrotfilt[:,0],tmpimzrotfilt[:,1],c="red")
+            # plt.scatter(centsred_borderfilt[:,0],centsred_borderfilt[:,1],c="blue")
+            # plt.show()
+        else:
+            logging.info(f"No matching points found")
+            points_found = False
     else:
         logging.info("No parameters fullfil criteria!")
         points_found = False
@@ -585,7 +632,8 @@ if (np.sum(pcontsc) > np.sum(pcontsi)/10) and np.all(prop_diff < 0.25):
         convergenceMinimumValue=1e-6, convergenceWindowSize=10,
         estimateLearningRate=R.EachIteration
     )
-    R.SetOptimizerScalesFromIndexShift()
+    # R.SetOptimizerScalesFromIndexShift()
+    R.SetOptimizerScalesFromPhysicalShift()
     # R.SetInitialTransform(init_transform3)
     R.SetInitialTransform(sitk.AffineTransform(2))
     R.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration(R))
@@ -597,19 +645,39 @@ if (np.sum(pcontsc) > np.sum(pcontsi)/10) and np.all(prop_diff < 0.25):
     logging.info(f"Save Image difference as: {tmpfilename}")
     saveimage_tile(((postIMSro_trans.astype(float)-IMSpimg.astype(float))+255)/2, tmpfilename, resolution)
 
-    # plt.imshow(IMSpimg.astype(float)-postIMSro_trans.astype(float))
+    # transform_inverse = sitk.AffineTransform(2)
+    # transform_inverse.SetCenter(np.flip(np.array(transform.GetCenter())))
+    # transform_inverse.SetTranslation(-np.flip(np.array(transform.GetTranslation())))
+    # transform_inverse.SetMatrix(transform.GetMatrix())
+    # tmpmat = transform.GetMatrix()
+    # tmpmat_inv = np.array([[1-(tmpmat[3]-1),-tmpmat[2]],[-tmpmat[1],1-(tmpmat[0]-1)]])
+    # transform_inverse.SetMatrix(tmpmat_inv.flatten())
+    # transform_inverse.GetParameters()
+
+
+    # tpts = np.array([init_transform.TransformPoint(centsred[i,:]) for i in range(centsred.shape[0])])
+    # tpts_scaled = tpts/resolution*stepsize
+    # tpts_scaled = np.array([transform_inverse.TransformPoint(tpts_scaled[i,:]) for i in range(tpts_scaled.shape[0])])
+
+    # fig, (ax1, ax2) = plt.subplots(1,2)
+    # ax1.imshow(IMSpimg.astype(float)[1700:2500,4100:4900]-postIMSro_trans.astype(float)[1700:2500,4100:4900])
+    # ax2.scatter(imzcoordsfilttrans[:,1]/resolution*stepsize,imzcoordsfilttrans[:,0]/resolution*stepsize)
+    # ax2.scatter(tpts_scaled[:,1],tpts_scaled[:,0])
+    # ax2.set_xlim([4100,4900])
+    # ax2.set_ylim([1700,2500])
+    # ax2.invert_yaxis()
+    # ax2.set_aspect('equal', 'box')
     # plt.show()
 
     # tpts = np.array([init_transform_inverse.TransformPoint(imzcoordsfilttrans[i,:]) for i in range(imzcoordsfilttrans.shape[0])])
     # plt.scatter(tpts[:,1],tpts[:,0])
     # plt.scatter(centsred[:,1],centsred[:,0])
     # plt.show()
-
     transform_scaled_inverse = sitk.AffineTransform(2)
     transform_scaled_inverse.SetCenter(np.flip(np.array(transform.GetCenter())*resolution/stepsize))
     transform_scaled_inverse.SetTranslation(-np.flip(np.array(transform.GetTranslation())*resolution/stepsize))
     tmpmat = transform.GetMatrix()
-    tmpmat_inv = np.array([[1-(tmpmat[3]-1),-tmpmat[1]],[-tmpmat[2],1-(tmpmat[0]-1)]])
+    tmpmat_inv = np.array([[1-(tmpmat[3]-1),-tmpmat[2]],[-tmpmat[1],1-(tmpmat[0]-1)]])
     transform_scaled_inverse.SetMatrix(tmpmat_inv.flatten())
     transform_scaled_inverse.GetParameters()
 
@@ -642,20 +710,6 @@ else:
     transform_scaled = sitk.AffineTransform(2)
     transform = sitk.AffineTransform(2)
 
-
-
-
-
-# tm = sitk.CompositeTransform(2)
-# tm.AddTransform(init_transform)
-# tm.AddTransform(transform_scaled_inverse)
-# transform_comb = composite2affine(tm, [0,0])
-
-# tpts = np.array([transform_comb.TransformPoint(centsred[i,:]) for i in range(centsred.shape[0])])
-# plt.scatter(imzcoordsfilttrans[:,1],imzcoordsfilttrans[:,0])
-# plt.scatter(tpts[:,1],tpts[:,0])
-# plt.show()
-
 logging.info(f"Combine Sitk with cpd Registration")
 tm = sitk.CompositeTransform(2)
 tm.AddTransform(init_transform_inverse)
@@ -675,15 +729,61 @@ fig.savefig(tmpfilename)
 
 logging.info(f"Combine Registrations")
 # combined transformation steps
+# tm = sitk.CompositeTransform(2)
+# tm.AddTransform(transform_comb)
+# tm.AddTransform(tinv)
+# pycpd_transform_comb = composite2affine(tm, [0,0])
+# pycpd_transform_comb.GetParameters()
+
+
+
+imzcoords_all = create_imz_coords(imzimg, None, imzrefcoords, imz_bbox, rotmat)
+imzcoords_in = imzcoords_all + init_translation
+
+# no sitk, combined transformation steps
+tm = sitk.CompositeTransform(2)
+tm.AddTransform(init_transform_inverse)
+tm.AddTransform(tinv)
+pycpd_transform_comb_nositk = composite2affine(tm, [0,0])
+pycpd_transform_comb_nositk.GetParameters()
+
+# no sitk, combined transformation steps
 tm = sitk.CompositeTransform(2)
 tm.AddTransform(transform_comb)
 tm.AddTransform(tinv)
 pycpd_transform_comb = composite2affine(tm, [0,0])
 pycpd_transform_comb.GetParameters()
 
+imzcoordstransformed_nositk = np.array([pycpd_transform_comb_nositk.TransformPoint(imzcoords_in[i,:].astype(float)) for i in range(imzcoords_in.shape[0])])
+centsredinmask = centsred[pcontsc]
+kdt = KDTree(imzcoordstransformed_nositk, leaf_size=30, metric='euclidean')
+distances_inmask_nositk, indices = kdt.query(centsredinmask, k=1, return_distance=True)
+q50_error_inmask_nositk = np.quantile(distances_inmask_nositk,0.5)*stepsize
+logging.info(f"Median error in mask is {q50_error_inmask_nositk} (no sitk)")
 
-imzcoords_all = create_imz_coords(imzimg, None, imzrefcoords, imz_bbox, rotmat)
-imzcoords_in = imzcoords_all + init_translation
+imzcoordstransformed = np.array([pycpd_transform_comb.TransformPoint(imzcoords_in[i,:].astype(float)) for i in range(imzcoords_in.shape[0])])
+kdt = KDTree(imzcoordstransformed, leaf_size=30, metric='euclidean')
+distances_inmask, indices = kdt.query(centsredinmask, k=1, return_distance=True)
+q50_error_inmask = np.quantile(distances_inmask,0.5)*stepsize
+logging.info(f"Median error in mask is {q50_error_inmask} (sitk)")
+
+if q50_error_inmask > q50_error_inmask_nositk*1.2:
+    logging.info(f"Median error in mask is 20% higher than median error: Don't use sitk registration!")
+    pycpd_transform_comb = pycpd_transform_comb_nositk
+
+# tm = sitk.CompositeTransform(2)
+# tm.AddTransform(init_transform)
+# tm.AddTransform(transform_scaled_inverse)
+# transform_comb = composite2affine(tm, [0,0])
+
+# tpts = np.array([transform_comb.TransformPoint(centsred[i,:]) for i in range(centsred.shape[0])])
+# plt.scatter(imzcoordsfilttrans[:,1],imzcoordsfilttrans[:,0])
+# plt.scatter(tpts[:,1],tpts[:,0])
+# plt.show()
+
+
+# imzcoords_all = create_imz_coords(imzimg, None, imzrefcoords, imz_bbox, rotmat)
+# imzcoords_in = imzcoords_all + init_translation
 imzcoordstransformed = np.array([pycpd_transform_comb.TransformPoint(imzcoords_in[i,:].astype(float)) for i in range(imzcoords_in.shape[0])])
 
 tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_combined_registration_all.svg"
@@ -695,7 +795,6 @@ fig = plt.gcf()
 fig.set_size_inches(20,20)
 fig.savefig(tmpfilename)
 # plt.show()
-
 
 
 logging.info("Init Transform (Euler2D):")
@@ -748,6 +847,10 @@ q05_error_inmask = np.quantile(distances_inmask,0.05)*stepsize
 logging.info(f"Mean Error in IMC mask: {str(mean_error_inmask)}")
 logging.info(f"Number of points in IMC mask: {str(len(distances_inmask))} / {str(len(imzcoordstransformedinmask))}")
 logging.info(f"Quantiles: \n\tQ05: {str(q05_error_inmask)}\n\tQ25: {str(q25_error_inmask)}\n\tQ50: {str(q50_error_inmask)}\n\tQ75: {str(q75_error_inmask)}\n\tQ95: {str(q95_error_inmask)}")
+
+
+
+
 
 # mean error
 reg_measure_dic = {
