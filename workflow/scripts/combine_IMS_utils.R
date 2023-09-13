@@ -186,31 +186,84 @@ create_imsc <- function(imspeaks_filename, imscoords_filename,
   celldf <- do.call(rbind, celldf_ls)
 
   if (complete_maldi) {
-    subdf <- pd
-    pd_sub <- subdf
-    sp::coordinates(subdf) <- c("ims_x", "ims_y")
-    sp::gridded(subdf) <- TRUE
-    dst <- 3
-    nl2 <- BiocNeighbors::findNeighbors(sp::coordinates(subdf), dst)
-    wm <- nl2$index
-    class(wm) <- c("nb", "list")
-    # wm <- spdep::dnearneigh(sp::coordinates(subdf), 0, dst, row.names = paste0(subdf$ims_idx),k=50)
-    dj <- spdep::n.comp.nb(wm)
-    pd_sub$region_id <- dj$comp.id
+    cuts <- c(seq(from=0, to=dim(pd)[1],by=150000),dim(pd)[1])
+    djls <- list()
+    coordsls <- list()
+    for(i in seq_len(length(cuts)-1)){
+      subdf <- pd[(cuts[i]+1):cuts[i+1],]
+      pd_sub <- subdf
+      sp::coordinates(subdf) <- c("ims_x", "ims_y")
+      sp::gridded(subdf) <- TRUE
+      dst <- 3
+      nl2 <- BiocNeighbors::findNeighbors(sp::coordinates(subdf), dst)
+      wm <- nl2$index
+      class(wm) <- c("nb", "list")
+      # wm <- spdep::dnearneigh(sp::coordinates(subdf), 0, dst, row.names = paste0(subdf$ims_idx),k=50)
+      djls[[i]] <- spdep::n.comp.nb(wm)
+      coordsls[[i]] <- sp::coordinates(subdf)
+    }
 
+    if (length(djls)==1) {
+      pd_sub <- pd
+      pd_sub$region_id <- djls[[1]]$comp.id
+    } else{
+      dst=2
+      all_combs <- combn(length(coordsls),2)
+      to_combine <- list()
+      uq_matches_ls <- list()
+      for (i in seq_len(dim(all_combs)[2])){
+        coordscomb <- Reduce(rbind, coordsls[all_combs[1,i]:all_combs[2,i]])
+        th <- dim(coordsls[[all_combs[1,i]]])[1]
+        nl2 <- BiocNeighbors::findNeighbors(coordscomb, dst)$index
+        is_close <- sapply(nl2, function(n) any(n>th) & any(n<=th))
+        djci <- c(djls[[all_combs[1,i]]]$comp.id,djls[[all_combs[2,i]]]$comp.id)
+        djci[is_close]
+        matches_ls <- lapply(seq_len(sum(is_close)), function(j){
+          tci <- djci[nl2[is_close][[j]]]
+          c(unique(tci[nl2[is_close][[j]]<=th]), unique(tci[nl2[is_close][[j]]>th]))
+        })
+        uq_matches_ls[[i]] <- unique(matches_ls)
+        to_combine[[i]] <- any(is_close)
+      }
+      to_combine <- Reduce(c,to_combine)
+      # uq_matches_ls
+
+      # TODO: so far only works if length(djls)==2
+      stopifnot(length(djls)==2)
+      new_djls <- djls
+      for (i in seq_len(dim(all_combs)[2])){
+        djls[[all_combs[1,i]]]
+        for (j in seq_along(uq_matches_ls[[i]])){
+          new_djls[[all_combs[2,i]]]$comp.id[djls[[all_combs[2,i]]]$comp.id == uq_matches_ls[[i]][[j]][2]] <- uq_matches_ls[[i]][[j]][1]
+        }
+      }
+
+      djcomp <- Reduce(c, lapply(new_djls, function(x) x$comp.id))
+      pd_sub <- pd
+      pd_sub$region_id <- djcomp
+    }
     reg <- unique(pd_sub$region_id[pd_sub$ims_idx %in% celldf$ims_idx])
     if (length(celloverlap_filename) == 1 & length(reg) > 1) {
       warning("Multiple regions of IMS associated with single IMC found!")
     }
-    combined_df <- celldf |>
-      dplyr::right_join(pd_sub[pd_sub$region_id %in% reg, ], by = dplyr::join_by("ims_idx","sample_id"))
-    combined_df_split <- base::split(combined_df, combined_df[["region_id"]])
+    pd_sub <- pd_sub[pd_sub$region_id %in% reg, ]
+    # combined_df <- celldf |>
+    #   dplyr::right_join(pd_sub[pd_sub$region_id %in% reg, ], by = dplyr::join_by("ims_idx","sample_id"))
+    # combined_df_split <- base::split(combined_df, combined_df[["region_id"]])
   } else {
-    combined_df <- celldf |>
-      dplyr::inner_join(pd, by = dplyr::join_by("ims_idx","sample_id")) |>
-      dplyr::mutate(region_id = !!dplyr::sym(sample_id_colname))
-    combined_df_split <- base::split(combined_df, combined_df[[sample_id_colname]])
+    pd_sub <- pd
   }
+  if(length(imscoords_filename)==1){
+    pd_sub$sample_id <- NULL
+    combined_df <- dplyr::inner_join(celldf, pd_sub, by = dplyr::join_by("ims_idx"))
+  } else{
+    combined_df <- dplyr::inner_join(celldf, pd_sub, by = dplyr::join_by("ims_idx","sample_id"))
+  }
+  if (complete_maldi) {
+      combined_df <- dplyr::mutate(combined_df, region_id = !!dplyr::sym(sample_id_colname))
+  }
+  combined_df_split <- base::split(combined_df, combined_df[[sample_id_colname]])
+  
 
   # test and correct for switched axis
   has_flipped_axis <- sapply(combined_df_split, has_flipped_axis_ims)
