@@ -17,18 +17,21 @@ imspeaks_filename <- snakemake@input[["peaks"]]
 imzml_name <- gsub("_peaks.h5","",basename(imspeaks_filename))
 
 
-# project_name <- "test_combined"
+# project_name <- "test_split_ims"
 # project_name <- "NASH_HCC_TMA"
 project_name <- basename(dirname(dirname(dirname(imspeaks_filename)[1])))
 
-# imscoords_filenames <- here::here("data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/", project_name, "/data/IMS/", paste0(project_name, "-IMSML-coords.h5"))
+# imscoords_filename <- here::here("data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/", project_name, "/data/IMS/", paste0(project_name, "_IMSML-coords.h5"))
+# imscoords_filename <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/postIMS_to_IMS_test_split_ims-Cirrhosis-TMA-5_New_Detector_002-IMSML-coords.h5"
+
 # imscoords_filename <- sapply(1:45, function(i) sprintf("/home/retger/Downloads/test_IMS_coords_comb/postIMS_to_IMS_NASH_HCC_TMA-NASH_HCC_TMA-2_0%02d-IMSML-coords.h5",i))[-39]
+# imscoords_filename[11] <- "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA_011-IMSML-coords.h5"
 # imscoords_filename <- sapply(1:4, function(i) sprintf("/home/retger/Downloads/test_IMS_coords_comb/postIMS_to_IMS_NASH_HCC_TMA-NASH_HCC_TMA-2_0%02d-IMSML-coords.h5",i))
 imscoords_filename <- snakemake@input[["imsml_coords_fp"]]
 names(imscoords_filename) <- basename(imscoords_filename) |>
-  gsub(pattern="-IMSML-coords.h5",replacement="") |>
+  gsub(pattern="(-|_)IMSML-coords.h5",replacement="") |>
   gsub(pattern="postIMS_to_IMS_",replacement="") |>
-  gsub(pattern=paste0("^",project_name,"-"),replacement="")
+  gsub(pattern=paste0("^",project_name,"(-|_)"),replacement="")
 # imscoords_filename <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/postIMS_to_IMS_test_split_ims_2-IMSML-coords.h5"
 # imscoords_filename <- c("/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/postIMS_to_IMS_test_combined-IMSML-coords.h5","/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/postIMS_to_IMS_test_combined-Cirrhosis-TMA-5_New_Detector_002-IMSML-coords.h5")
 
@@ -44,11 +47,22 @@ maldi_pixel_size <- maldi_step_size*as.numeric(snakemake@params["IMS_shrink_fact
 # celloverlap_filename <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/cell_overlap/test_split_ims_Cirrhosis-TMA-5_New_Detector_002_cell_overlap_IMS.csv"
 # celloverlap_filename <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/cell_overlap/test_combined_Cirrhosis-TMA-5_New_Detector_001_cell_overlap_IMS.csv"
 # celloverlap_filename <- sapply(1:45, function(i) sprintf("/home/retger/Downloads/test_IMS_coords_comb/NASH_HCC_TMA_NASH_HCC_TMA-2_0%02d_cell_overlap_IMS.csv",i))[-39]
-# celloverlap_filename <- sapply(1:4, function(i) sprintf("/home/retger/Downloads/test_IMS_coords_comb/NASH_HCC_TMA_NASH_HCC_TMA-2_0%02d_cell_overlap_IMS.csv",i))
 celloverlap_filename <- snakemake@input[["cell_overlaps"]]
 names(celloverlap_filename) <- basename(celloverlap_filename) |>
   gsub(pattern="_cell_overlap_IMS.csv",replacement="") |>
   gsub(pattern=paste0(project_name,"_"),replacement="")
+
+
+# check and replace names of manual imsmicrolink files
+is_correct <- names(imscoords_filename) == names(celloverlap_filename)
+sprintf("Number of matching names %s / %s", sum(is_correct), length(names(imscoords_filename)))
+if (sum(is_correct) < length(is_correct)){
+  for (i in seq_len(length(is_correct)-sum(is_correct))) {
+    print(sprintf("Incorrect name: %s, expected: %s", names(imscoords_filename)[!is_correct][i], names(celloverlap_filename)[!is_correct][i]))
+  }
+  print("Replacing names")
+  names(imscoords_filename)[!is_correct] <- names(celloverlap_filename)[!is_correct]
+}
 
 
 # cellcentroids_filename <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/cell_overlap/test_split_ims_Cirrhosis-TMA-5_New_Detector_002_cell_centroids.csv"

@@ -146,6 +146,7 @@ create_imsc <- function(imspeaks_filename, imscoords_filename,
   }
   if(length(imscoords_filename) == 1){
     pd <- get_peak_data(imspeaks_filename, imscoords_filename, maldi_pixelsize)
+    pd$sample_id <- names(imscoords_filename)
   } else{
     pdls <- lapply(seq_along(imscoords_filename), function(i) get_peak_data(imspeaks_filename, imscoords_filename[i], maldi_pixelsize,idx_by_location=idx_by_location[i]))
     for(i in seq_along(pdls)){
