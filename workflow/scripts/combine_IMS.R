@@ -30,7 +30,7 @@ project_name <- basename(dirname(dirname(dirname(imspeaks_filename)[1])))
 # imscoords_filename <- sapply(1:45, function(i) sprintf("/home/retger/Downloads/test_IMS_coords_comb/postIMS_to_IMS_NASH_HCC_TMA-NASH_HCC_TMA-2_0%02d-IMSML-coords.h5",i))[-39]
 # imscoords_filename[11] <- "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA_011-IMSML-coords.h5"
 # imscoords_filename <- sapply(1:4, function(i) sprintf("/home/retger/Downloads/test_IMS_coords_comb/postIMS_to_IMS_NASH_HCC_TMA-NASH_HCC_TMA-2_0%02d-IMSML-coords.h5",i))
-imscoords_filename <- snakemake@input[["imsml_coords_fp"]]
+imscoords_filename <- unique(snakemake@input[["imsml_coords_fp"]])
 names(imscoords_filename) <- basename(imscoords_filename) |>
   gsub(pattern="(-|_)IMSML-coords.h5",replacement="") |>
   gsub(pattern="postIMS_to_IMS_",replacement="") |>
