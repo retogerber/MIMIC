@@ -586,6 +586,8 @@ def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, ma
                     angles_points=angles_points%360
                 else:
                     angles_points=-angles_points%360
+                if direction==2 and len(refcoords)<40:
+                    angles_points[angles_points>270]=-1
                 angles_ind = angles_points > np.quantile(angles_points,0.55)
                 tmprefcoords = refcoords[angles_ind,]
                 angles_ls = []
