@@ -146,11 +146,11 @@ create_imsc <- function(imspeaks_filename, imscoords_filename,
   }
   if(length(imscoords_filename) == 1){
     pd <- get_peak_data(imspeaks_filename, imscoords_filename, maldi_pixelsize)
-    pd$sample_id <- names(imscoords_filename)
+    pd[[sample_id_colname]] <- names(imscoords_filename)
   } else{
     pdls <- lapply(seq_along(imscoords_filename), function(i) get_peak_data(imspeaks_filename, imscoords_filename[i], maldi_pixelsize,idx_by_location=idx_by_location[i]))
     for(i in seq_along(pdls)){
-      pdls[[i]]$sample_id <- names(imscoords_filename)[i]
+      pdls[[i]][[sample_id_colname]] <- names(imscoords_filename)[i]
     }
     pd <- do.call(rbind,pdls)
   }
@@ -173,7 +173,7 @@ create_imsc <- function(imspeaks_filename, imscoords_filename,
 
   celldf_ls <- lapply(seq_along(celloverlap_filename), function(i) {
     tmpcelldf <- data.table::fread(celloverlap_filename[i])
-    tmpcelldf$sample_id <- names(celloverlap_filename)[i]
+    tmpcelldf[[sample_id_colname]] <- names(celloverlap_filename)[i]
 
     tmpcentdf <- data.table::fread(cellcentroids_filename[i])
     data.table::setnames(tmpcentdf, "x", "Pos_X_on_IMS")
@@ -268,17 +268,18 @@ create_imsc <- function(imspeaks_filename, imscoords_filename,
     # combined_df_split <- base::split(combined_df, combined_df[["region_id"]])
   } else {
     pd_sub <- pd
+    pd_sub$region_id <- pd_sub[[sample_id_colname]]
   }
   if(length(imscoords_filename)==1){
-    pd_sub$sample_id <- NULL
-    combined_df <- dplyr::inner_join(celldf, pd_sub, by = dplyr::join_by("ims_idx"))
+    pd_sub[[sample_id_colname]] <- NULL
+    combined_df <- dplyr::right_join(celldf, pd_sub, by = dplyr::join_by("ims_idx"))
   } else{
-    combined_df <- dplyr::inner_join(celldf, pd_sub, by = dplyr::join_by("ims_idx","sample_id"))
+    combined_df <- dplyr::right_join(celldf, pd_sub, by = dplyr::join_by("ims_idx", !!dplyr::sym(sample_id_colname)))
   }
-  if (complete_maldi) {
-      combined_df <- dplyr::mutate(combined_df, region_id = !!dplyr::sym(sample_id_colname))
-  }
-  combined_df_split <- base::split(combined_df, combined_df[[sample_id_colname]])
+  # if (complete_maldi) {
+  #     combined_df <- dplyr::mutate(combined_df, region_id = !!dplyr::sym(sample_id_colname))
+  # }
+  combined_df_split <- base::split(combined_df, combined_df$region_id)
   
 
   # test and correct for switched axis
@@ -312,11 +313,11 @@ create_imsc <- function(imspeaks_filename, imscoords_filename,
     warning(call. = FALSE, "The difference in cell positions per pixel is higher than expected. Are you using the correct cell mask?")
   }
 
-  used_samples <- unique(combined_df[["sample_id"]])
+  used_samples <- unique(combined_df[[sample_id_colname]])
   used_samples <- used_samples[!is.na(used_samples)]
   dfls <- lapply(used_samples, function(sam) {
     # get locations
-    dff <- combined_df[combined_df$sample_id == sam & !is.na(combined_df$cell_idx), ]
+    dff <- combined_df[combined_df[[sample_id_colname]] == sam & !is.na(combined_df$cell_idx), ]
     dfa <- combined_df[combined_df$region_id == unique(dff$region_id), ]
 
     # find convex hull of pixels with cells
