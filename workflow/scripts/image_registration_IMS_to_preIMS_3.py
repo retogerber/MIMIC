@@ -993,15 +993,8 @@ project_metadata, pmap_coord_data = vie._generate_pmap_coords_and_meta(project_n
     transformed_coords_micro_px,
 ) = vie._transform_ims_coords_to_microscopy()
 
-print(pmap_coord_data)
-print(transformed_coords_ims)
-print(transformed_coords_micro)
-pmap_coord_data["x_micro_ims_px"] = transformed_coords_ims[:, 0]
-pmap_coord_data["y_micro_ims_px"] = transformed_coords_ims[:, 1]
 pmap_coord_data["x_micro_physical"] = transformed_coords_micro[:, 0]
 pmap_coord_data["y_micro_physical"] = transformed_coords_micro[:, 1]
-pmap_coord_data["x_micro_px"] = transformed_coords_micro_px[:, 0]
-pmap_coord_data["y_micro_px"] = transformed_coords_micro_px[:, 1]
 
 
 logging.info("Get mean error after registration")
@@ -1010,15 +1003,44 @@ imzcoordstrans = np.stack([np.array(pmap_coord_data["y_micro_physical"].to_list(
 
 kdt = KDTree(centsredfilttrans, leaf_size=30, metric='euclidean')
 distances, indices = kdt.query(imzcoordstrans, k=1, return_distance=True)
+ims_point_to_keep = distances[:,0]<0.5*stepsize
+
+kdt = KDTree(imzcoordstrans[ims_point_to_keep,:], leaf_size=30, metric='euclidean')
+distances, indices = kdt.query(centsredfilttrans, k=1, return_distance=True)
 point_to_keep = distances[:,0]<0.5*stepsize
-imzcoordstransfilt = imzcoordstrans[point_to_keep,:]
-vie.image_transformer.target_pts = centsredfilttrans
-vie.image_transformer.source_pts = imzcoordstransfilt
+centsredfilttrans = centsredfilttrans[point_to_keep,:]
+
+matches = skimage.feature.match_descriptors(imzcoordstrans[ims_point_to_keep,:], centsredfilttrans, metric='euclidean', cross_check=True, max_distance=0.5*stepsize)
+
+imzcoordstransfilt = np.stack([np.array(pmap_coord_data["y_padded"].to_list()).T,np.array(pmap_coord_data["x_padded"].to_list()).T], axis=1)
+imzcoordstransfilt = imzcoordstransfilt[ims_point_to_keep,:][matches[:,0],:]
+centsredfilttrans = centsredfilttrans[matches[:,1],:]
+
+vie.image_transformer.source_pts = centsredfilttrans
+vie.image_transformer.target_pts = imzcoordstransfilt*stepsize
 logging.info("Error: "+ str(np.mean(distances[point_to_keep,0])))
 logging.info("Number of points: "+ str(np.sum(point_to_keep)))
 reg_measure_dic['IMS_to_postIMS_error'] = str(np.mean(distances[point_to_keep,0]))
 reg_measure_dic['n_points'] = str(np.sum(point_to_keep))
 json.dump(reg_measure_dic, open(ims_to_postIMS_regerror,"w"))
+
+
+project_metadata, pmap_coord_data = vie._generate_pmap_coords_and_meta(project_name)
+(
+    transformed_coords_ims,
+    transformed_coords_micro,
+    transformed_coords_micro_px,
+) = vie._transform_ims_coords_to_microscopy()
+pmap_coord_data["x_micro_ims_px"] = transformed_coords_ims[:, 0]
+pmap_coord_data["y_micro_ims_px"] = transformed_coords_ims[:, 1]
+pmap_coord_data["x_micro_physical"] = transformed_coords_micro[:, 0]
+pmap_coord_data["y_micro_physical"] = transformed_coords_micro[:, 1]
+pmap_coord_data["x_micro_px"] = transformed_coords_micro_px[:, 0]
+pmap_coord_data["y_micro_px"] = transformed_coords_micro_px[:, 1]
+print(pmap_coord_data)
+print(transformed_coords_ims)
+print(transformed_coords_micro)
+
 
 pmeta_out_fp = Path(output_dir) / f"{project_name}-IMSML-meta.json"
 logging.info("Save data")
