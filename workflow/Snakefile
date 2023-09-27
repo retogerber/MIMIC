@@ -794,9 +794,9 @@ rule transform_IMC_location_to_postIMS:
 
 
 rule process_imzml:
-    threads: 16
+    threads: 32 
     resources:
-        mem_mb=20000
+        mem_mb=50000
     input: 
         imzml=lambda wildcards: os.path.join("results",wildcards.project_name,"data","IMS", f"{wildcards.imzml_base}.imzML"),
         ibd=lambda wildcards: os.path.join("results",wildcards.project_name,"data","IMS", f"{wildcards.imzml_base}.ibd"),

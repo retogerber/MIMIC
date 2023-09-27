@@ -25,7 +25,7 @@ stopifnot(grepl("\\.imzML$",basename(filename_imzml)))
 stopifnot(grepl("\\.ibd$",basename(filename_ibd)))
 
 setCardinalBPPARAM(BiocParallel::MulticoreParam(workers = snakemake@threads) )
-setCardinalNumBlocks(n=ifelse(snakemake@threads>10,snakemake@threads,20))
+setCardinalNumBlocks(n=ifelse(snakemake@threads>10,as.integer(snakemake@threads)*10,200))
 setCardinalVerbose(verbose=TRUE)
 
 # read peaklist
@@ -37,7 +37,7 @@ internal_standard_mzval <- ref_mzvals_df[["mz"]][ref_mzvals_df[["is_internal_sta
 # read imzml
 msi <- readImzML(
   name=sub("\\.imzML$","",basename(filename_imzml)),
-  resolution=0.05, units="mz",
+  resolution=0.01, units="mz",
   folder=dirname(filename_imzml),
   mass.range = c(min(ref_mzvals)-1,max(ref_mzvals)+1))
 
@@ -48,8 +48,8 @@ ref_feature <- features(msi)[which.min(abs(obs_mzvals-internal_standard_mzval))]
 
 msi_processed <- msi |>
   normalize(method="tic") |>
-  mzAlign(ref=ref_mzvals,tolerance=0.05, units="mz") |>
-  peakBin(ref=ref_mzvals, type="height",tolerance=0.1, units="mz")
+  #mzAlign(ref=ref_mzvals,tolerance=0.02, units="mz") |>
+  peakBin(ref=ref_mzvals, type="height",tolerance=0.02, units="mz")
 
 
 # msi_processed <- msi |> 
