@@ -1,6 +1,7 @@
 from wsireg.reg_shapes import RegShapes
 import numpy as np
 from tifffile import imread
+import skimage
 import cv2
 import pickle
 import sys,os
@@ -24,12 +25,20 @@ sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 logging.info("Start")
 cv2.setNumThreads(snakemake.threads)
 # cell mask file
+# cell_image_fp = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed_on_postIMS.ome.tiff"
 #cell_image_fp="/home/retger/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_006_transformed.ome.tiff"
 cell_image_fp=snakemake.input["IMCmask"]
 
+resolution = float(snakemake.params['resolution'])
 logging.info("Read Mask")
 # read mask
 cell_mask = imread(cell_image_fp)
+
+if resolution != 1:
+    wn = int(cell_mask.shape[0]*resolution)
+    hn = int(cell_mask.shape[1]*resolution)
+    cell_mask = cv2.resize(cell_mask, (hn,wn), interpolation=cv2.INTER_NEAREST_EXACT)
+
 
 logging.info("Find bounding box")
 # find bounding box

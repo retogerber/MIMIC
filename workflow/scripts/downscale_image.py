@@ -24,8 +24,8 @@ sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 logging.info("Start")
 
 # microscopy_pixelsize = 0.22537
-microscopy_pixelsize = snakemake.params["microscopy_pixelsize"]
-IMC_pixelsize = snakemake.params["IMC_pixelsize"]
+input_spacing = snakemake.params["input_spacing"]
+output_spacing = snakemake.params["output_spacing"]
 
 # img_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/test_split_pre_postIMC.ome.tiff"
 img_file = snakemake.input["postIMS"]
@@ -48,7 +48,7 @@ mask = imread(imcmask_file)
 logging.info("Create Transformation")
 # setup transformation sequence
 empty_transform = BASE_RIG_TFORM
-empty_transform['Spacing'] = (str(IMC_pixelsize),str(IMC_pixelsize))
+empty_transform['Spacing'] = (str(input_spacing),str(input_spacing))
 empty_transform['Size'] = (mask.shape[1], mask.shape[0])
 # empty_transform['Size'] = (img.shape[1], img.shape[0])
 rt = RegTransform(empty_transform)
@@ -56,7 +56,7 @@ rts = RegTransformSeq(rt,[0])
 
 logging.info("Transform and Save")
 # transform and save image
-ri = reg_image_loader(img, microscopy_pixelsize)
+ri = reg_image_loader(img, output_spacing)
 writer = OmeTiffWriter(ri, reg_transform_seq=rts)
 writer.write_image_by_plane(img_basename, output_dir=img_dirname, tile_size=1024)
 

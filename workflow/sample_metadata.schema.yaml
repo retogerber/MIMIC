@@ -1,0 +1,87 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+description: an entry in the sample sheet
+properties:
+  sample_name:
+    type: string
+    description: sample name
+  project_name:
+    type: string
+    description: project name
+  core_name:
+    type: string
+    description: TMA core name / identifier
+  reg_type:
+    type: string
+    pattern: (precise)|(register)
+    default: precise
+    description: type of registration
+  IMS_pixel_size:
+    type: number
+    exclusiveMinimum: 0
+    description: IMS step size in micrometer 
+  IMS_shrink_factor:
+    type: number
+    exclusiveMinimum: 0
+    maximum: 1
+    description: shrink factor of IMS, smaller than 1 if pixelsize is smaller than stepsize
+  IMC_pixel_size:
+    type: number
+    exclusiveMinimum: 0
+    description: IMC step size in micrometer
+  microscopy_pixel_size:
+    type: number
+    exclusiveMinimum: 0
+    description: microscopy pixel size in micrometer
+  coords_filename:
+    type: string
+    pattern: ()|(.h5$)
+    description: name of coords file
+  imzml_filename:
+    type: string
+    pattern: (.imzML$)
+    description: name of imzML file
+  IMS_rotation_angle:
+    type: number
+    default: 0
+    description: rotation angle of IMS relative to postIMS microscopy image
+  IMS_to_postIMS_n_splits:
+    type: number
+    default: 19
+    minimum: 3
+    maximum: 19
+    multipleOf: 1
+    description: number of parameter combinations to try for IMS ablation mark detection
+  IMS_to_postIMS_init_gridsearch:
+    type: number
+    default: 3
+    minimum: 0
+    maximum: 3
+    multipleOf: 1
+    description: number of iterations of grid search for initial transformation of IMS ablation marks to postIMS
+  within_IMC_fine_registration:
+    type: boolean
+    default: true
+    description: should fine registration of IMS ablation marks in IMC location be performed when registering IMS to postIMS
+  min_index_length:
+    type: number
+    default: 6
+    minimum: 3
+    multipleOf: 1
+    description: minimum sequence length to determine unique index of border points
+  max_index_length:
+    type: number
+    default: 20
+    minimum: 6
+    multipleOf: 1
+    description: maximum sequence length to determine unique index of border points
+
+required:
+  - sample_name
+  - project_name
+  - core_name
+  - IMS_pixel_size
+  - IMS_shrink_factor
+  - IMC_pixel_size
+  - microscopy_pixel_size
+  - imzml_filename
+

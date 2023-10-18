@@ -46,6 +46,12 @@ resolution = float(snakemake.params["IMC_pixelsize"])
 rotation_imz = float(snakemake.params["IMS_rotation_angle"])
 assert(rotation_imz in [-270,-180,-90,0,90,180,270])
 rotmat = get_rotmat_from_angle(rotation_imz)
+
+IMS_to_postIMS_n_splits = snakemake.params["IMS_to_postIMS_n_splits"]
+assert(IMS_to_postIMS_n_splits in [3,5,7,9,11,13,15,17,19])
+IMS_to_postIMS_init_gridsearch = snakemake.params["IMS_to_postIMS_init_gridsearch"]
+assert(IMS_to_postIMS_init_gridsearch in [0,1,2,3])
+
 logging.info("Rotation angle: "+str(rotation_imz))
 logging.info("IMS stepsize: "+str(stepsize))
 logging.info("IMS pixelsize: "+str(pixelsize))
@@ -120,7 +126,7 @@ gc.collect()
 logging.info("Read postIMS region bounding box")
 # read crop bbox
 dfmeta = pd.read_csv(output_table)
-imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed","")
+imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed_on_postIMS","")
 imc_project = os.path.split(os.path.split(os.path.split(os.path.split(imc_mask_file)[0])[0])[0])[1]
 # imc_project = "cirrhosis_TMA"
 # imc_project="test_split_ims"
@@ -151,7 +157,7 @@ regionimz = dfmeta[inds_arr]["imzregion"].tolist()[0]
 
 logging.info("Read cropped postIMS")
 # subset mask
-postIMScut = readimage_crop(postIMS_file, [int(xmin/resolution), int(ymin/resolution), int(xmax/resolution), int(ymax/resolution)])
+postIMScut = readimage_crop(postIMS_file, [int(xmin), int(ymin), int(xmax), int(ymax)])
 postIMScut = prepare_image_for_sam(postIMScut, 1)
 logging.info("Median filter")
 ksize = np.round(((stepsize-pixelsize)/resolution)/3).astype(int)*2
@@ -504,13 +510,15 @@ def find_w(img_median: np.ndarray, img_convolved: np.ndarray, mask1: np.ndarray,
 
     return max_score, threshold, w, centsred
 
-ws = [0.001,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.5,0.6,0.7,0.8,0.9,0.99]
+ws = np.array([0.001,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.5,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,0.99])
+wsindx = np.round(np.linspace(0,len(ws)-1,IMS_to_postIMS_n_splits)).astype(int)
+ws = ws[wsindx]
+
 max_score_outer, threshold_outer, w_outer, centsred_outer = find_w(postIMSmpre, tmp2, postIMSoutermask_small, postIMSringmask, ws, threads=threads)
 del postIMSringmask, postIMSoutermask_small
 gc.collect()
 
 logging.info("Find best threshold for points (inner points)")
-ws = [0.001,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.5,0.6,0.7,0.8,0.9,0.99]
 max_score_inner, threshold_inner, w_inner, centsred_inner = find_w(postIMSmpre, tmp2, postIMSinnermask, postIMSinnermask, ws, threads=threads)
 
 logging.info("Max score (outer): "+str(max_score_outer))
@@ -746,11 +754,9 @@ postIMSn = skimage.morphology.convex_hull_image(postIMSn)
 postIMSnringmask = create_ring_mask(postIMSn, imspixel_outscale*stepsize/resolution, imspixel_inscale*stepsize/resolution)
 
 logging.info("Extract postIMS boundary points")
-ws = [0.001,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.5,0.6,0.7,0.8,0.9,0.99]
 max_score_outer, threshold_outer, w_outer, centsred_outer = find_w(postIMSmpre, tmp2, postIMSnringmask, postIMSnringmask, ws, threads=threads)
 
 logging.info("Find best threshold for points (inner points)")
-ws = [0.001,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.5,0.6,0.7,0.8,0.9,0.99]
 max_score_inner, threshold_inner, w_inner, centsred_inner = find_w(postIMSmpre, tmp2, postIMSn, postIMSn, ws, threads=threads)
 
 centsred = combine_points(centsred_outer, centsred_inner)
@@ -1018,63 +1024,73 @@ def init_worker(poly_in, tpls_in, imzcoordsfilttrans_in, cents_indices_in, imz_i
     global weights
     weights = weights_in
 
-import itertools
-xrinit = np.linspace(-3,3,25)
-yrinit = np.linspace(-3,3,25)
-rotrinit = np.linspace(-np.pi/144,np.pi/144,11)
-logging.info(f"\tNumber of iterations: {len(xrinit)*len(yrinit)*len(rotrinit)}")
-tz = itertools.product(xrinit, yrinit, rotrinit)
-with Pool(threads, initializer= init_worker, initargs=(poly, tpls, imzcoordsfilttrans, cents_indices, imz_indices, weights)) as p:
-    n_points_ls = p.map(score_init_transform, tz)
-
-n_points_arr_init = np.array(n_points_ls)
-n_points_arr_init = n_points_arr_init[np.isfinite(n_points_arr_init).all(axis=1)]
-if np.max(n_points_arr_init[:,2])<0.95:
-    pcont_threshold = np.max(n_points_arr_init[:,2])
-    n_points_arr_init_red = n_points_arr_init[np.logical_or(n_points_arr_init[:,2] >= pcont_threshold,n_points_arr_init[:,2]==np.max(n_points_arr_init[:,2])),:]
-    xrinit2 = np.linspace(-3,3,7)
-    yrinit2 = np.linspace(-3,3,7)
-    rotrinit2 = np.linspace(-np.pi/144,np.pi/144,7)
+if IMS_to_postIMS_init_gridsearch==0:
+    n_points_arr = np.zeros((1,5))
 else:
-    pcont_threshold = np.quantile(n_points_arr_init[:,2],0.9)
-    n_points_arr_init_red = n_points_arr_init[np.logical_or(n_points_arr_init[:,2] >= pcont_threshold,n_points_arr_init[:,2]==np.max(n_points_arr_init[:,2])),:]
-    xrinit2 = np.arange(np.min(n_points_arr_init_red[:,5])-0.5,np.max(n_points_arr_init_red[:,5])+1,0.1)
-    yrinit2 = np.arange(np.min(n_points_arr_init_red[:,6])-0.5,np.max(n_points_arr_init_red[:,6])+1,0.1)
-    rotrinit2 = np.arange(np.min(n_points_arr_init_red[:,7])-2*np.pi/1440,np.max(n_points_arr_init_red[:,7])+2*np.pi/1440,np.pi/2880)
+    import itertools
+    xrinit = np.linspace(-3,3,25)
+    yrinit = np.linspace(-3,3,25)
+    rotrinit = np.linspace(-np.pi/144,np.pi/144,11)
+    logging.info(f"\tNumber of iterations: {len(xrinit)*len(yrinit)*len(rotrinit)}")
+    tz = itertools.product(xrinit, yrinit, rotrinit)
+    with Pool(threads, initializer= init_worker, initargs=(poly, tpls, imzcoordsfilttrans, cents_indices, imz_indices, weights)) as p:
+        n_points_ls = p.map(score_init_transform, tz)
+
+    n_points_arr_init = np.array(n_points_ls)
+    n_points_arr_init = n_points_arr_init[np.isfinite(n_points_arr_init).all(axis=1)]
+    if np.max(n_points_arr_init[:,2])<0.95:
+        pcont_threshold = np.max(n_points_arr_init[:,2])
+        n_points_arr_init_red = n_points_arr_init[np.logical_or(n_points_arr_init[:,2] >= pcont_threshold,n_points_arr_init[:,2]==np.max(n_points_arr_init[:,2])),:]
+        xrinit2 = np.linspace(-3,3,7)
+        yrinit2 = np.linspace(-3,3,7)
+        rotrinit2 = np.linspace(-np.pi/144,np.pi/144,7)
+    else:
+        pcont_threshold = np.quantile(n_points_arr_init[:,2],0.9)
+        n_points_arr_init_red = n_points_arr_init[np.logical_or(n_points_arr_init[:,2] >= pcont_threshold,n_points_arr_init[:,2]==np.max(n_points_arr_init[:,2])),:]
+        xrinit2 = np.arange(np.min(n_points_arr_init_red[:,5])-0.5,np.max(n_points_arr_init_red[:,5])+1,0.1)
+        yrinit2 = np.arange(np.min(n_points_arr_init_red[:,6])-0.5,np.max(n_points_arr_init_red[:,6])+1,0.1)
+        rotrinit2 = np.arange(np.min(n_points_arr_init_red[:,7])-2*np.pi/1440,np.max(n_points_arr_init_red[:,7])+2*np.pi/1440,np.pi/2880)
 
 
-import itertools
-logging.info(f"\tNumber of iterations: {len(xrinit2)*len(yrinit2)*len(rotrinit2)}")
-tz = itertools.product(xrinit2,yrinit2,rotrinit2)
-with Pool(threads, initializer= init_worker, initargs=(poly, tpls, imzcoordsfilttrans, cents_indices, imz_indices, weights)) as p:
-    n_points_ls = p.map(score_init_transform, tz)
-
-n_points_arr_init2 = np.array(n_points_ls)
-n_points_arr_init2 = n_points_arr_init2[np.isfinite(n_points_arr_init2).all(axis=1)]
-if np.max(n_points_arr_init2[:,2])<0.95:
-    pcont_threshold = np.max(n_points_arr_init2[:,2])
-    n_points_arr_init2_red = n_points_arr_init2[np.logical_or(n_points_arr_init2[:,2] >= pcont_threshold,n_points_arr_init2[:,2]==np.max(n_points_arr_init2[:,2])),:]
-    xr = np.linspace(-3,3,7)
-    yr = np.linspace(-3,3,7)
-    rotr = np.linspace(-np.pi/144,np.pi/144,7)
-else:
-    pcont_threshold = np.quantile(n_points_arr_init2[:,2],1)
-    n_points_arr_init2_red = n_points_arr_init2[np.logical_or(n_points_arr_init2[:,2] >= pcont_threshold,n_points_arr_init2[:,2]==np.max(n_points_arr_init2[:,2])),:]
-    xr = np.arange(np.min(n_points_arr_init2_red[:,5])-0.1,np.max(n_points_arr_init2_red[:,5])+0.2,0.05)
-    yr = np.arange(np.min(n_points_arr_init2_red[:,6])-0.1,np.max(n_points_arr_init2_red[:,6])+0.2,0.05)
-    rotr = np.arange(np.min(n_points_arr_init2_red[:,7])-np.pi/2880,np.max(n_points_arr_init2_red[:,7])+2*np.pi/2880,np.pi/5760)
-
-import itertools
-logging.info(f"\tNumber of iterations: {len(xr)*len(yr)*len(rotr)}")
-tz = itertools.product(xr,yr,rotr)
-with Pool(threads, initializer= init_worker, initargs=(poly, tpls, imzcoordsfilttrans, cents_indices, imz_indices, weights)) as p:
-    n_points_ls = p.map(score_init_transform, tz)
-del poly, tpls
-gc.collect()
-n_points_arr = np.array(n_points_ls)
-n_points_arr = n_points_arr[np.isfinite(n_points_arr).all(axis=1)]
-n_points_arr = np.vstack([n_points_arr_init_red,n_points_arr_init2_red, n_points_arr])
-logging.info(f"\tNumber of finite points:{n_points_arr.shape[0]}/{len(n_points_ls)}")
+if IMS_to_postIMS_init_gridsearch==1:
+    n_points_arr = n_points_arr_init
+elif IMS_to_postIMS_init_gridsearch>1:
+    import itertools
+    logging.info(f"\tNumber of iterations: {len(xrinit2)*len(yrinit2)*len(rotrinit2)}")
+    tz = itertools.product(xrinit2,yrinit2,rotrinit2)
+    with Pool(threads, initializer= init_worker, initargs=(poly, tpls, imzcoordsfilttrans, cents_indices, imz_indices, weights)) as p:
+        n_points_ls = p.map(score_init_transform, tz)
+    
+    n_points_arr_init2 = np.array(n_points_ls)
+    n_points_arr_init2 = n_points_arr_init2[np.isfinite(n_points_arr_init2).all(axis=1)]
+    if np.max(n_points_arr_init2[:,2])<0.95:
+        pcont_threshold = np.max(n_points_arr_init2[:,2])
+        n_points_arr_init2_red = n_points_arr_init2[np.logical_or(n_points_arr_init2[:,2] >= pcont_threshold,n_points_arr_init2[:,2]==np.max(n_points_arr_init2[:,2])),:]
+        xr = np.linspace(-3,3,7)
+        yr = np.linspace(-3,3,7)
+        rotr = np.linspace(-np.pi/144,np.pi/144,7)
+    else:
+        pcont_threshold = np.quantile(n_points_arr_init2[:,2],1)
+        n_points_arr_init2_red = n_points_arr_init2[np.logical_or(n_points_arr_init2[:,2] >= pcont_threshold,n_points_arr_init2[:,2]==np.max(n_points_arr_init2[:,2])),:]
+        xr = np.arange(np.min(n_points_arr_init2_red[:,5])-0.1,np.max(n_points_arr_init2_red[:,5])+0.2,0.05)
+        yr = np.arange(np.min(n_points_arr_init2_red[:,6])-0.1,np.max(n_points_arr_init2_red[:,6])+0.2,0.05)
+        rotr = np.arange(np.min(n_points_arr_init2_red[:,7])-np.pi/2880,np.max(n_points_arr_init2_red[:,7])+2*np.pi/2880,np.pi/5760)
+    
+if IMS_to_postIMS_init_gridsearch==2:
+    n_points_arr = np.vstack([n_points_arr_init_red,n_points_arr_init2_red])
+elif IMS_to_postIMS_init_gridsearch>2:
+    import itertools
+    logging.info(f"\tNumber of iterations: {len(xr)*len(yr)*len(rotr)}")
+    tz = itertools.product(xr,yr,rotr)
+    with Pool(threads, initializer= init_worker, initargs=(poly, tpls, imzcoordsfilttrans, cents_indices, imz_indices, weights)) as p:
+        n_points_ls = p.map(score_init_transform, tz)
+    del poly, tpls
+    gc.collect()
+    n_points_arr = np.array(n_points_ls)
+    n_points_arr = n_points_arr[np.isfinite(n_points_arr).all(axis=1)]
+    n_points_arr = np.vstack([n_points_arr_init_red,n_points_arr_init2_red, n_points_arr])
+    logging.info(f"\tNumber of finite points:{n_points_arr.shape[0]}/{len(n_points_ls)}")
+ 
 if np.max(n_points_arr[:,2])<0.95:
     xsh=0
     ysh=0
@@ -1116,7 +1132,7 @@ else:
     rot = n_points_arr_red[ind,7]
     del n_points_arr_red
 
-del n_points_ls, n_points_arr
+del n_points_arr
 gc.collect()
 
 logging.info(f"Parameters: rotation: {rot}, x shift: {xsh}, yshift: {ysh}")

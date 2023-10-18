@@ -62,7 +62,11 @@ def saveimage_tile(image: np.ndarray, filename: str, resolution: float):
 def prepare_image_for_sam(image: np.ndarray, scale): 
     '''Convert image to grayscale, equalize and scale'''
     img = grayscale(image, True)
-    img = skimage.transform.rescale(img, scale, preserve_range = True)   
+    # img = skimage.transform.rescale(img, scale, preserve_range = True)   
+    if scale != 1:
+        wn = int(img.shape[0]*scale)
+        hn = int(img.shape[1]*scale)
+        img = cv2.resize(img, (hn,wn), interpolation=cv2.INTER_NEAREST)
     img = (img-np.nanmin(img))/(np.nanmax(img)- np.nanmin(img))
     img = skimage.exposure.equalize_adapthist(img)
     img = normalize_image(img)*255
@@ -720,4 +724,74 @@ def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, ma
 
 
     return polyout
+
+
+def subtract_postIMS_grid(img: np.ndarray) -> np.ndarray:
+    # adapted from: https://stackoverflow.com/a/63403618
+    # read input as grayscale
+    # opencv fft only works on grayscale
+    hh, ww = img.shape[:2]
+
+    # convert image to floats and do dft saving as complex output
+    dft = cv2.dft(np.float32(img), flags = cv2.DFT_COMPLEX_OUTPUT)
+
+    # apply shift of origin from upper left corner to center of image
+    dft_shift = np.fft.fftshift(dft)
+
+    # extract magnitude and phase images
+    mag, phase = cv2.cartToPolar(dft_shift[:,:,0], dft_shift[:,:,1])
+
+    # get spectrum for viewing only
+    spec = (np.log(mag) / 20)
+
+    # get local threshold
+    local_thresh = skimage.filters.threshold_local(spec, block_size=191)
+    threshold = np.quantile((spec-local_thresh).flatten(),0.99)
+    # threshold based on difference from local threshold to image
+    mask = (spec-local_thresh) > threshold
+
+    # remove individual high pixels
+    mask = cv2.medianBlur(mask.astype(np.uint8)*255, 3)
+    # increase peaks
+    mask = cv2.morphologyEx(src=mask.astype(np.uint8), op = cv2.MORPH_DILATE, kernel = skimage.morphology.diamond(1)).astype(bool).astype(np.uint8)
+
+    # blacken out center DC region from mask
+    cx = ww // 2
+    cy = hh // 2
+    mask = cv2.circle(mask, (cx,cy), 12, 0, -1)
+
+    # invert mask
+    mask = 1 - mask
+    mask=mask.astype(np.uint8)
+
+    # apply mask to magnitude image
+    mag_notch = mask*mag
+
+    # get local average magnitude
+    magmedian = cv2.medianBlur(mag, ksize=5)
+    magmedian = cv2.blur(magmedian, ksize=(51,51))
+    magmedian = cv2.medianBlur(magmedian, ksize=5)
+    magmedian = cv2.blur(magmedian, ksize=(51,51))
+    magmedian = cv2.medianBlur(magmedian, ksize=5)
+    # replace masked regions with local average
+    mag_notch[mask==0] = local_thresh[mask==0]*magmedian[mask==0]
+
+    # convert magnitude and phase into cartesian real and imaginary components
+    real, imag = cv2.polarToCart(mag_notch, phase)
+
+    # combine cartesian components into one complex image
+    complex = cv2.merge([real, imag])
+
+    # shift origin from center to upper left corner
+    complex_ishift = np.fft.ifftshift(complex)
+
+    # do idft with normalization saving as real output
+    img_notch = cv2.idft(complex_ishift, flags=cv2.DFT_SCALE+cv2.DFT_REAL_OUTPUT)
+    img_notch = (normalize_image(img_notch)*255).astype(np.uint8)
+
+    # equalize histogram
+    img_notch_stretched = skimage.exposure.equalize_adapthist(img_notch)
+    img_notch_stretched = (normalize_image(img_notch_stretched)*255).astype(np.uint8)
+
+    return img_notch_stretched
 

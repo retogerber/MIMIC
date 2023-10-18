@@ -29,6 +29,7 @@ model_name = "isnet-general-use"
 os.environ["OMP_NUM_THREADS"] = str(snakemake.threads)
 rembg_session = new_session(model_name)
 # CHECKPOINT_PATH = "/home/retger/Downloads/sam_vit_h_4b8939.pth"
+# CHECKPOINT_PATH = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/sam_weights/sam_vit_h_4b8939.pth"
 CHECKPOINT_PATH = snakemake.input["sam_weights"]
 DEVICE = 'cpu'
 MODEL_TYPE = "vit_h"
@@ -40,7 +41,8 @@ stepsize = float(snakemake.params["IMS_pixelsize"])
 #pixelsize = 24
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
 #resolution = 1
-resolution = float(snakemake.params["IMC_pixelsize"])
+# resolution=0.22537
+resolution = float(snakemake.params["microscopy_pixelsize"])
 
 # postIMS_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMS/test_split_pre_postIMS_reduced.ome.tiff"
 # postIMS_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS_reduced.ome.tiff"
@@ -54,7 +56,9 @@ imc_mask_files = snakemake.input["IMCmask"]
 logging.info("Read and process image")
 # read postIMS image
 postIMS = skimage.io.imread(postIMS_file)
-postIMS = prepare_image_for_sam(postIMS, resolution)
+postIMS = prepare_image_for_sam(postIMS, 1)
+# postIMS = prepare_image_for_sam(postIMS, resolution)
+
 # postIMSmpre = skimage.filters.median(postIMS, skimage.morphology.disk( np.floor(((stepsize-pixelsize)/resolution)/3)))
 # postIMS2r = skimage.filters.median(postIMS, skimage.morphology.disk(int((1/resolution) * (pixelsize/4))))
 # postIMS2r = np.stack([postIMS, postIMS, postIMS], axis=2)

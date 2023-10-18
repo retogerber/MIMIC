@@ -45,19 +45,36 @@ rotation_imz = float(snakemake.params["IMS_rotation_angle"])
 assert(rotation_imz in [-270,-180,-90,0,90,180,270])
 rotmat = get_rotmat_from_angle(rotation_imz)
 
+if not isinstance(snakemake.params['within_IMC_fine_registration'], bool):
+    assert(isinstance(snakemake.params['within_IMC_fine_registration'], str))
+    assert(snakemake.params['within_IMC_fine_registration'].strip() in ["","True","true","False","false"])
+    do_within_IMC_fine_registration = True if snakemake.params['within_IMC_fine_registration'] in ["True","true"] else False
+else:
+    do_within_IMC_fine_registration = snakemake.params['within_IMC_fine_registration']
+
+# min_n=6
+min_n = snakemake.params["min_index_length"]
+# max_n=30
+max_n = snakemake.params["max_index_length"]
+
+
 logging.info("Rotation angle: "+str(rotation_imz))
 logging.info("IMS stepsize: "+str(stepsize))
 logging.info("IMS pixelsize: "+str(pixelsize))
 logging.info("Microscopy pixelsize: "+str(resolution))
+logging.info(f"within_IMC_fine_registration: {do_within_IMC_fine_registration}")
+logging.info(f"min_n: {min_n}")
+logging.info(f"max_n: {max_n}")
 
-# imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/IMS_test_split_pre.imzML"
+# imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/IMS_test_split_ims.imzML"
+# imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/IMS_test_split_ims_1.imzML"
 # imzmlfile = "/home/retger/Downloads/pos_mode_lipids_tma_02022023_imzml.imzML"
 # imzmlfile = "/home/retger/Downloads/lipid_tma_negative_run1_02042023_imzml.imzML"
 # imzmlfile = "/home/retger/Downloads/test_images_ims_to_imc_workflow/hcc-tma-3_aaxl_20raster_06132022-total ion count.imzML"
 # imzmlfile = "/home/retger/Downloads/test_images_ims_to_imc_workflow/cirrhosis_TMA_IMS.imzML"
 imzmlfile = snakemake.input["imzml"]
 
-# imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
+# imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed_on_postIMS.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/Lipid_TMA_37819_025_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_040_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_transformed.ome.tiff"
@@ -66,17 +83,18 @@ imzmlfile = snakemake.input["imzml"]
 # imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Cirrhosis_TMA_5_01262022_002.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 
-imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed","")
+imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed_on_postIMS","")
 # imc_project = "Lipid_TMA"
 imc_project = os.path.split(os.path.split(os.path.split(os.path.split(imc_mask_file)[0])[0])[0])[1]
 project_name = "postIMS_to_IMS_"+imc_project+"-"+imc_samplename
 
+# postIMS_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/postIMS/test_split_ims_postIMS.ome.tiff"
 # postIMS_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS.ome.tiff"
 # postIMS_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA_postIMS.ome.tiff"
 # postIMS_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/cirrhosis_TMA_postIMS.ome.tiff"
 postIMS_file = snakemake.input["postIMS_downscaled"]
 
-# masks_transform_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_masks_transform.txt"
+# masks_transform_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/registration_metric/Cirrhosis-TMA-5_New_Detector_001_masks_transform.txt"
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_masks_transform.txt"
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_040_masks_transform.txt"
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_masks_transform.txt"
@@ -84,7 +102,7 @@ postIMS_file = snakemake.input["postIMS_downscaled"]
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_008_masks_transform.txt"
 # masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Cirrhosis_TMA_5_01262022_002_masks_transform.txt"
 masks_transform_filename = snakemake.input["masks_transform"]
-# gridsearch_transform_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_gridsearch_transform.txt"
+# gridsearch_transform_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/registration_metric/Cirrhosis-TMA-5_New_Detector_001_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_040_gridsearch_transform.txt"
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_gridsearch_transform.txt"
@@ -93,7 +111,7 @@ masks_transform_filename = snakemake.input["masks_transform"]
 # gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Cirrhosis_TMA_5_01262022_002_gridsearch_transform.txt"
 gridsearch_transform_filename = snakemake.input["gridsearch_transform"]
 
-# postIMS_ablation_centroids_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_postIMS_ablation_centroids.csv"
+# postIMS_ablation_centroids_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/registration_metric/Cirrhosis-TMA-5_New_Detector_001_postIMS_ablation_centroids.csv"
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_postIMS_ablation_centroids.csv"
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_040_postIMS_ablation_centroids.csv"
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_postIMS_ablation_centroids.csv"
@@ -101,7 +119,7 @@ gridsearch_transform_filename = snakemake.input["gridsearch_transform"]
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_008_postIMS_ablation_centroids.csv"
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Cirrhosis_TMA_5_01262022_002_postIMS_ablation_centroids.csv"
 postIMS_ablation_centroids_filename = snakemake.input["postIMS_ablation_centroids"]
-# metadata_to_save_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_step1_metadata.json"
+# metadata_to_save_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/registration_metric/Cirrhosis-TMA-5_New_Detector_001_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_040_step1_metadata.json"
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_step1_metadata.json"
@@ -129,7 +147,8 @@ postIMS_bbox = metadata['postIMS_bbox']
 xmin, ymin, xmax, ymax = postIMS_bbox
 imzuqregs = np.array(metadata['IMS_regions'])
 regionimz = metadata['Matching_IMS_region']
-postIMS_shape = (int(postIMS_bbox[2]/resolution)-int(postIMS_bbox[0]/resolution), int(postIMS_bbox[3]/resolution)-int(postIMS_bbox[1]/resolution))
+# postIMS_shape = (int(postIMS_bbox[2]/resolution)-int(postIMS_bbox[0]/resolution), int(postIMS_bbox[3]/resolution)-int(postIMS_bbox[1]/resolution))
+postIMS_shape = (int(postIMS_bbox[2])-int(postIMS_bbox[0]), int(postIMS_bbox[3])-int(postIMS_bbox[1]))
 
 tinv = sitk.ReadTransform(masks_transform_filename )
 tmp_transform = sitk.ReadTransform(gridsearch_transform_filename )
@@ -262,8 +281,6 @@ distances, all_indices = kdt_ordered_centsred_border_all.query(centsred_border, 
 indices = all_indices[distances==0].flatten()
 nn1s=list(range(31))
 nn2s=list(range(31))
-min_n=6
-max_n=30
 max_dist_diff=0.2
 max_angle_diff=15
 from itertools import product
@@ -606,7 +623,7 @@ IMSpimg = image_from_points(postIMS_shape, imzcoordsfilttrans/resolution*stepsiz
 logging.info(f"Number of points in IMC location: {np.sum(pcontsc)} / {np.sum(pcontsi)}")
 logging.info(f"Distance between centroid of postIMS points and IMC center: {obs_centroid - theo_centroid} (Max possible: {theo_range})")
 # filter for number of points and location of centroid
-if (np.sum(pcontsc) > np.sum(pcontsi)/10) and np.all(prop_diff < 0.25):
+if (np.sum(pcontsc) > np.sum(pcontsi)/10) and np.all(prop_diff < 0.25) and do_within_IMC_fine_registration:
     
     logging.info(f"Run sitk registration")
     postIMSpimgcompl = postIMSpimg.copy()
@@ -704,7 +721,6 @@ if (np.sum(pcontsc) > np.sum(pcontsi)/10) and np.all(prop_diff < 0.25):
 
 else:
     logging.info(f"Criteria not met, do NOT run additional registration!")
-    postIMSro_trans = postIMSpimg
     # Identity transform
     transform_scaled_inverse = sitk.AffineTransform(2)
     transform_scaled = sitk.AffineTransform(2)
@@ -879,6 +895,7 @@ vie.ims_pixel_map = napari_imsmicrolink.data.ims_pixel_map.PixelMapIMS(imzmlfile
 vie.ims_pixel_map.ims_res = stepsize
 vie._tform_c.tform_ctl.target_mode_combo.setItemText(int(0),'Microscopy')
 vie._data.micro_d.res_info_input.setText(str(resolution))
+# vie._data.micro_d.res_info_input.setText(str(1))
 for regi in imzuqregs[imzuqregs != regionimz]:
     vie.ims_pixel_map.delete_roi(roi_name = str(regi), remove_padding=False)
 
@@ -914,8 +931,8 @@ logging.info(tm3.GetParameters())
 
 # Translation because of postIMS crop
 tm4 = sitk.TranslationTransform(2)
-yshift = ymin
-xshift = xmin
+yshift = ymin*resolution
+xshift = xmin*resolution
 tm4.SetParameters(np.array([xshift,yshift]).astype(np.double))
 logging.info(f"4. Transformation: {tm4.GetName()}")
 logging.info(tm4.GetParameters())
@@ -974,6 +991,7 @@ logging.info("Apply transformation")
 vie.image_transformer.affine_transform = tmfl
 vie.image_transformer.inverse_affine_transform = tmfl.GetInverse()
 vie.image_transformer.output_spacing = [resolution, resolution]
+# vie.image_transformer.output_spacing = [1, 1]
 vie.image_transformer._get_np_matrices()
 vie.microscopy_image = napari_imsmicrolink.data.tifffile_reader.TiffFileRegImage(postIMS_file)
 vie._add_ims_data()
@@ -1052,7 +1070,7 @@ napari_imsmicrolink.utils.coords.pmap_coords_to_h5(pmap_coord_data, coords_out_f
 
 
 # check match
-postIMScut = readimage_crop(postIMS_file, [int(xmin/resolution), int(ymin/resolution), int(xmax/resolution), int(ymax/resolution)])
+postIMScut = readimage_crop(postIMS_file, [int(xmin), int(ymin), int(xmax), int(ymax)])
 for i in [-2,-1,0,1,2]:
     for j in [-2,-1,0,1,2]:
         xindsc = (centsred[:,0]/resolution*stepsize).astype(int)+i
@@ -1063,8 +1081,8 @@ for i in [-2,-1,0,1,2]:
         xindsc = xindsc[inds]
         yindsc = yindsc[inds]
         postIMScut[xindsc,yindsc,:] = [255,0,0]
-        xinds = (np.array(pmap_coord_data["y_micro_physical"].to_list())/resolution+i-xmin/resolution).astype(int)
-        yinds = (np.array(pmap_coord_data["x_micro_physical"].to_list())/resolution+j-ymin/resolution).astype(int)
+        xinds = (np.array(pmap_coord_data["y_micro_physical"].to_list())/resolution+i-xmin).astype(int)
+        yinds = (np.array(pmap_coord_data["x_micro_physical"].to_list())/resolution+j-ymin).astype(int)
         xb = np.logical_and(xinds >= 0, xinds <= (postIMScut.shape[0]-1))
         yb = np.logical_and(yinds >= 0, yinds <= (postIMScut.shape[1]-1))
         inds = np.logical_and(xb,yb)

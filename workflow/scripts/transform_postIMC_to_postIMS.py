@@ -1,4 +1,5 @@
 from wsireg.writers.ome_tiff_writer import OmeTiffWriter
+from wsireg.reg_shapes import RegShapes
 from wsireg.reg_transforms.reg_transform_seq import RegTransformSeq
 from wsireg.reg_images.loader import reg_image_loader
 import numpy as np
@@ -6,12 +7,6 @@ from tifffile import imread
 from shapely.geometry import shape
 import json
 import sys,os
-import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
 import logging, traceback
 logging.basicConfig(filename=snakemake.log["stdout"],
                     level=logging.INFO,
@@ -26,8 +21,16 @@ sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 logging.info("Start")
 
 # microscopy_pixelsize = 0.22537
-microscopy_pixelsize = snakemake.params["microscopy_pixelsize"]
+microscopy_pixelsize = snakemake.params["input_spacing"]
+# output_spacing=1
+output_spacing = snakemake.params["output_spacing"]
 
+transform_target = "preIMS"
+transform_target = snakemake.params["transform_target"]
+transform_source = "postIMC"
+transform_source = snakemake.params["transform_source"]
+
+# transform_file_postIMC_to_postIMS_single = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/registrations/postIMC_to_postIMS/test_split_pre-postIMC_to_postIMS_transformations.json"
 # transform_file_postIMC_to_postIMS = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/registrations/postIMC_to_postIMS/A1/test_split_pre_A1-postIMC_to_postIMS_transformations.json"
 transform_file_postIMC_to_postIMS=snakemake.input["postIMC_to_postIMS_transform"]
 
@@ -43,14 +46,51 @@ img_out = snakemake.output["postIMC_transformed"]
 img_basename = os.path.basename(img_out).split(".")[0]
 img_dirname = os.path.dirname(img_out)
 
-logging.info("Read Image")
-# read image
-img=imread(img_file)
 
-logging.info("Read json and create shape")
+logging.info("Setup transformation")
+# setup transformation sequence
+rtsn=RegTransformSeq(transform_file_postIMC_to_postIMS)
+#rtsn.set_output_spacing((microscopy_pixelsize,microscopy_pixelsize))
+#rtsn.set_output_spacing((1.0,1.0))
+rtsn.set_output_spacing((float(output_spacing),float(output_spacing)))
+
+# if transform_target != "postIMS":
+rtls = rtsn.reg_transforms
+is_split_transform = len(rtls)==6
+
+if transform_target == "preIMC":
+    n_end = 1
+elif transform_target == "preIMS":
+    n_end = 5 if is_split_transform else 3
+elif transform_target == "postIMS":
+    n_end = 6 if is_split_transform else 4
+else:
+    raise ValueError("Unknown transform target: " + transform_target)
+if transform_source == "postIMC":
+    n_start = 0
+elif transform_source == "preIMC":
+    n_start = 1
+elif transform_source == "preIMS":
+    n_start = 5 if is_split_transform else 3
+else:
+    raise ValueError("Unknown transform source: " + transform_source)
+
+rtls = rtsn.reg_transforms
+rtls = rtls[n_start:n_end]
+rtsn = RegTransformSeq(rtls, transform_seq_idx=list(range(len(rtls))))
+if len(rtls)>0:
+    rtsn.set_output_spacing((float(output_spacing),float(output_spacing)))
+
+logging.info("Read json, transform and create shape")
 # get info of IMC location
 IMC_geojson = json.load(open(IMC_geojson_file, "r"))
+
+rs = RegShapes(IMC_geojson_file)
+rs.transform_shapes(rtsn)
+
+IMC_geojson['geometry']['coordinates'] = [rs.transformed_shape_data[0]['array'].tolist()]
 IMC_geojson_polygon = shape(IMC_geojson['geometry'])
+
 logging.info("Create bounding box")
 # bounding box
 bb1 = IMC_geojson_polygon.bounds
@@ -58,10 +98,18 @@ bb1 = IMC_geojson_polygon.bounds
 bb1 = [bb1[1],bb1[0],bb1[3],bb1[2]]
 bbn = [0]*4
 # scale up by 1.35 mm in each direction, leading to image size of about 3.7mm * 3.7mm, which should be enough to include whole TMA core
-bbn[0] = int(np.floor(bb1[0]/microscopy_pixelsize - 1350/microscopy_pixelsize))
-bbn[1] = int(np.floor(bb1[1]/microscopy_pixelsize - 1350/microscopy_pixelsize))
-bbn[2] = int(np.ceil(bb1[2]/microscopy_pixelsize + 1350/microscopy_pixelsize ))
-bbn[3] = int(np.ceil(bb1[3]/microscopy_pixelsize + 1350/microscopy_pixelsize ))
+bbn[0] = int(np.floor(bb1[0] - 1350/microscopy_pixelsize))
+bbn[1] = int(np.floor(bb1[1] - 1350/microscopy_pixelsize))
+bbn[2] = int(np.ceil(bb1[2] + 1350/microscopy_pixelsize ))
+bbn[3] = int(np.ceil(bb1[3] + 1350/microscopy_pixelsize ))
+
+
+
+logging.info("Read Image")
+# read image
+img=imread(img_file)
+
+
 # edges
 if bbn[0]<0:
     bbn[0] = 0
@@ -77,11 +125,6 @@ logging.info("Create new image")
 imgnew = img*0
 imgnew[bbn[0]:bbn[2],bbn[1]:bbn[3]] = img[bbn[0]:bbn[2],bbn[1]:bbn[3]]
 
-logging.info("Setup transformation")
-# setup transformation sequence
-rtsn=RegTransformSeq(transform_file_postIMC_to_postIMS)
-rtsn.set_output_spacing((microscopy_pixelsize,microscopy_pixelsize))
-rtsn.set_output_spacing((1.0,1.0))
 
 logging.info("Transform and save image")
 # transform and save image

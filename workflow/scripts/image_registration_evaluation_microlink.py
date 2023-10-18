@@ -24,17 +24,17 @@ logging.info("Start")
 
 logging.info("Error of all points")
 # postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_042_postIMS_ablation_centroids.csv"
-# postIMS_ablation_centroids_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_postIMS_ablation_centroids.csv"
+# postIMS_ablation_centroids_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_001_postIMS_ablation_centroids.csv"
 postIMS_ablation_centroids_filename = snakemake.input["postIMS_ablation_centroids"]
 # metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_042_step1_metadata.json"
-# metadata_to_save_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_002_step1_metadata.json" 
+# metadata_to_save_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_001_step1_metadata.json" 
 metadata_to_save_filename = snakemake.input["metadata"]
 # imsml_coords_fp = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_3781_042-IMSML-coords.h5"
-# imsml_coords_fp = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/postIMS_to_IMS_test_split_pre-Cirrhosis-TMA-5_New_Detector_002-IMSML-coords.h5"
+# imsml_coords_fp = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/postIMS_to_IMS_test_split_pre-Cirrhosis-TMA-5_New_Detector_001-IMSML-coords.h5"
 # imsml_coords_fp = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/postIMS_to_IMS_test_split_pre-IMSML-coords.h5"
 imsml_coords_fp = snakemake.input["imsml_coords_fp"]
 #imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_042_transformed.ome.tiff"
-# imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
+# imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed_on_postIMS.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 
 # stepsize=10
@@ -52,11 +52,12 @@ logging.info(f"Resolution: {str(resolution)}")
 with open(metadata_to_save_filename, 'r') as fp:
     metadata = json.load(fp)
 postIMS_bbox = metadata['postIMS_bbox']
+# xmin, ymin, xmax, ymax = (np.array(postIMS_bbox)*resolution).astype(int)
 xmin, ymin, xmax, ymax = postIMS_bbox
-postIMS_shape = (int(postIMS_bbox[2]/resolution)-int(postIMS_bbox[0]/resolution), int(postIMS_bbox[3]/resolution)-int(postIMS_bbox[1]/resolution))
+# postIMS_shape = (int(postIMS_bbox[2]*resolution)-int(postIMS_bbox[0]*resolution), int(postIMS_bbox[3]*resolution)-int(postIMS_bbox[1]*resolution))
 
 centsred = np.loadtxt(postIMS_ablation_centroids_filename, delimiter=',')
-centsredfilttrans = centsred*stepsize+np.array([xmin,ymin])
+centsredfilttrans = centsred*stepsize+np.array([xmin*resolution,ymin*resolution])
 with h5py.File(imsml_coords_fp, "r") as f:
     print(f["xy_padded"][:])
     print(f["xy_original"][:])
@@ -72,8 +73,8 @@ with h5py.File(imsml_coords_fp, "r") as f:
         
         micro_x = (padded[:, 0] * stepsize )
         micro_y = (padded[:, 1] * stepsize )
-        xsub = np.logical_and(micro_x > ymin, micro_x < ymax)
-        ysub = np.logical_and(micro_y > xmin, micro_y < xmax)
+        xsub = np.logical_and(micro_x > ymin*resolution, micro_x < ymax*resolution)
+        ysub = np.logical_and(micro_y > xmin*resolution, micro_y < xmax*resolution)
         sub = np.logical_and(xsub, ysub)
         micro_x = micro_x[sub]
         micro_y = micro_y[sub]
@@ -90,13 +91,17 @@ np.mean(distances.flatten())
 
 
 imcmask = readimage_crop(imc_mask_file, [int(xmin), int(ymin), int(xmax), int(ymax)])
+if resolution != 1:
+    wn = int(imcmask.shape[0]*resolution)
+    hn = int(imcmask.shape[1]*resolution)
+    imcmask = cv2.resize(imcmask, (hn,wn), interpolation=cv2.INTER_NEAREST_EXACT)
 imcmaskch = skimage.morphology.convex_hull_image(imcmask>0)
 contours,_ = cv2.findContours(imcmaskch.astype(np.uint8),cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
 contours = np.squeeze(contours[0])
 poly = shapely.geometry.Polygon(contours)
 poly = poly.buffer(2)
 import shapely.affinity
-poly = shapely.affinity.translate(poly, xoff=xmin, yoff=ymin, zoff=0.0)
+poly = shapely.affinity.translate(poly, xoff=xmin*resolution, yoff=ymin*resolution, zoff=0.0)
 # import shapely.plotting
 # shapely.plotting.plot_polygon(poly)
 # plt.scatter(imscoords[:,0],imscoords[:,1],s=1)
@@ -140,22 +145,22 @@ logging.info(f"Quantiles: \n\tQ05: {str(q05_error_inmask)}\n\tQ25: {str(q25_erro
 
 # mean error
 reg_measure_dic = {
-    "IMS_to_postIMS_part_mean_error": f"{mean_error:1.4f}",
-    "IMS_to_postIMS_part_quantile05_error": f"{q05_error:1.4f}",
-    "IMS_to_postIMS_part_quantile25_error": f"{q25_error:1.4f}",
-    "IMS_to_postIMS_part_quantile50_error": f"{q50_error:1.4f}",
-    "IMS_to_postIMS_part_quantile75_error": f"{q75_error:1.4f}",
-    "IMS_to_postIMS_part_quantile95_error": f"{q95_error:1.4f}",
-    "n_points_part": f"{len(distances):d}",
-    "n_points_part_total": f"{len(imscoords):d}",
-    "IMS_to_postIMS_part_inmask_mean_error": f"{mean_error_inmask:1.4f}",
-    "IMS_to_postIMS_part_inmask_quantile05_error": f"{q05_error_inmask:1.4f}",
-    "IMS_to_postIMS_part_inmask_quantile25_error": f"{q25_error_inmask:1.4f}",
-    "IMS_to_postIMS_part_inmask_quantile50_error": f"{q50_error_inmask:1.4f}",
-    "IMS_to_postIMS_part_inmask_quantile75_error": f"{q75_error_inmask:1.4f}",
-    "IMS_to_postIMS_part_inmask_quantile95_error": f"{q95_error_inmask:1.4f}",
-    "n_points_part_inmask": f"{len(distances_inmask):d}",
-    "n_points_part_total_inmask": f"{len(imzcoordstransformedinmask):d}",
+    "IMS_to_postIMS_mean_error": f"{mean_error:1.4f}",
+    "IMS_to_postIMS_quantile05_error": f"{q05_error:1.4f}",
+    "IMS_to_postIMS_quantile25_error": f"{q25_error:1.4f}",
+    "IMS_to_postIMS_quantile50_error": f"{q50_error:1.4f}",
+    "IMS_to_postIMS_quantile75_error": f"{q75_error:1.4f}",
+    "IMS_to_postIMS_quantile95_error": f"{q95_error:1.4f}",
+    "IMS_to_postIMS_n_points": f"{len(distances):d}",
+    "IMS_to_postIMS_n_points_total": f"{len(imscoords):d}",
+    "IMS_to_postIMS_inmask_mean_error": f"{mean_error_inmask:1.4f}",
+    "IMS_to_postIMS_inmask_quantile05_error": f"{q05_error_inmask:1.4f}",
+    "IMS_to_postIMS_inmask_quantile25_error": f"{q25_error_inmask:1.4f}",
+    "IMS_to_postIMS_inmask_quantile50_error": f"{q50_error_inmask:1.4f}",
+    "IMS_to_postIMS_inmask_quantile75_error": f"{q75_error_inmask:1.4f}",
+    "IMS_to_postIMS_inmask_quantile95_error": f"{q95_error_inmask:1.4f}",
+    "IMS_to_postIMS_inmask_n_points": f"{len(distances_inmask):d}",
+    "IMS_to_postIMS_inmask_n_points_total": f"{len(imzcoordstransformedinmask):d}",
     }
 
 
@@ -198,8 +203,8 @@ e8 = mean_error(postIMS, IMS, t4)
 
 ee = [e1, e2, e3, e4, e5, e6, e7, e8]
 
-reg_measure_dic['IMS_to_postIMS_error_landmarks_only'] = f"{np.min(ee):1.4f}"
-reg_measure_dic['n_landmarks'] = f"{IMS.shape[0]:d}"
+reg_measure_dic['IMS_to_postIMS_landmarks_only_mean_error'] = f"{np.min(ee):1.4f}"
+reg_measure_dic['IMS_to_postIMS_n_landmarks'] = f"{IMS.shape[0]:d}"
 logging.info("Save json")
 json.dump(reg_measure_dic, open(snakemake.output["IMS_to_postIMS_error"],"w"))
 

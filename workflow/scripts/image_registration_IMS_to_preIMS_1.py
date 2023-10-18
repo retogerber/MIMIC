@@ -33,15 +33,17 @@ resolution = float(snakemake.params["IMC_pixelsize"])
 rotation_imz = float(snakemake.params["IMS_rotation_angle"])
 assert(rotation_imz in [-270,-180,-90,0,90,180,270])
 
-# postIMSr_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/postIMS/test_split_ims_postIMS_reduced_mask.ome.tiff"
+# postIMSr_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMS/test_split_pre_postIMS_reduced_mask.ome.tiff"
 # postIMSr_file = "/home/retger/Downloads/cirrhosis_TMA_postIMS_reduced_mask.ome.tiff"
 # postIMSr_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS_reduced_mask.ome.tiff"
 postIMSr_file = snakemake.input["postIMSmask_downscaled"]
 # imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/IMS_test_split_ims_2.imzML"
+# imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/IMS_test_split_pre.imzML"
 # imzmlfile = "/home/retger/Downloads/cirrhosis_TMA_IMS.imzML"
 # imzmlfile = "/home/retger/Downloads/pos_mode_lipids_tma_02032023_imzml.imzML"
 imzmlfile = snakemake.input["imzml"]
 # imc_mask_files = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
+# imc_mask_files = ["/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed.ome.tiff","/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"]
 # imc_mask_files = [f"/home/retger/Downloads/Cirrhosis-TMA-5_New_Detector_0{i}_transformed.ome.tiff" for i in ["01","02","03","04","05","06","07","08","09","11","12","13","14","15","16"]]
 # imc_mask_files = imc_mask_files + [f"/home/retger/Downloads/Cirrhosis-TMA-5_01062022_0{i}_transformed.ome.tiff" for i in ["05","06","07","08","09"]]
 # imc_mask_files = imc_mask_files + [f""/home/retger/Downloads/Cirrhosis_TMA_5_01262022_0{i}_transformed.ome.tiff" for i in ["01","02","03","04","05"]]
@@ -53,29 +55,40 @@ if isinstance(imc_mask_files, str):
 # sample_metadata = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/config/sample_metadata.csv"
 # sample_metadata = "/home/retger/Downloads/sample_metadata.csv"
 # sample_metadata = snakemake.input["sample_metadata"]
+# sample_core_names = "Cirrhosis-TMA-5_New_Detector_001|-_-|A1|-|-|Cirrhosis-TMA-5_New_Detector_002|-_-|B1"
 sample_core_names = snakemake.params["sample_core_names"]
 
 # output_table = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/IMS_to_postIMS_matches.csv"
 output_table = snakemake.output["IMS_to_postIMS_matches"]
 
 
+logging.info("Rotation angle: "+str(rotation_imz))
+logging.info("IMS stepsize: "+str(stepsize))
+logging.info("IMS pixelsize: "+str(pixelsize))
+logging.info("Microscopy pixelsize: "+str(resolution))
 
 logging.info("IMC location")
 # get imc location info
 imcbboxls = list()
 for imcmaskfile in imc_mask_files:
     imc=skimage.io.imread(imcmaskfile)
+    logging.info(f"\t{imc.shape}\t{imcmaskfile}")
     imc[imc>0]=255
     imc = imc.astype(np.uint8)
     imcbboxls.append(skimage.measure.regionprops(imc)[0].bbox)
 
-imc_samplenames = [ os.path.splitext(os.path.splitext(os.path.split(f)[1])[0])[0].replace("_transformed","") for f in imc_mask_files]
+imc_samplenames = [ os.path.splitext(os.path.splitext(os.path.split(f)[1])[0])[0].replace("_transformed_on_postIMS","") for f in imc_mask_files]
 # imc_projects = ["cirrhosis_TMA"]*len(imc_samplenames)
 imc_projects = [ os.path.split(os.path.split(os.path.split(os.path.split(f)[0])[0])[0])[1] for f in imc_mask_files]
 
 sample_core_names_ls = sample_core_names.split("|-|-|")
 core_names_alt = np.array([s.split("|-_-|")[1] for s in sample_core_names_ls])
 sample_names = np.array([s.split("|-_-|")[0] for s in sample_core_names_ls])
+
+logging.info("Sample core names input: "+sample_core_names)
+logging.info("Sample names: "+",".join(sample_names.tolist()))
+logging.info("Core names: "+",".join(core_names_alt.tolist()))
+logging.info("imc sample names: "+",".join(imc_samplenames))
 
 core_names = list()
 for s in imc_samplenames:
@@ -84,7 +97,7 @@ for s in imc_samplenames:
 
 logging.info("Read postIMS mask")
 postIMSr = skimage.io.imread(postIMSr_file)
-
+logging.info(f"\t{postIMSr.shape}\t{postIMSr_file}")
 # expand mask
 # # outermask = skimage.morphology.isotropic_dilation(postIMSr, (1/resolution)*stepsize*2)
 # postIMSlbs = skimage.measure.label(postIMSr.astype(np.uint8))
@@ -156,7 +169,7 @@ imzregions = imzregions.astype(np.uint8)
 # remove imz areas that are clearly too small to match
 imzregpop = skimage.measure.regionprops(imzregions)
 imzlabels = np.array([r.label for r in imzregpop])
-imzareas = np.array([r.area for r in imzregpop]) * (stepsize*resolution)**2
+imzareas = np.array([r.area for r in imzregpop]) * (stepsize/resolution)**2
 to_remove = imzareas < np.min(postIMS_pre_areas)*0.5
 labs_to_remove = imzlabels[to_remove]
 for lab in labs_to_remove:
@@ -164,7 +177,7 @@ for lab in labs_to_remove:
 
 imzuqregs = np.unique(imzregions)[1:]
 # rescale to postIMS resolution
-imzimgres = skimage.transform.rescale(imzimg, stepsize*resolution, preserve_range = True)   
+imzimgres = skimage.transform.rescale(imzimg, stepsize/resolution, preserve_range = True)   
 imzimgres[imzimgres>0] = 255 
 del imz
 

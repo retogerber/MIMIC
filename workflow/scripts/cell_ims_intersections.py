@@ -45,7 +45,7 @@ def compute_intersections(
     # rs.shape_data.pop(0)
     # rs.shape_data_gj.pop(0)
 
-    resolution_factor = ims_spacing / micro_spacing
+    # resolution_factor = ims_spacing / micro_spacing
 
     logging.info("Read h5 coords file")
     with h5py.File(imsml_coords_fp, "r") as f:
@@ -59,14 +59,14 @@ def compute_intersections(
         else:
             padded = f["xy_padded"][:]
             
-            micro_x = (padded[:, 0] * resolution_factor)
-            micro_y = (padded[:, 1] * resolution_factor)
+            micro_x = (padded[:, 0] * ims_spacing)
+            micro_y = (padded[:, 1] * ims_spacing)
 
     logging.info("Create cell polygons")
     cell_polygons = [geometry.Polygon(r["array"]) for r in rs.shape_data]
     assert len(cell_polygons) == len(cell_indices)
     logging.info("Create IMS pixel polygons")
-    pixel_boxes = [px_to_box(x, y, resolution_factor) for x, y in zip(micro_x, micro_y)]
+    pixel_boxes = [px_to_box(x, y, ims_spacing*ims_shrink_factor) for x, y in zip(micro_x, micro_y)]
     if ims_shrink_factor:
         pixel_boxes = [
             affinity.scale(px, xfact=ims_shrink_factor, yfact=ims_shrink_factor)
@@ -102,11 +102,15 @@ def compute_intersections(
 
 
 # inputs
+# imsml_coords_fp = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/postIMS_to_IMS_test_split_pre-IMSML-coords.h5"
+# imsml_coords_fp = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/postIMS_to_IMS_test_split_pre-Cirrhosis-TMA-5_New_Detector_002-IMSML-coords.h5"
 #imsml_coords_fp = "/home/retger/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMS/cirrhosis_TMA-IMSML-coords.h5"
 imsml_coords_fp = snakemake.input["imsml_coords_fp"]
+# cell_indices_fp = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed_on_postIMS_cell_indices.pkl"
 #cell_indices_fp =  "/home/retger/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_006_transformed_cell_indices.pkl"
 cell_indices_fp = snakemake.input["cell_indices"]
 
+# cell_shapes_fp = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed_on_postIMS_cell_masks.geojson"
 #cell_shapes_fp = "/home/retger/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_006_transformed_cell_masks.geojson"
 cell_shapes_fp = snakemake.input["IMCmask_transformed"]
 
@@ -114,8 +118,11 @@ output_csv = snakemake.output["cell_overlaps"]
 
 
 # data specific settings
+# ims_spacing=30
 ims_spacing = snakemake.params["IMS_pixelsize"]
+# micro_spacing = 0.22537
 micro_spacing = snakemake.params["IMC_pixelsize"]
+# ims_shrink_factor = 0.8
 ims_shrink_factor = snakemake.params["IMS_shrink_factor"]
 
 
@@ -136,6 +143,7 @@ with warnings.catch_warnings():
         ims_shrink_factor=ims_shrink_factor,
     )
 
+assert(len(cell_overlap_df['cell_idx'].to_list())>0)
 
 logging.info("Save to csv")
 cell_overlap_df.to_csv(

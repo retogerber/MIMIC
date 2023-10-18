@@ -1,8 +1,7 @@
 # logging
 stdlog <- file(snakemake@log[["stdout"]], open="wt")
 sink(stdlog, type = "output")
-stderr <- file(snakemake@log[["stderr"]], open="wt")
-sink(stderr, type = "message")
+sink(stdlog, type = "message")
 
 # n_worker <- snakemake@threads
 # RhpcBLASctl::blas_set_num_threads(n_worker)
