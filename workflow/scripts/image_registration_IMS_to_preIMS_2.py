@@ -32,10 +32,10 @@ cv2.setNumThreads(threads)
 logging.info("Start")
 
 # parameters
-# stepsize = 20
+# stepsize = 30
 # stepsize = 10
 stepsize = float(snakemake.params["IMS_pixelsize"])
-# pixelsize = 16
+# pixelsize = 24
 # pixelsize = 8 
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
 # resolution = 1
@@ -228,37 +228,37 @@ def points_from_mask(
     '''
     
     # filter detected regions to obtain ablation marks
-    labs = skimage.measure.label(mask.astype(np.double))
-    regs = skimage.measure.regionprops(labs)
-    del labs
+    _,_,stats,cents = cv2.connectedComponentsWithStats(mask.astype(np.uint8))
+    stats=stats[1:,:]
+    cents=np.flip(cents[1:,:],axis=1)
+    
     # filter by area 
-    areas = np.asarray([c.area for c in regs])
+    areas = stats[:,4]
+    widths = stats[:,2]
+    heights = stats[:,3]
+
+    # areas = np.asarray([c.area for c in regs])
     # minimal area is a circle with radius (empirical guess based on pixelsize and resolution) 
     min_radius = (pixelsize/8+(pixelsize/8-1)*2.5)/resolution
     min_area = min_radius**2*np.pi if min_radius>0 else np.pi
     area_range = [min_area,(pixelsize/resolution)**2]
     inran = np.logical_and(areas > area_range[0], areas < area_range[1])
-    del areas
-    regsred = np.asarray(regs)[inran]
-    del regs, inran
+
+    cents = cents[inran,:]
     # check length
-    if not isinstance(regsred, np.ndarray) or len(regsred)<6:
+    if not isinstance(cents, np.ndarray) or len(cents)<6:
         return np.zeros((0,2))
 
     # filter by ratio of x-slice to y-slice
-    x_slice = np.array([r.slice[0].stop-r.slice[0].start for r in regsred])
-    y_slice = np.array([r.slice[1].stop-r.slice[1].start for r in regsred])
-    slice_ratio = np.asarray([x_slice/y_slice]).flatten()
+    slice_ratio = widths[inran]/heights[inran]
     is_round = np.abs(np.log10(slice_ratio))<np.log10(2)
-    regsred = np.asarray(regsred)[is_round]
+    cents = cents[is_round,:]
 
     # check length
-    if not isinstance(regsred, np.ndarray) or len(regsred)<6:
+    if not isinstance(cents, np.ndarray) or len(cents)<6:
         return np.zeros((0,2))
-    cents = np.asarray([r.centroid for r in regsred])
     # to IMS scale
     centsred = cents*resolution/stepsize
-    del cents
     centsred = filter_points(centsred, min_n=min_n)
     return centsred
 
@@ -445,9 +445,7 @@ def find_threshold(img: np.ndarray, maskb_dist: np.ndarray, thr_range=[127,250],
 # def score_find_w(w, img_median, img_convolved, maskb_dist, mask2, threads):
 def score_find_w(w):
     postIMSm = w*img_median_in + (1-w)*img_convolved_in
-    postIMSm = skimage.exposure.equalize_adapthist(normalize_image(postIMSm))
-    postIMSm = normalize_image(postIMSm)*255
-    postIMSm = postIMSm.astype(np.uint8)
+    postIMSm = cv2.createCLAHE().apply(postIMSm.astype(np.uint8))
     postIMSm[np.logical_not(mask2_in)] = 0
     if threads_in>1:
         if current_threshold_in.value>0:
