@@ -102,14 +102,17 @@ def compute_intersections(
 
 
 # inputs
+
+imsml_coords_fp = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_011-IMSML-coords.h5"
 # imsml_coords_fp = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/postIMS_to_IMS_test_split_pre-IMSML-coords.h5"
 # imsml_coords_fp = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/postIMS_to_IMS_test_split_pre-Cirrhosis-TMA-5_New_Detector_002-IMSML-coords.h5"
 #imsml_coords_fp = "/home/retger/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMS/cirrhosis_TMA-IMSML-coords.h5"
 imsml_coords_fp = snakemake.input["imsml_coords_fp"]
+cell_indices_fp = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_011_transformed_on_postIMS_cell_indices.pkl"
 # cell_indices_fp = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed_on_postIMS_cell_indices.pkl"
 #cell_indices_fp =  "/home/retger/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_006_transformed_cell_indices.pkl"
 cell_indices_fp = snakemake.input["cell_indices"]
-
+cell_shapes_fp = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_011_transformed_on_postIMS_cell_masks.geojson"
 # cell_shapes_fp = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed_on_postIMS_cell_masks.geojson"
 #cell_shapes_fp = "/home/retger/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_006_transformed_cell_masks.geojson"
 cell_shapes_fp = snakemake.input["IMCmask_transformed"]

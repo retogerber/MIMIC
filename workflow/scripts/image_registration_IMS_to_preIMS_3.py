@@ -27,6 +27,7 @@ sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 
 threads = int(snakemake.threads)
 sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(threads)
+cv2.setNumThreads(threads)
 
 # stepsize = 30
 # stepsize = 20
@@ -66,74 +67,33 @@ logging.info(f"within_IMC_fine_registration: {do_within_IMC_fine_registration}")
 logging.info(f"min_n: {min_n}")
 logging.info(f"max_n: {max_n}")
 
-# imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/IMS_test_split_ims.imzML"
-# imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/IMS_test_split_ims_1.imzML"
-# imzmlfile = "/home/retger/Downloads/pos_mode_lipids_tma_02022023_imzml.imzML"
-# imzmlfile = "/home/retger/Downloads/lipid_tma_negative_run1_02042023_imzml.imzML"
-# imzmlfile = "/home/retger/Downloads/test_images_ims_to_imc_workflow/hcc-tma-3_aaxl_20raster_06132022-total ion count.imzML"
-# imzmlfile = "/home/retger/Downloads/test_images_ims_to_imc_workflow/cirrhosis_TMA_IMS.imzML"
+imzmlfile = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_IMS.imzML"
 imzmlfile = snakemake.input["imzml"]
 
-# imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed_on_postIMS.ome.tiff"
-# imc_mask_file = "/home/retger/Downloads/Lipid_TMA_37819_025_transformed.ome.tiff"
-# imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_040_transformed.ome.tiff"
-# imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_transformed.ome.tiff"
-# imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_transformed.ome.tiff"
-# imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_008_transformed.ome.tiff"
-# imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Cirrhosis_TMA_5_01262022_002.tiff"
+imc_mask_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_032_transformed_on_postIMS.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 
 imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed_on_postIMS","")
-# imc_project = "Lipid_TMA"
 imc_project = os.path.split(os.path.split(os.path.split(os.path.split(imc_mask_file)[0])[0])[0])[1]
 project_name = "postIMS_to_IMS_"+imc_project+"-"+imc_samplename
 
-# postIMS_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/postIMS/test_split_ims_postIMS.ome.tiff"
-# postIMS_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS.ome.tiff"
-# postIMS_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA_postIMS.ome.tiff"
-# postIMS_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/cirrhosis_TMA_postIMS.ome.tiff"
+postIMS_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
 postIMS_file = snakemake.input["postIMS_downscaled"]
 
-# masks_transform_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/registration_metric/Cirrhosis-TMA-5_New_Detector_001_masks_transform.txt"
-# masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_masks_transform.txt"
-# masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_040_masks_transform.txt"
-# masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_masks_transform.txt"
-# masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_masks_transform.txt"
-# masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_008_masks_transform.txt"
-# masks_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Cirrhosis_TMA_5_01262022_002_masks_transform.txt"
+masks_transform_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_032_masks_transform.txt"
 masks_transform_filename = snakemake.input["masks_transform"]
-# gridsearch_transform_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/registration_metric/Cirrhosis-TMA-5_New_Detector_001_gridsearch_transform.txt"
-# gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_gridsearch_transform.txt"
-# gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_040_gridsearch_transform.txt"
-# gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_gridsearch_transform.txt"
-# gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_gridsearch_transform.txt"
-# gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_008_gridsearch_transform.txt"
-# gridsearch_transform_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Cirrhosis_TMA_5_01262022_002_gridsearch_transform.txt"
+gridsearch_transform_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_032_gridsearch_transform.txt"
 gridsearch_transform_filename = snakemake.input["gridsearch_transform"]
 
-# postIMS_ablation_centroids_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/registration_metric/Cirrhosis-TMA-5_New_Detector_001_postIMS_ablation_centroids.csv"
-# postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_postIMS_ablation_centroids.csv"
-# postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_040_postIMS_ablation_centroids.csv"
-# postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_postIMS_ablation_centroids.csv"
-# postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_postIMS_ablation_centroids.csv"
-# postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_008_postIMS_ablation_centroids.csv"
-# postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Cirrhosis_TMA_5_01262022_002_postIMS_ablation_centroids.csv"
+postIMS_ablation_centroids_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_032_postIMS_ablation_centroids.csv"
 postIMS_ablation_centroids_filename = snakemake.input["postIMS_ablation_centroids"]
-# metadata_to_save_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/registration_metric/Cirrhosis-TMA-5_New_Detector_001_step1_metadata.json"
-# metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_025_step1_metadata.json"
-# metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_040_step1_metadata.json"
-# metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_013_step1_metadata.json"
-# metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_029_step1_metadata.json"
-# metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA-2_008_step1_metadata.json"
-# metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Cirrhosis_TMA_5_01262022_002_step1_metadata.json"
+metadata_to_save_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_032_step1_metadata.json"
 metadata_to_save_filename = snakemake.input["metadata"]
 
 
-# ims_to_postIMS_regerror = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_001_IMS_to_postIMS_reg_auto_metrics.json"
 ims_to_postIMS_regerror = snakemake.output["IMS_to_postIMS_error"]
 ims_to_postIMS_regerror_image = snakemake.output["IMS_to_postIMS_error_image"]
 
-# coordsfile_out = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/postIMS_to_IMS_test_split_pre-IMSML-coords.h5"
 coordsfile_out = snakemake.output["imsml_coords_fp"]
 output_dir = os.path.dirname(coordsfile_out)
 
@@ -147,7 +107,6 @@ postIMS_bbox = metadata['postIMS_bbox']
 xmin, ymin, xmax, ymax = postIMS_bbox
 imzuqregs = np.array(metadata['IMS_regions'])
 regionimz = metadata['Matching_IMS_region']
-# postIMS_shape = (int(postIMS_bbox[2]/resolution)-int(postIMS_bbox[0]/resolution), int(postIMS_bbox[3]/resolution)-int(postIMS_bbox[1]/resolution))
 postIMS_shape = (int(postIMS_bbox[2])-int(postIMS_bbox[0]), int(postIMS_bbox[3])-int(postIMS_bbox[1]))
 
 tinv = sitk.ReadTransform(masks_transform_filename )
@@ -231,9 +190,6 @@ try:
     tch = shapely.union(tch11,tch22)
     if not tch.is_valid:
         tch = tch11
-    # import shapely.plotting
-    # shapely.plotting.plot_polygon(tch)
-    # plt.show()
 
     postIMSpoly_outer = tch.buffer(0.5, cap_style='square', join_style='mitre')
     postIMSpoly_inner = tch.buffer(-0.5, cap_style='square', join_style='mitre')
@@ -370,6 +326,7 @@ for k in range(len(nn_combinations)):
     close_ims_inds = np.arange(len(close_ims))[n_matches==1]
 
     logging.info(f"\t{nn1:02}_{nn2:02}\t{np.sum(n_matches==1):6}\t{len(ind_to_keep):6}\t{len(indices):6}")
+    print(f"\t{nn1:02}_{nn2:02}\t{np.sum(n_matches==1):6}\t{len(ind_to_keep):6}\t{len(indices):6}")
 
     # create matching points
     ind_to_keep_filt = np.array(ind_to_keep)[np.array(n_matches)==1]

@@ -41,28 +41,24 @@ msi <- readImzML(
   folder=dirname(filename_imzml),
   mass.range = c(min(ref_mzvals)-1,max(ref_mzvals)+1))
 
-
-obs_mzvals <- as.data.frame(fData(msi))[["mz"]]
-ref_feature <- features(msi)[which.min(abs(obs_mzvals-internal_standard_mzval))]
-
+log2_na <- function(x, xmin=0){
+  xnew <- log2(round(x,2))
+  xnew <- replace(xnew, is.infinite(xnew), xmin)
+  xnew
+}
 
 msi_processed <- msi |>
-  normalize(method="tic") |>
-  #mzAlign(ref=ref_mzvals,tolerance=0.02, units="mz") |>
-  peakBin(ref=ref_mzvals, type="height",tolerance=0.02, units="mz")
-
+  normalize("tic") |>
+  mzAlign(ref = ref_mzvals, tolerance = 0.02, units = "mz") |>
+  peakBin(ref = ref_mzvals, type = "height", tolerance = 0.02, units = "mz") |>
+  process(fun=log2_na, xmin=NA, label="transform", delay=TRUE)
+msi_processed <- process(msi_processed)
 
 # msi_processed <- msi |> 
 #   smoothSignal(method="sgolay") |>
 #   normalize(method="reference", feature=ref_feature) |>
 #   reduceBaseline() |> 
 #   peakBin(ref=ref_mzvals, type="height") 
-
-
-
-
-msi_processed <- process(msi_processed)
-  
 
 # write to hdf5
 # output_hdf5 <- here::here("data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMS/cirrhosis_TMA_peaks.h5")

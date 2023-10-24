@@ -1,7 +1,9 @@
+import cv2
+import SimpleITK as sitk
 import pandas as pd
+import json
 from sklearn.neighbors import KDTree
 import pycpd
-import SimpleITK as sitk
 import napari_imsmicrolink
 import skimage
 import numpy as np
@@ -22,26 +24,35 @@ sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 
 logging.info("Start")
 
+cv2.setNumThreads(snakemake.threads)
+sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(snakemake.threads)
+
 # parameters
-# stepsize = 10
+# stepsize = 20
 stepsize = float(snakemake.params["IMS_pixelsize"])
-# pixelsize = 8 
+# pixelsize = 16
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
-# resolution = 1
+# resolution = 0.22537
 resolution = float(snakemake.params["IMC_pixelsize"])
-# rotation_imz = 0
+# rotation_imz = 180
 rotation_imz = float(snakemake.params["IMS_rotation_angle"])
 assert(rotation_imz in [-270,-180,-90,0,90,180,270])
 
+postIMSr_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS_reduced_mask.ome.tiff"
 # postIMSr_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMS/test_split_pre_postIMS_reduced_mask.ome.tiff"
 # postIMSr_file = "/home/retger/Downloads/cirrhosis_TMA_postIMS_reduced_mask.ome.tiff"
 # postIMSr_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS_reduced_mask.ome.tiff"
 postIMSr_file = snakemake.input["postIMSmask_downscaled"]
+imzmlfile = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_IMS.imzML"
 # imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/IMS_test_split_ims_2.imzML"
 # imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/IMS_test_split_pre.imzML"
 # imzmlfile = "/home/retger/Downloads/cirrhosis_TMA_IMS.imzML"
 # imzmlfile = "/home/retger/Downloads/pos_mode_lipids_tma_02032023_imzml.imzML"
 imzmlfile = snakemake.input["imzml"]
+
+imc_mask_files = ["/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_E9.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_A2.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_B5.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_B1.geojson"]
+# imc_mask_files = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_022_transformed_on_postIMS.ome.tiff"
+# imc_mask_files = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_D2.geojson"
 # imc_mask_files = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
 # imc_mask_files = ["/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed.ome.tiff","/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"]
 # imc_mask_files = [f"/home/retger/Downloads/Cirrhosis-TMA-5_New_Detector_0{i}_transformed.ome.tiff" for i in ["01","02","03","04","05","06","07","08","09","11","12","13","14","15","16"]]
@@ -49,12 +60,15 @@ imzmlfile = snakemake.input["imzml"]
 # imc_mask_files = imc_mask_files + [f""/home/retger/Downloads/Cirrhosis_TMA_5_01262022_0{i}_transformed.ome.tiff" for i in ["01","02","03","04","05"]]
 # imc_mask_files = ["/home/retger/Downloads/Lipid_TMA_37819_009_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_025_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_027_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_029_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_031_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_033_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_035_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_037_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_039_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_041_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_043_transformed.ome.tiff"]
 # imc_mask_files = ["/home/retger/Downloads/Lipid_TMA_37819_012_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_015_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_017_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_019_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_021_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_023_transformed.ome.tiff"]
+
 imc_mask_files = snakemake.input["IMCmask"]
 if isinstance(imc_mask_files, str):
     imc_mask_files = [imc_mask_files]
 # sample_metadata = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/config/sample_metadata.csv"
 # sample_metadata = "/home/retger/Downloads/sample_metadata.csv"
 # sample_metadata = snakemake.input["sample_metadata"]
+# sample_core_names = "NASH_HCC_TMA-2_022|-_-|D2"
+sample_core_names = "NASH_HCC_TMA-2_002|-_-|E9|-|-|NASH_HCC_TMA-2_004|-_-|A2|-|-|NASH_HCC_TMA-2_011|-_-|B5|-|-|NASH_HCC_TMA-2_032|-_-|B1"
 # sample_core_names = "Cirrhosis-TMA-5_New_Detector_001|-_-|A1|-|-|Cirrhosis-TMA-5_New_Detector_002|-_-|B1"
 sample_core_names = snakemake.params["sample_core_names"]
 
@@ -67,83 +81,94 @@ logging.info("IMS stepsize: "+str(stepsize))
 logging.info("IMS pixelsize: "+str(pixelsize))
 logging.info("Microscopy pixelsize: "+str(resolution))
 
-logging.info("IMC location")
-# get imc location info
+logging.info("IMC location bounding boxes:")
 imcbboxls = list()
 for imcmaskfile in imc_mask_files:
-    imc=skimage.io.imread(imcmaskfile)
-    logging.info(f"\t{imc.shape}\t{imcmaskfile}")
-    imc[imc>0]=255
-    imc = imc.astype(np.uint8)
-    imcbboxls.append(skimage.measure.regionprops(imc)[0].bbox)
+    IMC_geojson = json.load(open(imcmaskfile, "r"))
+    if isinstance(IMC_geojson,list):
+        IMC_geojson=IMC_geojson[0]
+    boundary_points = np.array(IMC_geojson['geometry']['coordinates'])[0,:,:]
+    xmin=int(np.min(boundary_points[:,1]))
+    xmax=int(np.max(boundary_points[:,1]))
+    ymin=int(np.min(boundary_points[:,0]))
+    ymax=int(np.max(boundary_points[:,0]))
+    bbox = [xmin,ymin,xmax,ymax]
+    logging.info(f"    {bbox}:{imcmaskfile}")
+    imcbboxls.append(bbox)
 
-imc_samplenames = [ os.path.splitext(os.path.splitext(os.path.split(f)[1])[0])[0].replace("_transformed_on_postIMS","") for f in imc_mask_files]
-# imc_projects = ["cirrhosis_TMA"]*len(imc_samplenames)
+
+# get file metadata and matches between core and sample name
 imc_projects = [ os.path.split(os.path.split(os.path.split(os.path.split(f)[0])[0])[0])[1] for f in imc_mask_files]
+core_names = [ os.path.splitext(os.path.splitext(os.path.split(imc_mask_files[f])[1])[0])[0].replace(f"{imc_projects[f]}_IMC_mask_on_postIMS_","") for f in range(len(imc_mask_files))]
 
 sample_core_names_ls = sample_core_names.split("|-|-|")
 core_names_alt = np.array([s.split("|-_-|")[1] for s in sample_core_names_ls])
-sample_names = np.array([s.split("|-_-|")[0] for s in sample_core_names_ls])
+sample_names_alt = np.array([s.split("|-_-|")[0] for s in sample_core_names_ls])
+
+sample_names = list()
+for s in core_names:
+    sample_names.append(sample_names_alt[core_names_alt==s][0])
+sample_names = np.array(sample_names)
 
 logging.info("Sample core names input: "+sample_core_names)
 logging.info("Sample names: "+",".join(sample_names.tolist()))
 logging.info("Core names: "+",".join(core_names_alt.tolist()))
-logging.info("imc sample names: "+",".join(imc_samplenames))
-
-core_names = list()
-for s in imc_samplenames:
-    core_names.append(core_names_alt[sample_names==s][0])
-
+logging.info("imc sample names: "+",".join(sample_names))
 
 logging.info("Read postIMS mask")
 postIMSr = skimage.io.imread(postIMSr_file)
 logging.info(f"\t{postIMSr.shape}\t{postIMSr_file}")
-# expand mask
-# # outermask = skimage.morphology.isotropic_dilation(postIMSr, (1/resolution)*stepsize*2)
-# postIMSlbs = skimage.measure.label(postIMSr.astype(np.uint8))
-# postIMSlbs = postIMSlbs.astype(np.uint8)
-# # outermask = skimage.morphology.dilation(postIMSlbs, skimage.morphology.disk((1/resolution)*stepsize*2))
-# # rank maximum filter instead of dilation for speedup
-# outermask = skimage.filters.rank.maximum(postIMSlbs, skimage.morphology.disk((1/resolution)*stepsize*2))
-# import matplotlib.pyplot as plt
-# plt.imshow(outermask)
-# plt.show()
-# # measure regions
-# postIMSregin = skimage.measure.label(outermask.astype(np.uint8))
 
-postIMSregin = skimage.measure.label(postIMSr.astype(np.uint8))
+_,postIMSregin,pistats,picents = cv2.connectedComponentsWithStats(postIMSr, ltype=cv2.CV_16U)
+postIMSregin = postIMSregin.astype(np.uint8)
+del postIMSr
+# remove region corresponding to background (=0)
+pistats=pistats[1:,:]
+picents=np.flip(picents[1:,:],axis=1)
+
+logging.info(f"\tCentroids of postIMS: {picents}")
+
+# flip x and y axis
+xs = pistats[:,1]
+ys = pistats[:,0]
+heights = pistats[:,2]
+widths = pistats[:,3]
 
 logging.info("Find IMC to postIMS overlap")
 postIMSregions = list()
+postIMS_pre_bbox = list()
 for bb in imcbboxls:
     tmpuqs = np.unique([postIMSregin[bb[0],bb[1]], postIMSregin[bb[0],bb[3]], postIMSregin[bb[2],bb[1]], postIMSregin[bb[2],bb[3]]])
     tmpuqs = tmpuqs[tmpuqs>0]
     assert(len(tmpuqs)==1)
     postIMSregions.append(tmpuqs[0])
+    r = tmpuqs-1
+    postIMS_pre_bbox.append([xs[r][0],ys[r][0],xs[r][0]+widths[r][0], ys[r][0]+heights[r][0]])
 del tmpuqs
 
-regpops = skimage.measure.regionprops(postIMSregin)
-postIMS_pre_bbox = [r.bbox for r in regpops]
-postIMS_pre_labels = [r.label for r in regpops]
-postIMS_pre_areas = [r.area for r in regpops]
-del regpops
+logging.info(f"postIMSregions: {postIMSregions}")
+logging.info(f"postIMS_pre_bbox: {postIMS_pre_bbox}")
+postIMS_pre_areas = pistats[:,4]
 
-logging.info("Find global bounding box of cores")
-tmpbool = np.array([p in np.array(postIMSregions) for p in postIMS_pre_labels])
+# filter
+tmpbool = np.array([p in np.array(postIMSregions) for p in postIMSregions])
 postIMS_pre_bbox = np.array(postIMS_pre_bbox)[tmpbool]
-postIMS_pre_labels = np.array(postIMS_pre_labels)[tmpbool]
 postIMS_pre_areas = np.array(postIMS_pre_areas)[tmpbool]
+logging.info(f"postIMS_pre_bbox filtered: {postIMS_pre_bbox}")
+logging.info(f"postIMS_pre_areas filtered: {postIMS_pre_areas}")
+logging.info("Find global bounding box of cores")
 global_bbox = [
-    np.min([p[0] for p in postIMS_pre_bbox]),
-    np.min([p[1] for p in postIMS_pre_bbox]),
-    np.max([p[2] for p in postIMS_pre_bbox]),
-    np.max([p[3] for p in postIMS_pre_bbox]),
+    np.min([p[0] for p in postIMS_pre_bbox])-int(1/resolution),
+    np.min([p[1] for p in postIMS_pre_bbox])-int(1/resolution),
+    np.max([p[2] for p in postIMS_pre_bbox])+int(1/resolution),
+    np.max([p[3] for p in postIMS_pre_bbox])+int(1/resolution),
 ]
 del tmpbool
 logging.info(f"\txmin: {global_bbox[0]}")
 logging.info(f"\tymin: {global_bbox[1]}")
 logging.info(f"\txmax: {global_bbox[2]}")
 logging.info(f"\tymax: {global_bbox[3]}")
+
 
 
 logging.info("Read imzML file")
@@ -156,9 +181,12 @@ imzimg = imz._make_pixel_map_at_ims(randomize=False, map_type="minimized")
 logging.info(f"IMZML shape: {imzimg.shape}")
 
 logging.info("Apply rotation")
+
 # rotate 180 degrees
 imzimg = skimage.transform.rotate(imzimg,rotation_imz, preserve_range=True)
+imzimg = imzimg.astype(np.uint8)
 
+logging.info("Create IMZ image")
 # create imz region image
 y_extent, x_extent, y_coords, x_coords = imz._get_xy_extents_coords(map_type="minimized")
 imzregions = np.zeros((y_extent, x_extent), dtype=np.uint8)
@@ -176,49 +204,48 @@ for lab in labs_to_remove:
     imzimg[imzregions == lab]=0
 
 imzuqregs = np.unique(imzregions)[1:]
+
+
+logging.info("Scale IMZ image")
 # rescale to postIMS resolution
-imzimgres = skimage.transform.rescale(imzimg, stepsize/resolution, preserve_range = True)   
+wn = int(imzimg.shape[0]*stepsize/resolution)
+hn = int(imzimg.shape[1]*stepsize/resolution)
+imzimgres = cv2.resize(imzimg, (hn,wn), interpolation=cv2.INTER_NEAREST)
 imzimgres[imzimgres>0] = 255 
 del imz
 
-# imzimgres = skimage.transform.rotate(imzimgres,rotation_imz, preserve_range=True).astype(np.uint8)
-imzimgres[imzimgres>0] = 255
-
 logging.info("Cut postIMS mask to global bounding box")
-postIMSrcut = postIMSr[global_bbox[0]:global_bbox[2],global_bbox[1]:global_bbox[3]]
+logging.info(f"    Shape before: {postIMSregin.shape}")
 postIMSregincut = postIMSregin[global_bbox[0]:global_bbox[2],global_bbox[1]:global_bbox[3]]
+logging.info(f"    Shape after: {postIMSregincut.shape}")
+
+# check if all regions still present after cutting to global bounding box
+wn = int(postIMSregincut.shape[0]/100)
+hn = int(postIMSregincut.shape[1]/100)
+tmp = cv2.resize(postIMSregincut, (hn,wn), interpolation=cv2.INTER_NEAREST)
+tmpuq = np.unique(tmp)
+logging.info(f"Unique regions: {tmpuq}")
+assert(np.all(np.array([tt in postIMSregions for tt in tmpuq[1:]])))
+del tmp,tmpuq
 
 logging.info("Remove cores in postIMS that are missing in imz")
-boolimgls = list()
+boolimg = np.zeros(postIMSregincut.shape, dtype=bool)
 for region in postIMSregions:
-    boolimgls.append(postIMSregincut == region)
-boolimg = np.sum(np.stack(boolimgls),axis=0).astype(bool)
-del boolimgls
-postIMSrcut[np.logical_not(boolimg)] = 0
+    boolimg[postIMSregincut == region] = True
+boolimg = ~boolimg
 
+logging.info("Calculate connectedComponents")
 # get centroids of imz regions
-imzrps = skimage.measure.regionprops(skimage.measure.label(imzimgres))
-imzarea = np.array([rp.area for rp in imzrps])
+_,_,imzstats,imzcents = cv2.connectedComponentsWithStatsWithAlgorithm(imzimgres,connectivity=4,  ltype=cv2.CV_16U, ccltype=cv2.CCL_BBDT)
+# remove background, extract area
+imzarea = imzstats[1:,4]
+
+# remove very small test regions
 too_small = imzarea < np.mean(imzarea) - 5*np.std(imzarea)
-imzrps = np.array(imzrps)[np.logical_not(too_small)]
-imzcents = np.array([[rp.centroid[0],rp.centroid[1]] for rp in imzrps])
-del imzrps, imzarea, too_small
+imzcents=np.flip(imzcents[1:,:],axis=1)[~too_small,:]
+
 logging.info(f"\tCentroids of IMZ: {imzcents}")
 
-# get centroids of postIMS regions
-tmpi = postIMSregincut
-tmpi[np.logical_not(boolimg)] = 0
-pirps = skimage.measure.regionprops(tmpi)
-picents = np.array([[rp.centroid[0]+global_bbox[0],rp.centroid[1]+global_bbox[1]] for rp in pirps])
-del tmpi, pirps
-logging.info(f"\tCentroids of postIMS: {picents}")
-# import matplotlib.pyplot as plt
-# fig, ax = plt.subplots(nrows=1, ncols=2)
-# ax[0].imshow(imzimg)
-# ax[0].set_title("IMS")
-# ax[1].imshow(postIMSregincut)
-# ax[1].set_title("postIMS")
-# plt.show()
 
 
 # find good initial translation for registration:
@@ -264,27 +291,11 @@ def find_approx_init_translation(imzcents, picents):
     xy_init_shift = combs_red[np.array(max_dists_red) == np.min(max_dists_red),:][0,:]
     return xy_init_shift, np.min(max_dists_red)
 
+logging.info(f"Inital Matching")
 xy_init_shift, max_dist = find_approx_init_translation(imzcents, picents)
 
 logging.info(f"\tInital translation: {xy_init_shift}")
 logging.info(f"\tMax distance: {max_dist}")
-
-# kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
-# distances, indices = kdt.query(imzcents, k=2, return_distance=True)
-# if max_dist > np.min(distances[:,1])/2:
-#     inds = np.linspace(0,imzcents.shape[0]-1,imzcents.shape[0]).astype(int)
-#     ndiff = imzcents.shape[0]-picents.shape[0]
-#     outls = list()
-#     for i in inds:
-#         tmp_xy_init_shift, tmp_max_dist = find_approx_init_translation(imzcents[inds[inds!=i],:], picents)
-#         outls.append([i, tmp_max_dist, tmp_xy_init_shift])
-#     max_dists = [o[1] for o in outls]
-
-# plt.scatter(picents[:,1], picents[:,0])
-# plt.scatter(imzcents[inds[inds!=i],1], imzcents[inds[inds!=i],0], color="red")
-# plt.show()
-
-
 
 if (picents.shape[0]==1) and (imzcents.shape[0]==1):
     init_trans = np.round(xy_init_shift).astype(int)
@@ -298,12 +309,6 @@ else:
     init_trans = np.round(t_reg+np.array([global_bbox[0],global_bbox[1]])).astype(int)
 
 logging.info(f"Initial translation: {init_trans}")
-# import matplotlib.pyplot as plt
-# plt.scatter(picents[:,1]+xy_init_shift[1], picents[:,0]+xy_init_shift[0])
-# plt.scatter(TY[:,1], TY[:,0])
-# plt.scatter(imzcents[:,1], imzcents[:,0], color="red")
-# plt.show()
-
 
 
 logging.info("Register postIMS to imz")
@@ -314,9 +319,22 @@ def command_iteration(method):
         + f"= {method.GetMetricValue():10.5f} "
         + f": {method.GetOptimizerPosition()}"
     )
+
 # setup sitk images
-fixed_np = imzimgres.astype(np.float32)
-moving_np = postIMSrcut.astype(np.float32)
+tmp_downscale_factor = 25
+
+wn = int(imzimgres.shape[0]/tmp_downscale_factor)
+hn = int(imzimgres.shape[1]/tmp_downscale_factor)
+fixed_np = cv2.resize(imzimgres, (hn,wn), interpolation=cv2.INTER_NEAREST)
+fixed_np = fixed_np.astype(np.float32)
+
+moving_np = readimage_crop(postIMSr_file, global_bbox)
+moving_np[boolimg] = 0
+wn = int(moving_np.shape[0]/tmp_downscale_factor)
+hn = int(moving_np.shape[1]/tmp_downscale_factor)
+moving_np = cv2.resize(moving_np, (hn,wn), interpolation=cv2.INTER_NEAREST)
+moving_np = moving_np.astype(np.float32)
+del boolimg
 
 # import matplotlib.pyplot as plt
 # fig, ax = plt.subplots(nrows=1, ncols=2)
@@ -327,7 +345,7 @@ moving_np = postIMSrcut.astype(np.float32)
 # plt.show()
 
 
-
+logging.info(f"fixed image dimensions: ")
 # def register_postIMS_to_IMS(ims: np.ndarray, postIMS: np.ndarray):
 fixed = sitk.GetImageFromArray(fixed_np)
 moving = sitk.GetImageFromArray(moving_np)
@@ -335,7 +353,7 @@ del fixed_np,moving_np
 
 # initial transformation
 init_transform = sitk.AffineTransform(2)
-init_transform.SetTranslation(-init_trans[[1,0]].astype(np.double))
+init_transform.SetTranslation((-init_trans[[1,0]].astype(np.double))/tmp_downscale_factor)
 
 # setup registration
 R = sitk.ImageRegistrationMethod()
@@ -359,19 +377,32 @@ logging.info(f"Final translation: {transform.GetTranslation()}")
 # transform expanded, labeled mask
 resampler = sitk.ResampleImageFilter()
 resampler.SetTransform(transform)
-resampler.SetReferenceImage(fixed)
+wn = int(imzimgres.shape[0]/tmp_downscale_factor)
+hn = int(imzimgres.shape[1]/tmp_downscale_factor)
+fixed_np = cv2.resize(imzimgres, (hn,wn), interpolation=cv2.INTER_NEAREST)
+resampler.SetReferenceImage(sitk.GetImageFromArray(fixed_np))
 resampler.SetInterpolator(sitk.sitkNearestNeighbor)
-tmp1 = resampler.Execute(sitk.GetImageFromArray(postIMSregincut))
+wn = int((global_bbox[2]-global_bbox[0])/tmp_downscale_factor)
+hn = int((global_bbox[3]-global_bbox[1])/tmp_downscale_factor)
+tmp1 = cv2.resize(postIMSregincut, (hn,wn), interpolation=cv2.INTER_NEAREST)
+tmp1 = resampler.Execute(sitk.GetImageFromArray(tmp1))
 postIMSro_trans = sitk.GetArrayFromImage(tmp1)
 del tmp1, resampler
 
+
+logging.info("Save Image")
 # save matches image
-saveimage_tile((normalize_image(((postIMSro_trans>0).astype(int)-(imzimgres>0).astype(int))+1)*255).astype(np.uint8), snakemake.output["IMS_to_postIMS_matches_image"], 1)
+saveimage_tile((normalize_image(((postIMSro_trans>0).astype(int)-(fixed_np>0).astype(int))+1)*255).astype(np.uint8), snakemake.output["IMS_to_postIMS_matches_image"], 1)
+
+del fixed_np
+
 
 logging.info("Find matching regions between postIMS and imz")
-postIMSro_trans_downscaled = skimage.transform.resize(postIMSro_trans, imzregions.shape, preserve_range=True, anti_aliasing=False).astype(np.uint8)
+wn = int(imzregions.shape[0])
+hn = int(imzregions.shape[1])
+postIMSro_trans_downscaled = cv2.resize(postIMSro_trans, (hn,wn), interpolation=cv2.INTER_NEAREST)
 observedpostIMSregion_match = list()
-# for imz region 1 get matching postIMS core
+# for imz regions get matching postIMS core
 for regionimz in imzuqregs:
     t1=imzregions==regionimz
     overlaps = np.unique(postIMSro_trans_downscaled[t1], return_counts=True)
@@ -386,35 +417,26 @@ is_nan = np.isnan(observedpostIMSregion_match)
 imzuqregs = imzuqregs[np.logical_not(is_nan)]
 observedpostIMSregion_match = observedpostIMSregion_match[np.logical_not(is_nan)]
 
-logging.info("Create bounding boxes for all cores")
-postIMS_bboxls = list()
-postIMSregpops = skimage.measure.regionprops(postIMSregin)
-regpopslabs = np.asarray([t.label for t in postIMSregpops])
-for i in range(len(observedpostIMSregion_match)):
-    # select subset region for postIMS
-    tmpind = np.asarray(list(range(len(regpopslabs))))[regpopslabs==observedpostIMSregion_match[i]][0]
-    postIMS_bboxls.append(postIMSregpops[tmpind].bbox)
-
-postIMSxmins=[b[0] for b in postIMS_bboxls]
-postIMSymins=[b[1] for b in postIMS_bboxls]
-postIMSxmaxs=[b[2] for b in postIMS_bboxls]
-postIMSymaxs=[b[3] for b in postIMS_bboxls]
-
 logging.info("Save data")
 df1 = pd.DataFrame({
     "imzregion": imzuqregs,
-    "postIMSregion": observedpostIMSregion_match,
-    "postIMS_xmin": postIMSxmins,
-    "postIMS_ymin": postIMSymins,
-    "postIMS_xmax": postIMSxmaxs,
-    "postIMS_ymax": postIMSymaxs
+    "postIMSregion": observedpostIMSregion_match
 }).set_index("postIMSregion")
+
+postIMSxmins=[b[0] for b in postIMS_pre_bbox]
+postIMSymins=[b[1] for b in postIMS_pre_bbox]
+postIMSxmaxs=[b[2] for b in postIMS_pre_bbox]
+postIMSymaxs=[b[3] for b in postIMS_pre_bbox]
 
 df2 = pd.DataFrame({
     "postIMSregion": postIMSregions,
     "core_name": core_names,
+    "postIMS_xmin": postIMSxmins,
+    "postIMS_ymin": postIMSymins,
+    "postIMS_xmax": postIMSxmaxs,
+    "postIMS_ymax": postIMSymaxs,
     "project_name": imc_projects,
-    "sample_name": imc_samplenames
+    "sample_name": sample_names.tolist()
 }).set_index("postIMSregion")
 
 dfout = df2.join(df1, on=["postIMSregion"])

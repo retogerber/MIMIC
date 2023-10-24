@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 import json
 import skimage
 import skimage.exposure
@@ -21,28 +22,42 @@ sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 
 logging.info("Start")
 
-
+microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMC/NASH_HCC_TMA-2_011_transformed_on_preIMC.ome.tiff"
+microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA-2_004_transformed_on_postIMS.ome.tiff"
+microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMC/NASH_HCC_TMA-2_022_transformed_on_preIMS.ome.tiff"
 # microscopy_file_1 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre-preIMS_to_postIMS_registered_reduced.ome.tiff"
 # microscopy_file_1 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/Cirrhosis-TMA-5_New_Detector_002_transformed_on_preIMC.ome.tiff"
 # microscopy_file_1 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/Cirrhosis-TMA-5_New_Detector_002_transformed_on_preIMS.ome.tiff"
 microscopy_file_1 = snakemake.input['microscopy_image_1']
 
+microscopy_file_2 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMC/NASH_HCC_TMA_preIMC.ome.tiff"
+microscopy_file_2 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
+microscopy_file_2 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA_preIMS.ome.tiff"
 # microscopy_file_2 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMS/test_split_pre_postIMS.ome.tiff"
 # microscopy_file_2 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre_preIMS.ome.tiff"
 # microscopy_file_2 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/test_split_pre_preIMC.ome.tiff"
 # microscopy_file_2 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre_preIMS.ome.tiff"
 microscopy_file_2 = snakemake.input['microscopy_image_2']
+IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_preIMC_B5.geojson"
+IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_A2.geojson"
+IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_preIMS_D2.geojson"
+IMC_location=snakemake.input["IMC_location"]
 
-# IMC_file="/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed_on_postIMS.ome.tiff"
-# IMC_file="/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed_on_preIMS.ome.tiff"
-# IMC_file="/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed_on_preIMS.ome.tiff"
-IMC_file=snakemake.input["IMC_mask"]
+if isinstance(IMC_location, list):
+    IMC_location = IMC_location[0]
+logging.info(f"IMC_location: {IMC_location}")
 
-# input_spacing = 0.22537
-input_spacing = snakemake.params["input_spacing"]
-# rescale = 0.22537
-rescale = snakemake.params["downscale"]
+# input_spacing_1 = 1
+input_spacing_1 = snakemake.params["input_spacing_1"]
+# input_spacing_2 = 0.22537
+input_spacing_2 = snakemake.params["input_spacing_2"]
+# input_spacing_IMC_location = 0.22537
+input_spacing_IMC_location = snakemake.params["input_spacing_IMC_location"]
+# output_spacing = 1
+output_spacing = snakemake.params["output_spacing"]
 
+
+cv2.setNumThreads(snakemake.threads)
 
 # m = re.search("[a-zA-Z]*(?=_registered_reduced.ome.tiff$)",os.path.basename(microscopy_file_1))
 m = re.search("[a-zA-Z]*(?=.ome.tiff$)",os.path.basename(microscopy_file_1))
@@ -53,39 +68,46 @@ assert(comparison_from in ["postIMC","preIMC","preIMS"])
 
 
 # maximum assumed distance between corresponding points
-dmax = 50/(input_spacing/rescale)
+dmax = 50/(output_spacing)
 dmax = snakemake.params["max_distance"]
 # minimum distance between points on the same image 
-dmin = 10/(input_spacing/rescale)
+dmin = 10/(output_spacing)
 dmin = snakemake.params["min_distance"]
 
-microscopy_file_out = snakemake.output['microscopy_image_out']
+microscopy_file_out_1 = snakemake.output['microscopy_image_out_1']
+microscopy_file_out_2 = snakemake.output['microscopy_image_out_2']
 matching_points_filename_out = snakemake.output['matching_points']
 
 logging.info("core bounding box extraction")
-# read IMC to get bounding box (image was cropped in previous step)
-tmpimg = skimage.io.imread(microscopy_file_1)
-rp = skimage.measure.regionprops((np.max(tmpimg, axis=2)>0).astype(np.uint8))
-bb1 = rp[0].bbox
+IMC_geojson = json.load(open(IMC_location, "r"))
+if isinstance(IMC_geojson,list):
+    IMC_geojson=IMC_geojson[0]
+boundary_points = np.array(IMC_geojson['geometry']['coordinates'])[0,:,:]
+xmin=np.min(boundary_points[:,1])
+xmax=np.max(boundary_points[:,1])
+ymin=np.min(boundary_points[:,0])
+ymax=np.max(boundary_points[:,0])
 
+s1f = input_spacing_1/input_spacing_IMC_location
+bb1 = [int(xmin/s1f-201/input_spacing_1),int(ymin/s1f-201/input_spacing_1),int(xmax/s1f+201/input_spacing_1),int(ymax/s1f+201/input_spacing_1)]
 
-logging.info("load IMC mask")
-IMCw = readimage_crop(IMC_file, bb1)
-IMCw = skimage.transform.rescale(IMCw, rescale, preserve_range = True)   
-IMCw[IMCw>0]=255
-IMCw = IMCw.astype(np.uint8)
-imcbbox_inner = skimage.measure.regionprops(IMCw)[0].bbox
-IMCw= cv2.morphologyEx(src=IMCw.astype(np.uint8), op = cv2.MORPH_DILATE, kernel = skimage.morphology.square(int(201)))
-imcbbox_outer = skimage.measure.regionprops(IMCw)[0].bbox
+s2f = input_spacing_2/input_spacing_IMC_location
+bb2 = [int(xmin/s2f-201/input_spacing_2),int(ymin/s2f-201/input_spacing_2),int(xmax/s2f+201/input_spacing_2),int(ymax/s2f+201/input_spacing_2)]
 
+logging.info(f"bounding box whole image: {bb1}")
 
 logging.info("load microscopy image 1")
 microscopy_image_1 = readimage_crop(microscopy_file_1, bb1)
-microscopy_image_1 = prepare_image_for_sam(microscopy_image_1, rescale)
+microscopy_image_1 = prepare_image_for_sam(microscopy_image_1, input_spacing_1/output_spacing)
 
 logging.info("load microscopy image 2")
-microscopy_image_2 = readimage_crop(microscopy_file_2, bb1)
-microscopy_image_2 = prepare_image_for_sam(microscopy_image_2, rescale)
+microscopy_image_2 = readimage_crop(microscopy_file_2, bb2)
+microscopy_image_2 = prepare_image_for_sam(microscopy_image_2, input_spacing_2/output_spacing)
+
+xmax = min([microscopy_image_1.shape[0],microscopy_image_2.shape[0]])
+ymax = min([microscopy_image_1.shape[1],microscopy_image_2.shape[1]])
+imcbbox_outer = [0,0,xmax,ymax]
+logging.info(f"imcbbox_outer: {imcbbox_outer}")
 
 print(f"snakemake params remove_postIMS_grid: {snakemake.params['remove_postIMS_grid']}")
 if snakemake.params["remove_postIMS_grid"]:
@@ -99,21 +121,6 @@ x_segs = np.arange(imcbbox_outer[0],imcbbox_outer[2],(imcbbox_outer[2]-imcbbox_o
 x_segs = np.append(x_segs,imcbbox_outer[2])
 y_segs = np.arange(imcbbox_outer[1],imcbbox_outer[3],(imcbbox_outer[3]-imcbbox_outer[1])/8).astype(int)
 y_segs = np.append(y_segs,imcbbox_outer[3])
-
-# ksize = np.round(3*(input_spacing/rescale)).astype(int)
-# ksize = ksize+1 if ksize%2==0 else ksize
-
-
-# fig, ax = plt.subplots(nrows=1, ncols=2)
-# ax[0].imshow(microscopy_image_1, cmap="gray")
-# ax[0].set_ylim([x_segs[0],x_segs[-1]])
-# ax[0].set_xlim([y_segs[0],y_segs[-1]])
-# ax[1].imshow(microscopy_image_2, cmap="gray")
-# ax[1].set_ylim([x_segs[0],x_segs[-1]])
-# ax[1].set_xlim([y_segs[0],y_segs[-1]])
-# plt.show()
-
-
 
 logging.info("Loop over segments")
 dists_real = np.zeros(0)
@@ -153,8 +160,11 @@ for j in range((len(x_segs)-n_shift)):
 
         def single_match(k):  
             distances = np.linalg.norm(des1[indices[k,physical_distances[k,:]<dmax]] - des2[k], axis=1)
-            ind = np.argpartition(distances, 2)[:2]
-            return list(map(lambda l: cv2.DMatch(_distance=distances[l], _queryIdx=indices[k,:][l], _trainIdx=k), ind))
+            if len(distances)<3:
+                return [cv2.DMatch(),cv2.DMatch()]
+            else:
+                ind = np.argpartition(distances, 2)[:2]
+                return list(map(lambda l: cv2.DMatch(_distance=distances[l], _queryIdx=indices[k,:][l], _trainIdx=k), ind))
 
         matches = list(map(single_match, range(len(pts2))))
 
@@ -275,7 +285,6 @@ for j in range((len(x_segs)-n_shift)):
         # plt.show()
 
         logging.info(f"{i}_{j}: {len(matches_filt):4} {np.sum(matchesMask):4} {M[0,2]:8.3} {M[1,2]:8.3}")
-        print(f"{i}_{j}: {len(matches_filt):4} {np.sum(matchesMask):4} {M[0,2]:8.3} {M[1,2]:8.3}")
 
         
         # matches_filt = np.array(matches_filt)[matchesMask==1]
@@ -284,7 +293,7 @@ for j in range((len(x_segs)-n_shift)):
 
         kpf1 = np.array([kp1[matches_filt[k].queryIdx].pt for k in range(len(matches_filt))])
         kpf2 = np.array([kp2[matches_filt[k].trainIdx].pt for k in range(len(matches_filt))])
-        dists_real = np.append(dists_real,np.sqrt(np.sum((kpf1-kpf2)**2,axis=1)))
+        dists_real = np.append(dists_real,np.sqrt(np.sum((kpf1/output_spacing-kpf2/output_spacing)**2,axis=1)))
         angles = np.append(angles,np.array([get_angle([-10000,kpf1[k,1]],kpf1[k,:],kpf2[k,:]) for k in range(kpf1.shape[0])]))
 
         kpf1 += np.array([y_segs[j],x_segs[i]])
@@ -379,20 +388,23 @@ arrowed_microscopy_image_1 = np.stack([microscopy_image_1, microscopy_image_1, m
 for k in range(len(kpf1complfilt)):
     # tc = (int(dists_real_color[k,2]),int(dists_real_color[k,1]),int(dists_real_color[k,0]))
     tc = (int(dists_real_color[k,0]),int(dists_real_color[k,1]),int(dists_real_color[k,2]))
-    arrowed_microscopy_image_1 = cv2.arrowedLine(arrowed_microscopy_image_1, pt1=kpf1complfilt[k,:].astype(int), pt2=kpf2complfilt[k,:].astype(int), color=tc, thickness=int(5/(input_spacing/rescale)), tipLength=0.3)
+    arrowed_microscopy_image_1 = cv2.arrowedLine(arrowed_microscopy_image_1, pt1=kpf1complfilt[k,:].astype(int), pt2=kpf2complfilt[k,:].astype(int), color=tc, thickness=int(5/(input_spacing_1/output_spacing)), tipLength=0.3)
 
 # plt.imshow(arrowed_microscopy_image_1[x_segs[0]:x_segs[-1],y_segs[0]:y_segs[-1]])
 # plt.show()
 
-saveimage_tile(arrowed_microscopy_image_1[x_segs[0]:x_segs[-1],y_segs[0]:y_segs[-1]], microscopy_file_out ,1)
+saveimage_tile(arrowed_microscopy_image_1[x_segs[0]:x_segs[-1],y_segs[0]:y_segs[-1]], microscopy_file_out_1 ,1)
 
 
 arrowed_microscopy_image_2 = np.stack([microscopy_image_2, microscopy_image_2, microscopy_image_2], axis=2)
 for k in range(len(kpf2complfilt)):
     # tc = (int(dists_real_color[k,2]),int(dists_real_color[k,1]),int(dists_real_color[k,0]))
     tc = (int(dists_real_color[k,0]),int(dists_real_color[k,1]),int(dists_real_color[k,2]))
-    arrowed_microscopy_image_2 = cv2.arrowedLine(arrowed_microscopy_image_2, pt1=kpf2complfilt[k,:].astype(int), pt2=kpf1complfilt[k,:].astype(int), color=tc, thickness=int(5/(input_spacing/rescale)), tipLength=0.3)
+    arrowed_microscopy_image_2 = cv2.arrowedLine(arrowed_microscopy_image_2, pt1=kpf2complfilt[k,:].astype(int), pt2=kpf1complfilt[k,:].astype(int), color=tc, thickness=int(5/(input_spacing_1/output_spacing)), tipLength=0.3)
 
+saveimage_tile(arrowed_microscopy_image_2[x_segs[0]:x_segs[-1],y_segs[0]:y_segs[-1]], microscopy_file_out_2 ,1)
+# px.imshow(arrowed_microscopy_image_1).show()
+# px.imshow(arrowed_microscopy_image_2).show()
 # plt.imshow(arrowed_microscopy_image_2[x_segs[0]:x_segs[-1],y_segs[0]:y_segs[-1]])
 # plt.show()
 
@@ -401,3 +413,4 @@ for k in range(len(kpf2complfilt)):
 # ax[1].imshow(arrowed_microscopy_image_2[x_segs[0]:x_segs[-1],y_segs[0]:y_segs[-1]])
 # plt.show()
 
+logging.info("Finished")

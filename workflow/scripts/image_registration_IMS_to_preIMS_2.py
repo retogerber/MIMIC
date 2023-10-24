@@ -48,8 +48,10 @@ assert(rotation_imz in [-270,-180,-90,0,90,180,270])
 rotmat = get_rotmat_from_angle(rotation_imz)
 
 IMS_to_postIMS_n_splits = snakemake.params["IMS_to_postIMS_n_splits"]
+logging.info(f"IMS_to_postIMS_n_splits: {IMS_to_postIMS_n_splits}")
 assert(IMS_to_postIMS_n_splits in [3,5,7,9,11,13,15,17,19])
 IMS_to_postIMS_init_gridsearch = snakemake.params["IMS_to_postIMS_init_gridsearch"]
+logging.info(f"IMS_to_postIMS_init_gridsearch: {IMS_to_postIMS_init_gridsearch}")
 assert(IMS_to_postIMS_init_gridsearch in [0,1,2,3])
 
 logging.info("Rotation angle: "+str(rotation_imz))
@@ -68,25 +70,30 @@ logging.info("Microscopy pixelsize: "+str(resolution))
 # postIMS_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS.ome.tiff"
 # postIMS_file = "/home/retger/Downloads/NASH_HCC_TMA_postIMS.ome.tiff"
 # resolution = 0.22537
+postIMS_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
 postIMS_file = snakemake.input["postIMS_downscaled"]
 # postIMSr_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/postIMS/test_combined_postIMS_reduced_mask.ome.tiff"
 # postIMSr_file = "/home/retger/Downloads/cirrhosis_TMA_postIMS_reduced_mask.ome.tiff"
 # postIMSr_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS_reduced_mask.ome.tiff"
 # postIMSr_file = "/home/retger/Downloads/NASH_HCC_TMA_postIMS_reduced_mask.ome.tiff"
+postIMSr_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS_reduced_mask.ome.tiff"
 postIMSr_file = snakemake.input["postIMSmask_downscaled"]
 # imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/IMS_test_combined.imzML"
 # imzmlfile = "/home/retger/Downloads/cirrhosis_TMA_IMS.imzML"
 # imzmlfile = "/home/retger/Downloads/pos_mode_lipids_tma_02022023_imzml.imzML"
 # imzmlfile = "/home/retger/Downloads/hcc-tma-3_aaxl_20raster_06132022-total ion count.imzML"
+imzmlfile = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_IMS.imzML"
 imzmlfile = snakemake.input["imzml"]
 # imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/Lipid_TMA_37819_025_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/NASH_HCC_TMA-2_010_transformed.ome.tiff"
+imc_mask_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_032_transformed_on_postIMS.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 # output_table = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/test_combined_IMS_test_combined_IMS_to_postIMS_matches.csv"
 # output_table = "/home/retger/Downloads/cirrhosis_TMA_cirrhosis_TMA_IMS_IMS_to_postIMS_matches.csv"
 # output_table = "/home/retger/Downloads/Lipid_TMA_3781_pos_mode_lipids_tma_02022023_imzml_IMS_to_postIMS_matches.csv"
 # output_table = "/home/retger/Downloads/NASH_HCC_TMA_NASH_HCC_TMA_IMS_IMS_to_postIMS_matches.csv"
+output_table = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_NASH_HCC_TMA_IMS_IMS_to_postIMS_matches.csv"
 output_table = snakemake.input["IMS_to_postIMS_matches"]
 
 masks_transform_filename = snakemake.output["masks_transform"]
@@ -167,10 +174,7 @@ del postIMScut
 gc.collect()
 
 logging.info("Read cropped postIMS mask")
-postIMSrcut = readimage_crop(postIMSr_file, [xmin, ymin, xmax, ymax])
-logging.info("Resize")
-postIMSrcut = skimage.transform.resize(postIMSrcut, postIMSmpre.shape, preserve_range = True)
-postIMSrcut = np.round(postIMSrcut).astype(np.uint8)
+postIMSrcut = readimage_crop(postIMSr_file, [int(xmin), int(ymin), int(xmax), int(ymax)])
 logging.info("Create ringmask")
 postIMSringmask = create_ring_mask(postIMSrcut, (1/resolution)*stepsize*imspixel_outscale, (1/resolution)*stepsize*imspixel_inscale)
 logging.info("Isotropic dilation")
@@ -184,21 +188,33 @@ del postIMSrcut
 gc.collect()
 
 # subset and filter postIMS image
-kersize = int(stepsize/resolution/2)
+kersize = int(stepsize/2)
 kersize = kersize-1 if kersize%2==0 else kersize
 kernel = np.zeros((kersize,kersize))
 kernel[int((kersize-1)/2),:]=1
 kernel[:,int((kersize-1)/2)]=1
+# kernel = skimage.morphology.diamond(kersize)
 logging.info(f"Disk radius for rank threshold filter: {kersize}")
 
+# resize to 1um spacing
+if resolution != 1:
+    wn = int(postIMSmpre.shape[0]*resolution)
+    hn = int(postIMSmpre.shape[1]*resolution)
+    tmp1 = cv2.resize(postIMSmpre, (hn,wn), interpolation=cv2.INTER_NEAREST)
+else:
+    tmp1 = postIMSmpre.copy()
+
 # local rank filter, results in binary image
-tmp1 = skimage.filters.rank.threshold(postIMSmpre, skimage.morphology.disk(kersize))
+tmp1 = skimage.filters.rank.threshold(tmp1, skimage.morphology.disk(kersize))
+
 logging.info("Mean filter")
 # mean filter, with cross shape footprint
-# tmp2 = skimage.filters.rank.mean(tmp1*255, kernel)
 tmp2 = cv2.filter2D(src = tmp1*255, ddepth=-1, kernel=kernel/np.sum(kernel))
+    
+if resolution != 1:
+    tmp2 = cv2.resize(tmp2, (postIMSmpre.shape[1],postIMSmpre.shape[0]), interpolation=cv2.INTER_NEAREST)
+
 del tmp1
-gc.collect()
 
 # from: https://stackoverflow.com/a/26392655
 def get_angle(p0, p1=np.array([0,0]), p2=None):
@@ -513,11 +529,47 @@ wsindx = np.round(np.linspace(0,len(ws)-1,IMS_to_postIMS_n_splits)).astype(int)
 ws = ws[wsindx]
 
 max_score_outer, threshold_outer, w_outer, centsred_outer = find_w(postIMSmpre, tmp2, postIMSoutermask_small, postIMSringmask, ws, threads=threads)
+
+
+def plot_plotly_scatter_image(img, pts):
+    import plotly.graph_objects as go
+    from PIL import Image
+    import base64
+    from io import BytesIO
+
+    pil_img = Image.fromarray(img) # PIL image object
+    prefix = "data:image/png;base64,"
+    with BytesIO() as stream:
+        pil_img.save(stream, format="png")
+        base64_string = prefix + base64.b64encode(stream.getvalue()).decode("utf-8")
+    fig = px.scatter(x=pts[:,1], y=-pts[:,0])
+    # Add images
+    fig = fig.add_layout_image(
+            dict(
+                source=base64_string,
+                xref="x",
+                yref="y",
+                x=0,
+                y=0,
+                sizex=img.shape[1],
+                sizey=img.shape[0],
+                sizing="stretch",
+                opacity=0.5,
+                layer="below")
+    )
+    return fig
+
+# fig = plot_plotly_scatter_image(postIMSmpre, centsred_outer*stepsize/resolution)
+# fig.show()
+
 del postIMSringmask, postIMSoutermask_small
 gc.collect()
 
 logging.info("Find best threshold for points (inner points)")
 max_score_inner, threshold_inner, w_inner, centsred_inner = find_w(postIMSmpre, tmp2, postIMSinnermask, postIMSinnermask, ws, threads=threads)
+
+# fig = plot_plotly_scatter_image(tmp2, centsred_inner*stepsize/resolution)
+# fig.show()
 
 logging.info("Max score (outer): "+str(max_score_outer))
 logging.info("Corresponding threshold (outer): "+str(threshold_outer))
@@ -602,6 +654,9 @@ def points_from_mask_two_thresholds(
 # )
 centsred = combine_points(centsred_outer, centsred_inner)
 centsred = filter_points(centsred)
+
+# fig = plot_plotly_scatter_image(tmp2, centsred*stepsize/resolution)
+# fig.show()
 del postIMSoutermask, postIMSinnermask
 gc.collect()
 
@@ -760,6 +815,8 @@ max_score_inner, threshold_inner, w_inner, centsred_inner = find_w(postIMSmpre, 
 centsred = combine_points(centsred_outer, centsred_inner)
 centsred = filter_points(centsred)
 
+# fig = plot_plotly_scatter_image(postIMSmpre, centsred*stepsize/resolution)
+# fig.show()
 # centsred = points_from_mask_two_thresholds(
 #     img_median = postIMSmpre,
 #     img_convolved = tmp2,

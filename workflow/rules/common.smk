@@ -1,10 +1,16 @@
 import pandas as pd
 import numpy as np
+from snakemake.utils import validate
+import snakemake.workflow
 
-def read_sample_metadata(filename="config/sample_metadata.csv"):
+def read_sample_metadata(filename="config/sample_metadata.csv", validator=snakemake.workflow.srcdir("../sample_metadata.schema.yaml")):
+    if not os.path.isfile(validator):
+        sys.exit(f"Validator file {validator} not found!")
+
     if os.path.isfile(filename):
         with open(filename, 'r') as fil:
             sample_metadata_df = pd.read_csv(fil)
+            validate(sample_metadata_df, validator)
             return sample_metadata_df
     else:
         sys.exit("File config/sample_metadata.csv not found!")
@@ -53,6 +59,18 @@ def IMC_location_from_project_name(wildcards):
     files = [ f'results/{wildcards.project_name}/data/IMC_location/{wildcards.project_name}_IMC_mask_on_preIMC_{c}.geojson' for c in core_name_l ]
     return files
 
+def IMC_location_from_project_name_and_sample_name(wildcards, target=""):
+    assert(target in ["postIMC","preIMC","preIMS","postIMS"])
+    core=get_column_entry_from_metadata_two_conditions(
+        wildcards.project_name,
+        wildcards.sample,
+        "core_name",
+        "project_name",
+        "sample_name",
+        read_sample_metadata(config["sample_metadata"]),
+        return_all=False,
+    )
+    return f"results/{wildcards.project_name}/data/IMC_location/{wildcards.project_name}_IMC_mask_on_{target}_{core}.geojson",
 
 def IMC_to_preIMC_transform_pkl_core_name_from_sample_name(wildcards):
     core_name = get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "core_name", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
@@ -89,8 +107,10 @@ def choose_preIMC_to_postIMS_transform(wildcards):
         match_preIMC_location_with_IMC_location_file = checkpoints.match_preIMC_location_with_IMC_location.get(project_name=wildcards.project_name).output['matching']
         with match_preIMC_location_with_IMC_location_file.open() as f:
             df = pd.read_csv(f) 
-            #core=core_name_from_sample_name(wildcards)
-            core = get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "core_name", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
+            if 'core' in wildcards.keys():
+                core = wildcards.core
+            else:
+                core = get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "core_name", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
             part=df.loc[df["core"] == core]["preIMC_location"].tolist()[0]
             outfile = f'results/{wildcards.project_name}/registrations/preIMC_to_preIMS/{part}/{wildcards.project_name}_{part}-preIMC_to_postIMS_transformations.json'
             return outfile
@@ -106,8 +126,10 @@ def choose_postIMC_to_postIMS_transform(wildcards):
         match_preIMC_location_with_IMC_location_file = checkpoints.match_preIMC_location_with_IMC_location.get(project_name=wildcards.project_name).output['matching']
         with match_preIMC_location_with_IMC_location_file.open() as f:
             df = pd.read_csv(f) 
-            #core=core_name_from_sample_name(wildcards)
-            core = get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "core_name", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
+            if 'core' in wildcards.keys():
+                core = wildcards.core
+            else:
+                core = get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "core_name", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
             part=df.loc[df["core"] == core]["preIMC_location"].tolist()[0]
             outfile = f'results/{wildcards.project_name}/registrations/postIMC_to_postIMS/{part}/{wildcards.project_name}_{part}-postIMC_to_postIMS_transformations.json'
             return outfile
@@ -158,3 +180,26 @@ def sample_core_names(wildcards):
     sample_names = get_column_entry_from_metadata_two_conditions(wildcards.imzml_base+".imzML", wildcards.project_name, "sample_name", "imzml_filename", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)
     core_names = get_column_entry_from_metadata_two_conditions(wildcards.imzml_base+".imzML", wildcards.project_name, "core_name", "imzml_filename", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)
     return f'{"|-|-|".join(str(sample_names[i])+"|-_-|"+str(core_names[i]) for i in range(len(sample_names)))}'
+
+
+def n_threads_for_register_IMS_to_postIMS_single_core_1(wildcards, sample_metadata_df, n_threads_max=1):
+    IMS_to_postIMS_n_splits=get_column_entry_from_metadata_two_conditions(
+        wildcards.project_name,
+        wildcards.sample,
+        "IMS_to_postIMS_n_splits",
+        "project_name",
+        "sample_name",
+        read_sample_metadata(sample_metadata_df),
+    )
+    IMS_to_postIMS_init_gridsearch=get_column_entry_from_metadata_two_conditions(
+        wildcards.project_name,
+        wildcards.sample,
+        "IMS_to_postIMS_init_gridsearch",
+        "project_name",
+        "sample_name",
+        read_sample_metadata(sample_metadata_df),
+    )
+    return int(min([n_threads_max,max([IMS_to_postIMS_n_splits/2,4])]))
+
+
+
