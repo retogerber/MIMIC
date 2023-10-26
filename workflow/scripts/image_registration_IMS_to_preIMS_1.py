@@ -7,9 +7,8 @@ import pycpd
 import napari_imsmicrolink
 import skimage
 import numpy as np
-from wsireg.utils.im_utils import grayscale
-# from imc_to_ims_workflow.workflow.scripts.image_registration_IMS_to_preIMS_utils import *
-from image_registration_IMS_to_preIMS_utils import *
+# from image_registration_IMS_to_preIMS_utils import *
+from image_registration_IMS_to_preIMS_utils import readimage_crop, saveimage_tile, normalize_image
 import sys,os
 import logging, traceback
 logging.basicConfig(filename=snakemake.log["stdout"],
@@ -28,9 +27,9 @@ cv2.setNumThreads(snakemake.threads)
 sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(snakemake.threads)
 
 # parameters
-# stepsize = 20
+# stepsize = 30
 stepsize = float(snakemake.params["IMS_pixelsize"])
-# pixelsize = 16
+# pixelsize = 24
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
 # resolution = 0.22537
 resolution = float(snakemake.params["IMC_pixelsize"])
@@ -38,22 +37,22 @@ resolution = float(snakemake.params["IMC_pixelsize"])
 rotation_imz = float(snakemake.params["IMS_rotation_angle"])
 assert(rotation_imz in [-270,-180,-90,0,90,180,270])
 
-postIMSr_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS_reduced_mask.ome.tiff"
-# postIMSr_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMS/test_split_pre_postIMS_reduced_mask.ome.tiff"
+# postIMSr_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS_reduced_mask.ome.tiff"
+# postIMSr_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/postIMS/test_split_ims_postIMS_reduced_mask.ome.tiff"
 # postIMSr_file = "/home/retger/Downloads/cirrhosis_TMA_postIMS_reduced_mask.ome.tiff"
 # postIMSr_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS_reduced_mask.ome.tiff"
 postIMSr_file = snakemake.input["postIMSmask_downscaled"]
-imzmlfile = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_IMS.imzML"
-# imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/IMS_test_split_ims_2.imzML"
+# imzmlfile = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_IMS.imzML"
+# imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/IMS_test_split_ims_1.imzML"
 # imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/IMS_test_split_pre.imzML"
 # imzmlfile = "/home/retger/Downloads/cirrhosis_TMA_IMS.imzML"
 # imzmlfile = "/home/retger/Downloads/pos_mode_lipids_tma_02032023_imzml.imzML"
 imzmlfile = snakemake.input["imzml"]
 
-imc_mask_files = ["/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_E9.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_A2.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_B5.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_B1.geojson"]
+# imc_mask_files = ["/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_E9.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_A2.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_B5.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_B1.geojson"]
 # imc_mask_files = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_022_transformed_on_postIMS.ome.tiff"
 # imc_mask_files = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_D2.geojson"
-# imc_mask_files = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
+# imc_mask_files = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMC_location/test_split_ims_IMC_mask_on_postIMS_A1.geojson"
 # imc_mask_files = ["/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed.ome.tiff","/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"]
 # imc_mask_files = [f"/home/retger/Downloads/Cirrhosis-TMA-5_New_Detector_0{i}_transformed.ome.tiff" for i in ["01","02","03","04","05","06","07","08","09","11","12","13","14","15","16"]]
 # imc_mask_files = imc_mask_files + [f"/home/retger/Downloads/Cirrhosis-TMA-5_01062022_0{i}_transformed.ome.tiff" for i in ["05","06","07","08","09"]]
@@ -68,8 +67,8 @@ if isinstance(imc_mask_files, str):
 # sample_metadata = "/home/retger/Downloads/sample_metadata.csv"
 # sample_metadata = snakemake.input["sample_metadata"]
 # sample_core_names = "NASH_HCC_TMA-2_022|-_-|D2"
-sample_core_names = "NASH_HCC_TMA-2_002|-_-|E9|-|-|NASH_HCC_TMA-2_004|-_-|A2|-|-|NASH_HCC_TMA-2_011|-_-|B5|-|-|NASH_HCC_TMA-2_032|-_-|B1"
-# sample_core_names = "Cirrhosis-TMA-5_New_Detector_001|-_-|A1|-|-|Cirrhosis-TMA-5_New_Detector_002|-_-|B1"
+# sample_core_names = "NASH_HCC_TMA-2_002|-_-|E9|-|-|NASH_HCC_TMA-2_004|-_-|A2|-|-|NASH_HCC_TMA-2_011|-_-|B5|-|-|NASH_HCC_TMA-2_032|-_-|B1"
+# sample_core_names = "Cirrhosis-TMA-5_New_Detector_001|-_-|A1"
 sample_core_names = snakemake.params["sample_core_names"]
 
 # output_table = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/IMS_to_postIMS_matches.csv"
@@ -135,6 +134,7 @@ heights = pistats[:,2]
 widths = pistats[:,3]
 
 logging.info("Find IMC to postIMS overlap")
+picents_reduced = list()
 postIMSregions = list()
 postIMS_pre_bbox = list()
 for bb in imcbboxls:
@@ -144,6 +144,8 @@ for bb in imcbboxls:
     postIMSregions.append(tmpuqs[0])
     r = tmpuqs-1
     postIMS_pre_bbox.append([xs[r][0],ys[r][0],xs[r][0]+widths[r][0], ys[r][0]+heights[r][0]])
+    picents_reduced.append(picents[r,:])
+picents = np.vstack(picents_reduced)
 del tmpuqs
 
 logging.info(f"postIMSregions: {postIMSregions}")
@@ -152,8 +154,13 @@ postIMS_pre_areas = pistats[:,4]
 
 # filter
 tmpbool = np.array([p in np.array(postIMSregions) for p in postIMSregions])
-postIMS_pre_bbox = np.array(postIMS_pre_bbox)[tmpbool]
-postIMS_pre_areas = np.array(postIMS_pre_areas)[tmpbool]
+assert(np.any(tmpbool))
+if len(tmpbool)==1:
+    postIMS_pre_bbox = np.array(postIMS_pre_bbox)
+    postIMS_pre_areas = np.array(postIMS_pre_areas)
+else: 
+    postIMS_pre_bbox = np.array(postIMS_pre_bbox)[tmpbool]
+    postIMS_pre_areas = np.array(postIMS_pre_areas)[tmpbool]
 logging.info(f"postIMS_pre_bbox filtered: {postIMS_pre_bbox}")
 logging.info(f"postIMS_pre_areas filtered: {postIMS_pre_areas}")
 logging.info("Find global bounding box of cores")
@@ -292,6 +299,8 @@ def find_approx_init_translation(imzcents, picents):
     return xy_init_shift, np.min(max_dists_red)
 
 logging.info(f"Inital Matching")
+logging.info(f"picents: {picents}")
+logging.info(f"imzcents: {imzcents}")
 xy_init_shift, max_dist = find_approx_init_translation(imzcents, picents)
 
 logging.info(f"\tInital translation: {xy_init_shift}")

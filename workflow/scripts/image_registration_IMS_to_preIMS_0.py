@@ -82,7 +82,7 @@ def extract_mask(img: np.ndarray, session, rescale: float):
     # to grayscale, rescale
     w = prepare_image_for_sam(img, rescale)
     # using fft, remove IMS ablation grid
-    w = subtract_postIMS_grid(w)
+    #w = subtract_postIMS_grid(w)
     w = cv2.blur(w, (5,5))
     w = np.stack([w, w, w], axis=2)
     # detect background
@@ -120,10 +120,19 @@ for i in range(len(imcbboxls)):
     ymax = int(imcbboxls[i][3]+expand_microns)
     ymax = ymax if ymax<=postIMS_shape[1] else postIMS_shape[1]
     print(f"i: {i}, {os.path.basename(imc_mask_files[i])}, coords:[{xmin}:{xmax},{ymin}:{ymax}]")
-    tmpinpimg = readimage_crop(postIMS_file, (np.ceil(np.array([xmin,ymin,xmax+1,ymax+1])/resolution)).astype(int))
+    tmpinpimg = readimage_crop(postIMS_file, (np.ceil(np.array([xmin,ymin,xmax,ymax])/resolution)).astype(int))
     tmpimg = extract_mask(tmpinpimg, rembg_session, resolution)
     rembg_mask_areas.append(np.sum(tmpimg>0))
-    postIMSstitch[xmin:xmax,ymin:ymax] = np.max(np.stack([postIMSstitch[xmin:xmax,ymin:ymax],tmpimg[:(xmax-xmin),:(ymax-ymin)]], axis=0),axis=0)
+    wn, hn = postIMSstitch[xmin:xmax,ymin:ymax].shape
+    if tmpimg[:wn,:hn].shape[0]-wn > -2 and tmpimg[:wn,:hn].shape[1]-hn > -2:
+        tmpimg = cv2.resize(tmpimg[:wn,:hn].astype(np.uint8), (hn,wn), interpolation=cv2.INTER_NEAREST).astype(bool)
+    elif tmpimg[:wn,:hn].shape[0]-wn < -1 and tmpimg[:wn,:hn].shape[1]-hn < -1:
+        raise ValueError("shapes are too different!")
+    else:
+        tmpimg = tmpimg[:wn,:hn]
+    logging.info(f"\tshape 1: {postIMSstitch[xmin:xmax,ymin:ymax].shape}")
+    logging.info(f"\tshape 2: {tmpimg.shape}")
+    postIMSstitch[xmin:xmax,ymin:ymax] = np.max(np.stack([postIMSstitch[xmin:xmax,ymin:ymax],tmpimg], axis=0),axis=0)
 
 # threshold
 postIMSrs = postIMSstitch>0
@@ -157,11 +166,11 @@ for i in inds:
     logging.info(f"i: {i}, {os.path.basename(imc_mask_files[i])}, coords:[{xmin}:{xmax},{ymin}:{ymax}]")
 
     # read image
-    saminp = readimage_crop(postIMS_file, (np.ceil(np.array([xmin,ymin,xmax+1,ymax+1])/resolution)).astype(int))
+    saminp = readimage_crop(postIMS_file, (np.ceil(np.array([xmin,ymin,xmax,ymax])/resolution)).astype(int))
     # to gray scale, rescale
     saminp = prepare_image_for_sam(saminp, resolution)
     # remove postIMS IMS ablation grid
-    saminp = subtract_postIMS_grid(saminp)
+    #saminp = subtract_postIMS_grid(saminp)
     saminp = np.stack([saminp, saminp, saminp], axis=2)
     # run SAM segmentation model
     postIMSmasks, scores1 = sam_core(saminp, sam)
@@ -174,7 +183,16 @@ for i in inds:
     tmpind = tmpinds[scores1[tmpinds]==np.max(scores1[tmpinds])]
     tmpimg = postIMSmasks[tmpind,:,:][0,:,:].astype(np.uint8)*255
     sam_mask_areas.append(np.sum(tmpimg>0))
-    postIMSstitch[xmin:xmax,ymin:ymax] = np.max(np.stack([postIMSstitch[xmin:xmax,ymin:ymax],tmpimg[:(xmax-xmin),:(ymax-ymin)]], axis=0),axis=0)
+    wn, hn = postIMSstitch[xmin:xmax,ymin:ymax].shape
+    if tmpimg[:wn,:hn].shape[0]-wn > -2 and tmpimg[:wn,:hn].shape[1]-hn > -2:
+        tmpimg = cv2.resize(tmpimg[:wn,:hn].astype(np.uint8), (hn,wn), interpolation=cv2.INTER_NEAREST).astype(bool)
+    elif tmpimg[:wn,:hn].shape[0]-wn < -1 and tmpimg[:wn,:hn].shape[1]-hn < -1:
+        raise ValueError("shapes are too different!")
+    else:
+        tmpimg = tmpimg[:wn,:hn]
+    logging.info(f"\tshape 1: {postIMSstitch[xmin:xmax,ymin:ymax].shape}")
+    logging.info(f"\tshape 2: {tmpimg.shape}")
+    postIMSstitch[xmin:xmax,ymin:ymax] = np.max(np.stack([postIMSstitch[xmin:xmax,ymin:ymax],tmpimg], axis=0),axis=0)
 
 postIMSsamr = postIMSstitch>0
 

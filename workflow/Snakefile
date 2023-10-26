@@ -429,7 +429,8 @@ rule transform_IMC_location_to_preIMC:
         mem_mb=30000,
     input:
         IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC_{core}.geojson",
-        postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
+        #postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
+        postIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_transformations.json",
     output:
         IMC_location_transformed="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_preIMC_{core}.geojson",
     log:
@@ -456,6 +457,8 @@ use rule transform_IMC_location_to_preIMC as transform_IMC_location_to_preIMS wi
             read_sample_metadata(config["sample_metadata"]),
         ),
         transform_target="preIMS",
+    resources:
+        mem_mb=100000,
     output:
         IMC_location_transformed="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_preIMS_{core}.geojson",
     log:
@@ -476,6 +479,8 @@ use rule transform_IMC_location_to_preIMC as transform_IMC_location_to_postIMS w
             read_sample_metadata(config["sample_metadata"]),
         ),
         transform_target="postIMS",
+    resources:
+        mem_mb=100000,
     output:
         IMC_location_transformed="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMS_{core}.geojson",
     log:

@@ -22,25 +22,26 @@ sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 
 logging.info("Start")
 
-microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMC/NASH_HCC_TMA-2_011_transformed_on_preIMC.ome.tiff"
-microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA-2_004_transformed_on_postIMS.ome.tiff"
-microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMC/NASH_HCC_TMA-2_022_transformed_on_preIMS.ome.tiff"
-# microscopy_file_1 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre-preIMS_to_postIMS_registered_reduced.ome.tiff"
+# microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMC/NASH_HCC_TMA-2_011_transformed_on_preIMC.ome.tiff"
+# microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA-2_004_transformed_on_postIMS.ome.tiff"
+# microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMC/NASH_HCC_TMA-2_022_transformed_on_preIMS.ome.tiff"
+# microscopy_file_1 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/Cirrhosis-TMA-5_New_Detector_002_transformed_on_preIMS.ome.tiff"
 # microscopy_file_1 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/Cirrhosis-TMA-5_New_Detector_002_transformed_on_preIMC.ome.tiff"
 # microscopy_file_1 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/Cirrhosis-TMA-5_New_Detector_002_transformed_on_preIMS.ome.tiff"
 microscopy_file_1 = snakemake.input['microscopy_image_1']
 
-microscopy_file_2 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMC/NASH_HCC_TMA_preIMC.ome.tiff"
-microscopy_file_2 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
-microscopy_file_2 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA_preIMS.ome.tiff"
-# microscopy_file_2 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMS/test_split_pre_postIMS.ome.tiff"
+# microscopy_file_2 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMC/NASH_HCC_TMA_preIMC.ome.tiff"
+# microscopy_file_2 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
+# microscopy_file_2 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA_preIMS.ome.tiff"
+# microscopy_file_2 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre_preIMS.ome.tiff"
 # microscopy_file_2 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre_preIMS.ome.tiff"
 # microscopy_file_2 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/test_split_pre_preIMC.ome.tiff"
 # microscopy_file_2 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre_preIMS.ome.tiff"
 microscopy_file_2 = snakemake.input['microscopy_image_2']
-IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_preIMC_B5.geojson"
-IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_A2.geojson"
-IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_preIMS_D2.geojson"
+# IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_preIMC_B5.geojson"
+# IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_A2.geojson"
+# IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_preIMS_D2.geojson"
+# IMC_location = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_preIMS_B1.geojson"
 IMC_location=snakemake.input["IMC_location"]
 
 if isinstance(IMC_location, list):
@@ -144,13 +145,13 @@ for j in range((len(x_segs)-n_shift)):
         # kp1,des1 = cv2.BRISK_create(thresh=50,octaves=n_shift).detectAndCompute(img1,None)
         # kp1,des1 = cv2.ORB_create().detectAndCompute(img1,None)
         # kp1,des1 = cv2.SIFT_create().detectAndCompute(img1,None)
-        kp1,des1 = cv2.KAZE_create().detectAndCompute(img1,None)
+        kp1,des1 = cv2.KAZE_create(extended=True, upright=True).detectAndCompute(img1,None)
         pts1 = np.float32([ m.pt for m in kp1 ])
 
         img2 = microscopy_image_2[x_segs[i]:x_segs[i+n_shift],y_segs[j]:y_segs[j+n_shift]]
         # img2 = cv2.medianBlur(img2, ksize)
         # img2 = cv2.createCLAHE().apply(img2)
-        kp2,des2 = cv2.KAZE_create().detectAndCompute(img2,None)
+        kp2,des2 = cv2.KAZE_create(extended=True, upright=True).detectAndCompute(img2,None)
         pts2 = np.float32([ m.pt for m in kp2 ])
 
         # Matching
@@ -179,6 +180,9 @@ for j in range((len(x_segs)-n_shift)):
         src_pts = np.float32([ kp1[m.queryIdx].pt for m in matches_filt ]).reshape(-1,1,2)
         dst_pts = np.float32([ kp2[m.trainIdx].pt for m in matches_filt ]).reshape(-1,1,2)
 
+        if src_pts.shape[0] < 5 or dst_pts.shape[0] < 5:
+            continue
+
 
         # second step: remove one to many matches
         kdt = KDTree(src_pts.reshape(-1,2), leaf_size=30, metric='euclidean')
@@ -199,6 +203,9 @@ for j in range((len(x_segs)-n_shift)):
         matches_filt_dist_ratio = np.array(matches_filt_dist_ratio)[to_keep]
         src_pts = src_pts[to_keep,:,:]  
         dst_pts = dst_pts[to_keep,:,:]  
+
+        if src_pts.shape[0] < 5 or dst_pts.shape[0] < 5:
+            continue
 
         # third step: remove points close to each other (i.e. smaller than dmin)
         ctr1 = -1
@@ -242,9 +249,13 @@ for j in range((len(x_segs)-n_shift)):
         src_pts = src_pts[to_keep,:,:]  
         dst_pts = dst_pts[to_keep,:,:]  
 
+        if src_pts.shape[0] < 5 or dst_pts.shape[0] < 5:
+            continue
+
 
         # sort points, and revert sort afterwards (needed for sampling with PROSAC)
         order_matches_filt = np.array(sorted(np.arange(len(matches_filt)), key = lambda x: matches_filt_dist_ratio[x]))
+
 
         # based on: https://docs.opencv.org/4.x/dc/dc3/tutorial_py_matcher.html
         # and https://docs.opencv.org/4.x/d0/d74/md__build_4_x-contrib_docs-lin64_opencv_doc_tutorials_calib3d_usac.html
