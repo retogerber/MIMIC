@@ -2,7 +2,7 @@ import cv2
 import SimpleITK as sitk
 from wsireg.reg_shapes import RegShapes
 from wsireg.reg_transforms.reg_transform_seq import RegTransformSeq
-import json
+import numpy as np
 import sys,os
 import logging, traceback
 logging.basicConfig(filename=snakemake.log["stdout"],
@@ -30,15 +30,20 @@ logging.info(f"input_spacing: {input_spacing}")
 # transform_target = "preIMS"
 transform_target = snakemake.params["transform_target"]
 assert(transform_target in ["preIMC", "preIMS", "postIMS"])
+# transform_file_postIMC_to_postIMS="/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/registrations/postIMC_to_postIMS/5/NASH_HCC_TMA_5-postIMC_to_postIMS_transformations.json"
 # transform_file_postIMC_to_postIMS = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/registrations/postIMC_to_postIMS/test_split_pre-postIMC_to_postIMS_transformations.json"
 # transform_file_postIMC_to_postIMS = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/registrations/postIMC_to_postIMS/A1/test_split_pre_A1-postIMC_to_postIMS_transformations.json"
 transform_file_postIMC_to_postIMS=snakemake.input["postIMC_to_postIMS_transform"]
-
+# IMC_geojson_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMC_A8.geojson"
 # IMC_geojson_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_postIMC_A1.geojson"
 IMC_geojson_file=snakemake.input['IMC_location_on_postIMC']
 
 out_mask = snakemake.output["IMC_location_transformed"]
 
+logging.info(f"tranform_target: {transform_target}")
+logging.info(f"transform_file: {transform_file_postIMC_to_postIMS}")
+logging.info(f"IMC geojson file: {IMC_geojson_file}")
+logging.info(f"output mask: {out_mask}")
 
 
 logging.info("Load transform")
@@ -50,6 +55,10 @@ rtsn.set_output_spacing((float(output_spacing),float(output_spacing)))
 
 # if transform_target != "postIMS":
 rtls = rtsn.reg_transforms
+logging.info(f"Number of transforms: {len(rtls)}")
+# len=4 : direct registration
+# len=6 : additional separate registration between preIMC and preIMS
+assert(len(rtls)==6 or len(rtls)==4)
 is_split_transform = len(rtls)==6
 
 
@@ -67,13 +76,24 @@ rtls = rtsn.reg_transforms
 rtls = rtls[:n_end]
 
 rtsngeo = RegTransformSeq(rtls, transform_seq_idx=list(range(len(rtls))))
-if len(rtls)>0:
-    rtsngeo.set_output_spacing((float(output_spacing),float(output_spacing)))
+assert(len(rtls)>0)
+rtsngeo.set_output_spacing((float(output_spacing),float(output_spacing)))
 
 
 logging.info("Read json, transform and create shape")
-assert(len(rtls)>0)
 rs = RegShapes(IMC_geojson_file, source_res=input_spacing, target_res=output_spacing)
 rs.transform_shapes(rtsngeo)
 
+tmpout = rs.transformed_shape_data[0]['array']
+xmin = np.min(tmpout[:,0])
+assert(xmin>0)
+xmax = np.max(tmpout[:,0])
+assert(xmax<=rtsngeo.output_size[0])
+ymin = np.min(tmpout[:,1])
+assert(ymin>0)
+ymax = np.max(tmpout[:,1])
+assert(ymax<=rtsngeo.output_size[1])
+
 rs.save_shape_data(out_mask)
+
+logging.info(f"Finished")

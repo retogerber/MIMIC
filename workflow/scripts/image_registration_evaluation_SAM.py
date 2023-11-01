@@ -1,11 +1,11 @@
 import pandas as pd
 import cv2
 import matplotlib.pyplot as plt
-from rembg import remove, new_session
+from rembg import new_session
 import skimage
 import numpy as np
 import tifffile
-from image_registration_IMS_to_preIMS_utils import readimage_crop, prepare_image_for_sam, get_max_dice_score, dist_centroids, subtract_postIMS_grid
+from image_registration_IMS_to_preIMS_utils import readimage_crop, prepare_image_for_sam, get_max_dice_score, dist_centroids, subtract_postIMS_grid, extract_mask
 import sys,os
 import logging, traceback
 logging.basicConfig(filename=snakemake.log["stdout"],
@@ -59,20 +59,6 @@ logging.info("Setup rembg model")
 model_name = "isnet-general-use"
 os.environ["OMP_NUM_THREADS"] = str(snakemake.threads)
 rembg_session = new_session(model_name)
-
-def extract_mask(file, bb, session, rescale=1, is_postIMS=False):
-    w = readimage_crop(file, bb)
-    w = prepare_image_for_sam(w, rescale)
-    if is_postIMS:
-        w = subtract_postIMS_grid(w)
-        w = cv2.blur(w, (5,5))
-    w = np.stack([w, w, w], axis=2)
-    wr = remove(w, only_mask=True, session=session)
-    masks = wr>127
-    masks = skimage.morphology.remove_small_holes(masks,100**2*np.pi)
-    masks = cv2.morphologyEx(masks.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((5,5),np.uint8)).astype(bool)
-    masks = np.stack([masks])
-    return masks
 
 
 logging.info("postIMC on preIMC bounding box extraction")

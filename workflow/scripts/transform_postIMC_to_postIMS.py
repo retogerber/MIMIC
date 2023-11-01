@@ -4,9 +4,8 @@ from wsireg.writers.ome_tiff_writer import OmeTiffWriter
 from wsireg.reg_shapes import RegShapes
 from wsireg.reg_transforms.reg_transform_seq import RegTransformSeq
 from wsireg.reg_images.loader import reg_image_loader
-from image_registration_IMS_to_preIMS_utils import get_image_shape, readimage_crop
+from image_registration_IMS_to_preIMS_utils import get_image_shape, readimage_crop, extract_mask
 import numpy as np
-from tifffile import imread
 from shapely.geometry import shape
 import json
 import sys,os
@@ -32,14 +31,14 @@ IMC_location_spacing = snakemake.params["IMC_location_spacing"]
 
 
 
-# transform_target = "preIMC"
+# transform_target = "postIMS"
 transform_target = snakemake.params["transform_target"]
-# transform_source = "postIMC"
+# transform_source = "preIMS"
 transform_source = snakemake.params["transform_source"]
 
 cv2.setNumThreads(snakemake.threads)
 sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(snakemake.threads)
-transform_file_postIMC_to_postIMS = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/registrations/postIMC_to_postIMS/3/NASH_HCC_TMA_3-postIMC_to_postIMS_transformations.json"
+transform_file_postIMC_to_postIMS = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/registrations/postIMC_to_postIMS/B5/NASH_HCC_TMA_B5-postIMC_to_postIMS_transformations.json"
 # transform_file_postIMC_to_postIMS = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/registrations/postIMC_to_postIMS/1/NASH_HCC_TMA_1-postIMC_to_postIMS_transformations.json"
 # transform_file_postIMC_to_postIMS_single = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/registrations/postIMC_to_postIMS/test_split_pre-postIMC_to_postIMS_transformations.json"
 # transform_file_postIMC_to_postIMS = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/registrations/postIMC_to_postIMS/A1/test_split_pre_A1-postIMC_to_postIMS_transformations.json"
@@ -159,13 +158,49 @@ if bbn[2]>imgshape[0]:
     bbn[2] = imgshape[0]
 if bbn[3]>imgshape[1]:
     bbn[3] = imgshape[1]
-img = readimage_crop(img_file, bbn)
 
+img_mask = extract_mask(img_file, bbn, session=None, rescale=input_spacing/4, is_postIMS = transform_source=="postIMS")[0,:,:]
+wn = int(img_mask.shape[0]*(4/input_spacing))
+hn = int(img_mask.shape[1]*(4/input_spacing))
+img_mask = cv2.resize(img_mask.astype(np.uint8), (hn,wn), interpolation=cv2.INTER_NEAREST)
+
+bm = cv2.boundingRect(img_mask)
+bbnn = bbn.copy()
+bbnn[0] += bm[1]
+bbnn[1] += bm[0]
+bbnn[2] = bbnn[0]+bm[3]
+bbnn[3] = bbnn[1]+bm[2]
+
+# edges
+if bbnn[0]>bb1[0]:
+    bbnn[0] = bbn[0]
+if bbnn[1]>bb1[1]:
+    bbnn[1] = bbn[1]
+if bbnn[2]<bb1[2]:
+    bbnn[2] = bbn[2]
+if bbnn[3]<bb1[3]:
+    bbnn[3] = bbn[3]
+
+
+assert((bbnn[2]-bbnn[0]) < (bbn[2]-bbn[0]))
+assert((bbnn[3]-bbnn[1]) < (bbn[3]-bbn[1]))
+
+assert((bbnn[2]-bbnn[0]) > (bb1[2]-bb1[0]))
+assert((bbnn[3]-bbnn[1]) > (bb1[3]-bb1[1]))
+
+assert(bbnn[0]<bb1[0])
+assert(bbnn[1]<bb1[1])
+assert(bbnn[2]>bb1[2])
+assert(bbnn[3]>bb1[3])
+
+logging.info(f"final bounding box: {bbnn}")
+
+img = readimage_crop(img_file, bbnn)
 
 logging.info("Create new image")
 # create empty image and fill in core
 imgnew = np.zeros(imgshape, dtype=np.uint8)
-imgnew[bbn[0]:bbn[2],bbn[1]:bbn[3]] = img
+imgnew[bbnn[0]:bbnn[2],bbnn[1]:bbnn[3]] = img
 
 
 logging.info("Transform and save image")

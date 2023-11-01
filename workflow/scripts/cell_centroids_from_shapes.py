@@ -5,14 +5,7 @@ from wsireg.reg_shapes import RegShapes
 from shapely import geometry
 import numpy as np
 import pandas as pd
-
 import sys,os
-import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
 import logging, traceback
 logging.basicConfig(filename=snakemake.log["stdout"],
                     level=logging.INFO,
@@ -48,7 +41,6 @@ def compute_cell_centroids(
     centroids_df['cell_idx'] = cell_indices
     centroids_df.sort_values("cell_idx", inplace=True)
     return centroids_df
-
 
 
 cell_shapes_fp = snakemake.input["IMCmask_transformed"]

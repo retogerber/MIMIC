@@ -1,3 +1,4 @@
+import SimpleITK as sitk
 from wsireg.writers.ome_tiff_writer import OmeTiffWriter
 from wsireg.reg_transforms.reg_transform import RegTransform
 from wsireg.reg_transforms.reg_transform_seq import RegTransformSeq
@@ -16,6 +17,7 @@ sys.excepthook = handle_exception
 sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
 sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 
+sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(snakemake.threads)
 logging.info("Start")
 
 # output_spacing=0.22537
@@ -46,7 +48,7 @@ img_dirname = os.path.dirname(img_out)
 
 logging.info("Read image")
 # read in IMC image
-img=imread(img_file)
+# img=imread(img_file)
 
 logging.info("Read Transformation 1")
 if os.path.getsize(transform_file_IMC_to_preIMC)>0:
@@ -137,7 +139,8 @@ rts.set_output_spacing((float(output_spacing),float(output_spacing)))
 
 logging.info("Transform and save image")
 #ri = reg_image_loader(img, 1.0)#,preprocessing=ipp)
-ri = reg_image_loader(img, float(input_spacing))#,preprocessing=ipp)
+# ri = reg_image_loader(img, float(input_spacing))#,preprocessing=ipp)
+ri = reg_image_loader(img_file, float(input_spacing))#,preprocessing=ipp)
 writer = OmeTiffWriter(ri, reg_transform_seq=rts)
 writer.write_image_by_plane(img_basename, output_dir=img_dirname, tile_size=1024)
 

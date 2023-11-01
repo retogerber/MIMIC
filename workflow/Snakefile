@@ -459,6 +459,9 @@ use rule transform_IMC_location_to_preIMC as transform_IMC_location_to_preIMS wi
         transform_target="preIMS",
     resources:
         mem_mb=100000,
+    input:
+        IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC_{core}.geojson",
+        postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
     output:
         IMC_location_transformed="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_preIMS_{core}.geojson",
     log:
@@ -481,6 +484,9 @@ use rule transform_IMC_location_to_preIMC as transform_IMC_location_to_postIMS w
         transform_target="postIMS",
     resources:
         mem_mb=100000,
+    input:
+        IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC_{core}.geojson",
+        postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
     output:
         IMC_location_transformed="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMS_{core}.geojson",
     log:
@@ -646,7 +652,7 @@ rule precise_register_IMC_to_preIMC:
 rule transform_IMCaggr_to_postIMS:
     threads: 16
     resources:
-        mem_mb=75000,
+        mem_mb=40000,
     params:
         input_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
@@ -954,7 +960,7 @@ use rule downscale_postIMS as downscale_preIMC with:
 
 
 rule extract_core_mask_from_postIMS:
-    threads: 4
+    threads: 16
     resources:
         mem_mb=10000,
     params:
@@ -989,6 +995,7 @@ rule extract_core_mask_from_postIMS:
             ),
         ),
         postIMS_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced.ome.tiff",
+        preIMS_downscaled="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMS_to_postIMS_registered.ome.tiff",
     output:
         postIMSmask_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced_mask.ome.tiff",
     log:
@@ -1283,6 +1290,7 @@ rule image_registration_evaluation_postIMC_to_preIMC:
         min_distance=10,
         remove_postIMS_grid=False,
     input:
+        sam_weights="results/Misc/sam_vit_h_4b8939.pth",
         microscopy_image_1="results/{project_name}/data/postIMC/{sample}_transformed_on_preIMC.ome.tiff",
         microscopy_image_2="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
         IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"preIMC"),
@@ -1301,6 +1309,7 @@ rule image_registration_evaluation_postIMC_to_preIMC:
 
 use rule image_registration_evaluation_postIMC_to_preIMC as image_registration_evaluation_preIMC_to_preIMS with:
     input:
+        sam_weights="results/Misc/sam_vit_h_4b8939.pth",
         microscopy_image_1="results/{project_name}/data/preIMC/{sample}_transformed_on_preIMS.ome.tiff",
         microscopy_image_2="results/{project_name}/data/preIMS/{project_name}_preIMS.ome.tiff",
         IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"preIMS"),
@@ -1343,6 +1352,7 @@ use rule image_registration_evaluation_postIMC_to_preIMC as image_registration_e
         min_distance=10,
         remove_postIMS_grid=True,
     input:
+        sam_weights="results/Misc/sam_vit_h_4b8939.pth",
         microscopy_image_1="results/{project_name}/data/preIMS/{sample}_transformed_on_postIMS.ome.tiff",
         microscopy_image_2="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
         IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"postIMS"),

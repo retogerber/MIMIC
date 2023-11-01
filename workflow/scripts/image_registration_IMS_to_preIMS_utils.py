@@ -14,6 +14,7 @@ import tifffile
 import zarr
 import shapely
 from sklearn.neighbors import KDTree
+import rembg
 
 def normalize_image(image: np.ndarray):
     '''scale image by 0 to 1'''
@@ -618,7 +619,7 @@ def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, ma
 
             # filter points
             # find points spanning maximum angle
-            tr = int(newcoords.shape[0]/4-5) if len(newcoords)>=40 else int(len(newcoords))
+            tr = int(newcoords.shape[0]/4-5) if len(newcoords)>=100 else int(len(newcoords))
 
             # small number of points
             if tr==newcoords.shape[0]:
@@ -794,4 +795,21 @@ def subtract_postIMS_grid(img: np.ndarray) -> np.ndarray:
     img_notch_stretched = (normalize_image(img_notch_stretched)*255).astype(np.uint8)
 
     return img_notch_stretched
+
+
+def extract_mask(file, bb, session = None, rescale=1, is_postIMS=False):
+    if session == None:
+        session = rembg.new_session("isnet-general-use")
+    w = readimage_crop(file, bb)
+    w = prepare_image_for_sam(w, rescale)
+    if is_postIMS:
+        w = subtract_postIMS_grid(w)
+        w = cv2.blur(w, (5,5))
+    w = np.stack([w, w, w], axis=2)
+    wr = rembg.remove(w, only_mask=True, session=session)
+    masks = wr>127
+    masks = skimage.morphology.remove_small_holes(masks,100**2*np.pi)
+    masks = cv2.morphologyEx(masks.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((5,5),np.uint8)).astype(bool)
+    masks = np.stack([masks])
+    return masks
 

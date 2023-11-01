@@ -1,13 +1,14 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import json
+from segment_anything import sam_model_registry, SamPredictor
 import skimage
 import skimage.exposure
 import re
 import numpy as np
 from sklearn.neighbors import KDTree
 import cv2
-from image_registration_IMS_to_preIMS_utils import normalize_image, readimage_crop, prepare_image_for_sam, get_angle, saveimage_tile, subtract_postIMS_grid
+from image_registration_IMS_to_preIMS_utils import normalize_image, readimage_crop, prepare_image_for_sam, get_angle, saveimage_tile, subtract_postIMS_grid, extract_mask, get_image_shape, sam_core, preprocess_mask
 import sys,os
 import logging, traceback
 logging.basicConfig(filename=snakemake.log["stdout"],
@@ -22,7 +23,16 @@ sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 
 logging.info("Start")
 
-# microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMC/NASH_HCC_TMA-2_011_transformed_on_preIMC.ome.tiff"
+logging.info("Setup segment anything")
+# CHECKPOINT_PATH = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/Misc/sam_vit_h_4b8939.pth"
+CHECKPOINT_PATH = snakemake.input["sam_weights"]
+DEVICE = 'cpu'
+MODEL_TYPE = "vit_h"
+
+
+
+
+# microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA-2_020_transformed_on_postIMS.ome.tiff"
 # microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA-2_004_transformed_on_postIMS.ome.tiff"
 # microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMC/NASH_HCC_TMA-2_022_transformed_on_preIMS.ome.tiff"
 # microscopy_file_1 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/Cirrhosis-TMA-5_New_Detector_002_transformed_on_preIMS.ome.tiff"
@@ -30,7 +40,7 @@ logging.info("Start")
 # microscopy_file_1 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/Cirrhosis-TMA-5_New_Detector_002_transformed_on_preIMS.ome.tiff"
 microscopy_file_1 = snakemake.input['microscopy_image_1']
 
-# microscopy_file_2 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMC/NASH_HCC_TMA_preIMC.ome.tiff"
+# microscopy_file_2 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
 # microscopy_file_2 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
 # microscopy_file_2 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA_preIMS.ome.tiff"
 # microscopy_file_2 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre_preIMS.ome.tiff"
@@ -38,7 +48,7 @@ microscopy_file_1 = snakemake.input['microscopy_image_1']
 # microscopy_file_2 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/test_split_pre_preIMC.ome.tiff"
 # microscopy_file_2 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre_preIMS.ome.tiff"
 microscopy_file_2 = snakemake.input['microscopy_image_2']
-# IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_preIMC_B5.geojson"
+# IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_C9.geojson"
 # IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_A2.geojson"
 # IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_preIMS_D2.geojson"
 # IMC_location = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_preIMS_B1.geojson"
@@ -47,6 +57,8 @@ IMC_location=snakemake.input["IMC_location"]
 if isinstance(IMC_location, list):
     IMC_location = IMC_location[0]
 logging.info(f"IMC_location: {IMC_location}")
+logging.info(f"microscopy image 1: {microscopy_file_1}")
+logging.info(f"microscopy image 2: {microscopy_file_2}")
 
 # input_spacing_1 = 1
 input_spacing_1 = snakemake.params["input_spacing_1"]
@@ -56,6 +68,11 @@ input_spacing_2 = snakemake.params["input_spacing_2"]
 input_spacing_IMC_location = snakemake.params["input_spacing_IMC_location"]
 # output_spacing = 1
 output_spacing = snakemake.params["output_spacing"]
+
+logging.info(f"input spacing 1: {input_spacing_1}")
+logging.info(f"input spacing 2: {input_spacing_2}")
+logging.info(f"input spacing IMC location: {input_spacing_IMC_location}")
+logging.info(f"output spacing: {output_spacing}")
 
 
 cv2.setNumThreads(snakemake.threads)
@@ -91,11 +108,20 @@ ymax=np.max(boundary_points[:,0])
 
 s1f = input_spacing_1/input_spacing_IMC_location
 bb1 = [int(xmin/s1f-201/input_spacing_1),int(ymin/s1f-201/input_spacing_1),int(xmax/s1f+201/input_spacing_1),int(ymax/s1f+201/input_spacing_1)]
+logging.info(f"bounding box whole image 1: {bb1}")
 
 s2f = input_spacing_2/input_spacing_IMC_location
 bb2 = [int(xmin/s2f-201/input_spacing_2),int(ymin/s2f-201/input_spacing_2),int(xmax/s2f+201/input_spacing_2),int(ymax/s2f+201/input_spacing_2)]
+logging.info(f"bounding box whole image 2: {bb2}")
 
-logging.info(f"bounding box whole image: {bb1}")
+m2full_shape = get_image_shape(microscopy_file_1)
+bb3 = [int(xmin/s1f-1251/input_spacing_1),int(ymin/s1f-1251/input_spacing_1),int(xmax/s1f+1251/input_spacing_1),int(ymax/s1f+1251/input_spacing_1)]
+bb3[0] = bb3[0] if bb3[0]>=0 else 0
+bb3[1] = bb3[1] if bb3[1]>=0 else 0
+bb3[2] = bb3[2] if bb3[2]<=m2full_shape[0] else m2full_shape[0]
+bb3[3] = bb3[3] if bb3[3]<=m2full_shape[1] else m2full_shape[1]
+logging.info(f"bounding box mask whole image 1: {bb3}")
+
 
 logging.info("load microscopy image 1")
 microscopy_image_1 = readimage_crop(microscopy_file_1, bb1)
@@ -104,6 +130,41 @@ microscopy_image_1 = prepare_image_for_sam(microscopy_image_1, input_spacing_1/o
 logging.info("load microscopy image 2")
 microscopy_image_2 = readimage_crop(microscopy_file_2, bb2)
 microscopy_image_2 = prepare_image_for_sam(microscopy_image_2, input_spacing_2/output_spacing)
+
+logging.info("Extract mask for microscopy image 1")
+mask_2 = extract_mask(microscopy_file_1, bb3, rescale = input_spacing_1/output_spacing, is_postIMS=False)[0,:,:]
+xb = int((mask_2.shape[0]-microscopy_image_1.shape[0])/2)
+yb = int((mask_2.shape[1]-microscopy_image_1.shape[1])/2)
+wn = microscopy_image_1.shape[0]
+hn = microscopy_image_1.shape[1]
+mask_2 = cv2.resize(mask_2[xb:-xb,yb:-yb].astype(np.uint8), (hn,wn), interpolation=cv2.INTER_NEAREST)
+mask_2_proportion = np.sum(mask_2)/np.prod(mask_2.shape)
+logging.info(f"proportion image 1 covered by mask (rembg): {mask_2_proportion:5.4}")
+
+bb0 = [int(xmin/s1f),int(ymin/s1f),int(xmax/s1f),int(ymax/s1f)]
+IMC_mask_proportion = ((bb0[2]-bb0[0])*(bb0[3]-bb0[1]))/((bb1[2]-bb1[0])*(bb1[3]-bb1[1]))
+if mask_2_proportion < IMC_mask_proportion:
+    sam = sam_model_registry[MODEL_TYPE](checkpoint=CHECKPOINT_PATH)
+    sam.to(device=DEVICE)
+    saminp = readimage_crop(microscopy_file_1, bb1)
+    # to gray scale, rescale
+    saminp = prepare_image_for_sam(saminp, input_spacing_1/output_spacing)
+    saminp = np.stack([saminp, saminp, saminp], axis=2)
+    # run SAM segmentation model
+    masks, scores1 = sam_core(saminp, sam)
+    # postprocess
+    masks = np.stack([skimage.morphology.convex_hull_image(preprocess_mask(msk,1)) for msk in masks ])
+    tmpareas = np.array([np.sum(im) for im in masks])
+    indmax = np.argmax(tmpareas/(masks.shape[1]*masks.shape[2]))
+    mask_2 = masks[indmax,:,:].astype(np.uint8)
+    mask_2_proportion = np.sum(mask_2)/np.prod(mask_2.shape)
+    logging.info(f"proportion image 1 covered by mask (SAM): {mask_2_proportion:5.4}")
+    if mask_2_proportion < IMC_mask_proportion:
+        mask_2 = np.ones(microscopy_image_1.shape, dtype=np.uint8)
+
+
+# px.imshow(mask_2).show()
+# px.imshow(microscopy_image_2).show()
 
 xmax = min([microscopy_image_1.shape[0],microscopy_image_2.shape[0]])
 ymax = min([microscopy_image_1.shape[1],microscopy_image_2.shape[1]])
@@ -153,6 +214,11 @@ for j in range((len(x_segs)-n_shift)):
         # img2 = cv2.createCLAHE().apply(img2)
         kp2,des2 = cv2.KAZE_create(extended=True, upright=True).detectAndCompute(img2,None)
         pts2 = np.float32([ m.pt for m in kp2 ])
+        
+
+        if pts1.shape[0] < 5 or pts2.shape[0] < 5:
+            logging.info(f"{i}_{j}: {0:4} {0:4} {np.nan:8.3} {np.nan:8.3}")
+            continue
 
         # Matching
         # first step: based on physical distance (i.e. smaller than dmax)
@@ -181,6 +247,7 @@ for j in range((len(x_segs)-n_shift)):
         dst_pts = np.float32([ kp2[m.trainIdx].pt for m in matches_filt ]).reshape(-1,1,2)
 
         if src_pts.shape[0] < 5 or dst_pts.shape[0] < 5:
+            logging.info(f"{i}_{j}: {0:4} {0:4} {np.nan:8.3} {np.nan:8.3}")
             continue
 
 
@@ -205,16 +272,21 @@ for j in range((len(x_segs)-n_shift)):
         dst_pts = dst_pts[to_keep,:,:]  
 
         if src_pts.shape[0] < 5 or dst_pts.shape[0] < 5:
+            logging.info(f"{i}_{j}: {0:4} {0:4} {np.nan:8.3} {np.nan:8.3}")
             continue
 
         # third step: remove points close to each other (i.e. smaller than dmin)
         ctr1 = -1
         ctr2 = 0
         to_remove = np.zeros(0)
+        did_break = False
         while ctr1 < ctr2:
             # filter points
             to_keep = np.array([k for k in range(len(matches_filt)) if k not in to_remove])
             tmp_matches_filt = matches_filt[to_keep]
+            if len(to_keep) < 5:
+                did_break = True
+                break
 
             # first image 
             kdt = KDTree(src_pts.reshape(-1,2)[to_keep], leaf_size=30, metric='euclidean')
@@ -239,7 +311,10 @@ for j in range((len(x_segs)-n_shift)):
             to_remove = np.unique(to_remove)
             ctr1 = ctr2
             ctr2 = len(to_remove)
-
+        
+        if did_break:
+            logging.info(f"{i}_{j}: {0:4} {0:4} {np.nan:8.3} {np.nan:8.3}")
+            continue
 
         # apply filter
         to_keep = np.array([k for k in range(len(matches_filt)) if k not in to_remove])
@@ -250,6 +325,7 @@ for j in range((len(x_segs)-n_shift)):
         dst_pts = dst_pts[to_keep,:,:]  
 
         if src_pts.shape[0] < 5 or dst_pts.shape[0] < 5:
+            logging.info(f"{i}_{j}: {0:4} {0:4} {np.nan:8.3} {np.nan:8.3}")
             continue
 
 
@@ -317,41 +393,72 @@ for j in range((len(x_segs)-n_shift)):
         homography_mask = np.append(homography_mask,matchesMask,axis=0)
         matdic[f"{i}_{j}"] = {'matrix': M, 'i':i, 'j':j, 'n': np.sum(matchesMask)}
 
-combined_output = np.hstack([kpf1compl,kpf2compl,dists.reshape(-1,1),dist_ratios.reshape(-1,1),homography_mask.reshape(-1,1),dists_real.reshape(-1,1),angles.reshape(-1,1),ij_array])
-np.savetxt(matching_points_filename_out,combined_output,header=f"p1x,p1y,p2x,p2y,distance,distance_ratio,homography_mask,distance_physical,angle,i,j",delimiter=',')
 
-dists_realfilt = dists_real[homography_mask==1]
-ij_arrayfilt = ij_array[homography_mask==1]
-kpf1complfilt = kpf1compl[homography_mask==1]
-kpf2complfilt = kpf2compl[homography_mask==1]
+logging.info(f"Check if points are on tissue")
+contours, hierarchy = cv2.findContours(mask_2*255, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+# c_areas = np.array([cv2.contourArea(c) for c in contours])
+# np.argmax(c_areas)
+if len(contours)>1:
+    contours = [max(contours, key = cv2.contourArea)]
 
-logging.info(f"median distance: {np.median(dists_realfilt):5.3} (min: {np.min(dists_realfilt):5.3}, max: {np.max(dists_realfilt):5.3})")
+logging.info(f"proportion image 1 covered by contour of mask: {cv2.contourArea(contours[0])/np.prod(mask_2.shape):5.4}")
+
+in_mask_1 = np.zeros(len(kpf1compl),dtype=bool)
+for j in range(len(kpf1compl)):
+    in_mask_1[j]=np.any(np.array([cv2.pointPolygonTest(contours[i], np.flip(kpf1compl[j,:]), False) for i in range(len(contours))])==1)
+in_mask_2 = np.zeros(len(kpf2compl),dtype=bool)
+for j in range(len(kpf1compl)):
+    in_mask_2[j]=np.any(np.array([cv2.pointPolygonTest(contours[i], np.flip(kpf2compl[j,:]), False) for i in range(len(contours))])==1)
+in_mask = np.logical_and(in_mask_1, in_mask_2)
+
+logging.info(f"\t n_points in mask: {np.sum(in_mask)} / {len(in_mask)}")
+# px.scatter(x=kpf1compl[in_mask,1],y=-kpf1compl[in_mask,0]).show()
+# px.scatter(x=kpf1compl[~in_mask,1],y=-kpf1compl[~in_mask,0]).show()
+# ti = cv2.drawContours(microscopy_image_1.astype(np.uint8), contour, -1, (0,255,0), 3)
+# px.imshow(ti).show()
+
+combined_output = np.hstack([kpf1compl,kpf2compl,dists.reshape(-1,1),dist_ratios.reshape(-1,1),homography_mask.reshape(-1,1),in_mask.reshape(-1,1),dists_real.reshape(-1,1),angles.reshape(-1,1),ij_array])
+logging.info(f"done")
+logging.info("Save points")
+np.savetxt(matching_points_filename_out,combined_output,header=f"p1x,p1y,p2x,p2y,distance,distance_ratio,homography_mask,on_tissue,distance_physical,angle,i,j",delimiter=',')
+
+logging.info("Apply filter to points")
+dists_realfilt = dists_real[np.logical_and(homography_mask==1,in_mask)]
+ij_arrayfilt = ij_array[np.logical_and(homography_mask==1,in_mask)]
+kpf1complfilt = kpf1compl[np.logical_and(homography_mask==1,in_mask)]
+kpf2complfilt = kpf2compl[np.logical_and(homography_mask==1,in_mask)]
 
 
-params = cv2.UsacParams()
-params.confidence = 0.9999
-params.sampler = cv2.SAMPLING_PROSAC
-params.score = cv2.SCORE_METHOD_MAGSAC
-params.maxIterations = 1000000
-params.neighborsSearch = cv2.NEIGH_FLANN_RADIUS
-params.threshold = 1 
-params.loMethod = cv2.LOCAL_OPTIM_GC
-params.loIterations = 100
-# params.loSampleSize = 20 
-M, mask = cv2.estimateAffine2D(kpf1complfilt, kpf2complfilt, params)
-mask=mask.ravel()
+tc = np.sum(np.logical_and(homography_mask==1, in_mask))>=5
+if tc:
+    params = cv2.UsacParams()
+    params.confidence = 0.9999
+    params.sampler = cv2.SAMPLING_PROSAC
+    params.score = cv2.SCORE_METHOD_MAGSAC
+    params.maxIterations = 1000000
+    params.neighborsSearch = cv2.NEIGH_FLANN_RADIUS
+    params.threshold = 1 
+    params.loMethod = cv2.LOCAL_OPTIM_GC
+    params.loIterations = 100
+    # params.loSampleSize = 20 
+    M, mask = cv2.estimateAffine2D(kpf1complfilt, kpf2complfilt, params)
+    mask=mask.ravel()
 
-mean_error = np.mean(dists_realfilt)
-q95_error = np.quantile(dists_realfilt,0.95)
-q75_error = np.quantile(dists_realfilt,0.75)
-q50_error = np.quantile(dists_realfilt,0.5)
-q25_error = np.quantile(dists_realfilt,0.25)
-q05_error = np.quantile(dists_realfilt,0.05)
+mean_error = np.nan if not tc else np.mean(dists_realfilt)
+q95_error = np.nan if not tc else np.quantile(dists_realfilt,0.95)
+q75_error = np.nan if not tc else np.quantile(dists_realfilt,0.75)
+q50_error = np.nan if not tc else np.quantile(dists_realfilt,0.5)
+q25_error = np.nan if not tc else np.quantile(dists_realfilt,0.25)
+q05_error = np.nan if not tc else np.quantile(dists_realfilt,0.05)
+min_error = np.nan if not tc else np.min(dists_realfilt)
+max_error = np.nan if not tc else np.max(dists_realfilt)
 
-global_x_shift = M[0,2]
-global_y_shift = M[1,2]
-global_affinemat = M[:2,:2]
-n_points_in_global_affine= np.sum(mask)
+logging.info(f"median distance: {q50_error:5.3} (min: {min_error:5.3}, max: {max_error:5.3})")
+
+global_x_shift = np.nan if not tc else M[0,2]
+global_y_shift = np.nan if not tc else M[1,2]
+global_affinemat = np.zeros((2,2))*np.nan if not tc else M[:2,:2]
+n_points_in_global_affine = 0 if not tc else np.sum(mask)
 n_points_total = len(mask)
 
 reg_measure_dic = {
@@ -392,7 +499,7 @@ json.dump(reg_measure_dic, open(snakemake.output["error_stats"],"w"))
 
 import matplotlib as mpl
 viridis = mpl.colormaps['viridis'].resampled(8)
-dists_real_norm = mpl.colors.Normalize()(dists_real)
+dists_real_norm = mpl.colors.Normalize()(dists_realfilt)
 dists_real_color = (viridis(dists_real_norm)*255).astype(int)[:,:3]
 
 arrowed_microscopy_image_1 = np.stack([microscopy_image_1, microscopy_image_1, microscopy_image_1], axis=2)
