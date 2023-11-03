@@ -203,6 +203,8 @@ rule register_postIMC_to_postIMS:
     log:
         stdout="logs/register_postIMC_to_postIMS/{project_name}.stdout",
         stderr="logs/register_postIMC_to_postIMS/{project_name}.stderr",
+    benchmark:
+        "benchmarks/register_postIMC_to_postIMS/{project_name}.txt",
     # conda:
     #    "env/image_registration_wsireg.yaml"
     container:
@@ -337,6 +339,8 @@ rule register_preIMC_to_preIMS:
     log:
         stdout="logs/register_preIMC_to_preIMS/{project_name}_{part}.stdout",
         stderr="logs/register_preIMC_to_preIMS/{project_name}_{part}.stderr",
+    benchmark:
+        "benchmarks/register_preIMC_to_preIMS/{project_name}_{part}.txt",
     # conda:
     #    "env/image_registration_wsireg.yaml"
     container:
@@ -435,6 +439,8 @@ rule transform_IMC_location_to_preIMC:
         IMC_location_transformed="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_preIMC_{core}.geojson",
     log:
         stdout="logs/transform_IMC_location_to_preIMC/{project_name}_{core}.stdout"
+    benchmark:
+        "benchmarks/transform_IMC_location_to_preIMC/{project_name}_{core}.txt",
     # conda:
     #    "env/image_registration_wsireg.yaml"
     container:
@@ -466,6 +472,8 @@ use rule transform_IMC_location_to_preIMC as transform_IMC_location_to_preIMS wi
         IMC_location_transformed="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_preIMS_{core}.geojson",
     log:
         stdout="logs/transform_IMC_location_to_preIMS/{project_name}_{core}.stdout",
+    benchmark:
+        "benchmarks/transform_IMC_location_to_preIMS/{project_name}_{core}.txt",
 
 use rule transform_IMC_location_to_preIMC as transform_IMC_location_to_postIMS with:
     params:
@@ -491,6 +499,8 @@ use rule transform_IMC_location_to_preIMC as transform_IMC_location_to_postIMS w
         IMC_location_transformed="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMS_{core}.geojson",
     log:
         stdout="logs/transform_IMC_location_to_postIMS/{project_name}_{core}.stdout",
+    benchmark:
+        "benchmarks/transform_IMC_location_to_postIMS/{project_name}_{core}.txt",
  
 
 #
@@ -608,6 +618,8 @@ rule register_IMC_to_preIMC:
     log:
         stdout="logs/register_IMC_to_preIMC/{project_name}_{core}.stdout",
         stderr="logs/register_IMC_to_preIMC/{project_name}_{core}.stderr",
+    benchmark:
+        "benchmarks/register_IMC_to_preIMC/{project_name}_{core}.txt",
     # conda:
     #    "env/image_registration_wsireg.yaml"
     container:
@@ -677,6 +689,8 @@ rule transform_IMCaggr_to_postIMS:
     log:
         stdout="logs/transform_IMCaggr_to_postIMS/{project_name}_{sample}.stdout",
         stderr="logs/transform_IMCaggr_to_postIMS/{project_name}_{sample}.stderr",
+    benchmark:
+        "benchmarks/transform_IMCaggr_to_postIMS/{project_name}_{sample}.txt",
     # conda:
     #    "env/image_registration_wsireg.yaml"
     container:
@@ -714,6 +728,8 @@ rule transform_IMCmask_to_postIMS:
     log:
         stdout="logs/transform_IMCmask_to_postIMS/{project_name}_{sample}.stdout",
         stderr="logs/transform_IMCmask_to_postIMS/{project_name}_{sample}.stderr",
+    benchmark:
+        "benchmarks/transform_IMCmask_to_postIMS/{project_name}_{sample}.txt",
     # conda:
     #    "env/image_registration_wsireg.yaml"
     container:
@@ -757,6 +773,8 @@ rule transform_postIMC_to_postIMS:
         postIMC_transformed="results/{project_name}/data/postIMC/{sample}_transformed_on_postIMS.ome.tiff",
     log:
         stdout="logs/transform_postIMC_to_postIMS/{project_name}_{sample}.stdout",
+    benchmark:
+        "benchmarks/transform_postIMC_to_postIMS/{project_name}_{sample}.txt",
     container:
         config["container"]
     script:
@@ -798,6 +816,8 @@ rule transform_postIMC_to_preIMC:
         postIMC_transformed="results/{project_name}/data/postIMC/{sample}_transformed_on_preIMC.ome.tiff",
     log:
         stdout="logs/transform_postIMC_to_preIMC/{project_name}_{sample}.stdout",
+    benchmark:
+        "benchmarks/transform_postIMC_to_preIMC/{project_name}_{sample}.txt",
     container:
         config["container"]
     script:
@@ -839,6 +859,8 @@ rule transform_preIMC_to_preIMS:
         postIMC_transformed="results/{project_name}/data/preIMC/{sample}_transformed_on_preIMS.ome.tiff",
     log:
         stdout="logs/transform_preIMC_to_preIMS/{project_name}_{sample}.stdout",
+    benchmark:
+        "benchmarks/transform_preIMC_to_preIMS/{project_name}_{sample}.txt",
     container:
         config["container"]
     script:
@@ -880,6 +902,8 @@ rule transform_preIMS_to_postIMS:
         postIMC_transformed="results/{project_name}/data/preIMS/{sample}_transformed_on_postIMS.ome.tiff",
     log:
         stdout="logs/transform_preIMC_to_preIMS/{project_name}_{sample}.stdout",
+    benchmark:
+        "benchmarks/transform_preIMC_to_preIMS/{project_name}_{sample}.txt",
     container:
         config["container"]
     script:
@@ -919,6 +943,8 @@ rule downscale_postIMS:
         postIMS_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced.ome.tiff",
     log:
         stdout="logs/downscale_postIMS/{project_name}.stdout",
+    benchmark:
+        "benchmarks/downscale_postIMS/{project_name}.txt",
     container:
         config["container"]
     script:
@@ -940,6 +966,10 @@ use rule downscale_postIMS as downscale_preIMS with:
         ),
     output:
         postIMS_downscaled="results/{project_name}/data/preIMS/{project_name}-preIMS_to_postIMS_registered_reduced.ome.tiff",
+    log:
+        stdout="logs/downscale_preIMS/{project_name}.stdout",
+    benchmark:
+        "benchmarks/downscale_preIMS/{project_name}.txt",
 
 
 use rule downscale_postIMS as downscale_preIMC with:
@@ -957,6 +987,10 @@ use rule downscale_postIMS as downscale_preIMC with:
         ),
     output:
         postIMS_downscaled="results/{project_name}/data/preIMC/{project_name}-preIMC_to_postIMS_registered_reduced.ome.tiff",
+    log:
+        stdout="logs/downscale_preIMC/{project_name}.stdout",
+    benchmark:
+        "benchmarks/downscale_preIMC/{project_name}.txt",
 
 
 rule extract_core_mask_from_postIMS:
@@ -1000,6 +1034,8 @@ rule extract_core_mask_from_postIMS:
         postIMSmask_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced_mask.ome.tiff",
     log:
         stdout="logs/extract_core_mask_from_postIMS/{project_name}.stdout",
+    benchmark:
+        "benchmarks/extract_core_mask_from_postIMS/{project_name}.txt",
     # conda:
     #    "env/image_registration_qc.yaml"
     container:
@@ -1066,6 +1102,8 @@ rule register_IMS_to_postIMS:
         IMS_to_postIMS_matches_image="results/{project_name}/data/IMS/{project_name}_{imzml_base}_IMS_to_postIMS_matches_image.ome.tiff",
     log:
         stdout="logs/register_IMS_to_postIMS/{project_name}_{imzml_base}.stdout",
+    benchmark:
+        "benchmarks/register_IMS_to_postIMS/{project_name}_{imzml_base}.txt",
     # conda:
     #    "env/image_registration_qc.yaml"
     container:
@@ -1147,6 +1185,8 @@ rule register_IMS_to_postIMS_single_core_1:
         metadata="results/{project_name}/data/registration_metric/{sample}_step1_metadata.json",
     log:
         stdout="logs/register_IMS_to_postIMS_single_core_1/{project_name}_{sample}.stdout",
+    benchmark:
+        "benchmarks/register_IMS_to_postIMS_single_core_1/{project_name}_{sample}.txt",
     # conda:
     #    "env/image_registration_qc.yaml"
     container:
@@ -1237,6 +1277,8 @@ rule register_IMS_to_postIMS_single_core_2:
         imsml_coords_fp="results/{project_name}/data/IMS/postIMS_to_IMS_{project_name}-{sample}-IMSML-coords.h5",
     log:
         stdout="logs/register_IMS_to_postIMS_single_core_2/{project_name}_{sample}.stdout",
+    benchmark:
+        "benchmarks/register_IMS_to_postIMS_single_core_2/{project_name}_{sample}.txt",
     # conda:
     #    "env/image_registration_qc.yaml"
     container:
@@ -1301,6 +1343,8 @@ rule image_registration_evaluation_postIMC_to_preIMC:
         error_stats="results/{project_name}/data/registration_metric/{sample}_error_metrics_postIMC_on_preIMC.json",
     log:
         stdout="logs/image_registration_evaluation_postIMC_to_preIMC/{project_name}_{sample}.stdout",
+    benchmark:
+        "benchmarks/image_registration_evaluation_postIMC_to_preIMC/{project_name}_{sample}.txt",
     container:
         config["container"]
     script:
@@ -1320,6 +1364,8 @@ use rule image_registration_evaluation_postIMC_to_preIMC as image_registration_e
         error_stats="results/{project_name}/data/registration_metric/{sample}_error_metrics_preIMC_on_preIMS.json",
     log:
         stdout="logs/image_registration_evaluation_preIMC_to_preIMS/{project_name}_{sample}.stdout",
+    benchmark:
+        "benchmarks/image_registration_evaluation_preIMC_to_preIMS/{project_name}_{sample}.txt",
 
 
 use rule image_registration_evaluation_postIMC_to_preIMC as image_registration_evaluation_preIMS_to_postIMS with:
@@ -1363,6 +1409,8 @@ use rule image_registration_evaluation_postIMC_to_preIMC as image_registration_e
         error_stats="results/{project_name}/data/registration_metric/{sample}_error_metrics_preIMS_on_postIMS.json",
     log:
         stdout="logs/image_registration_evaluation_preIMS_to_postIMS/{project_name}_{sample}.stdout",
+    benchmark:
+        "benchmarks/image_registration_evaluation_preIMS_to_postIMS/{project_name}_{sample}.txt",
 
 
 rule image_registration_evaluation:
@@ -1408,6 +1456,8 @@ rule image_registration_evaluation:
         preIMSmask_postIMSmask="results/{project_name}/data/registration_metric/{sample}_preIMSmask_postIMSmask_reg_metrics.tiff",
     log:
         stdout="logs/image_registration_evaluation/{project_name}_{sample}.stdout",
+    benchmark:
+        "benchmarks/image_registration_evaluation/{project_name}_{sample}.txt",
     # conda:
     #    "env/image_registration_qc.yaml"
     container:
@@ -1449,6 +1499,8 @@ rule image_registration_evaluation_IMS_to_postIMS:
         IMS_to_postIMS_error="results/{project_name}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics.json",
     log:
         stdout="logs/image_registration_evaluation_IMS_to_postIMS/{project_name}_{sample}.stdout",
+    benchmark:
+        "benchmarks/image_registration_evaluation_IMS_to_postIMS/{project_name}_{sample}.txt",
     container:
         config["container"]
     script:
@@ -1591,6 +1643,8 @@ rule transformed_IMCmask_to_shape:
         cell_indices="results/{project_name}/data/IMC_mask/{sample}_transformed_on_postIMS_cell_indices.pkl",
     log:
         stdout="logs/transform_IMCmask_to_shape/{project_name}_{sample}.stdout",
+    benchmark:
+        "benchmarks/transform_IMCmask_to_shape/{project_name}_{sample}.txt",
     # conda:
     #    "env/image_registration_wsireg.yaml"
     container:
@@ -1609,6 +1663,8 @@ rule calculate_cell_centroid_positions:
     log:
         stdout="logs/calculate_cell_centroid_positions/{project_name}_{sample}.stdout",
         stderr="logs/calculate_cell_centroid_positions/{project_name}_{sample}.stderr",
+    benchmark:
+        "benchmarks/calculate_cell_centroid_positions/{project_name}_{sample}.txt",
     # conda:
     #    "env/image_registration_wsireg.yaml"
     container:
@@ -1647,6 +1703,8 @@ rule calculate_cell_overlap_with_IMS:
     log:
         stdout="logs/calculate_cell_overlap_with_IMS/{project_name}_{sample}.stdout",
         stderr="logs/calculate_cell_overlap_with_IMS/{project_name}_{sample}.stderr",
+    benchmark:
+        "benchmarks/calculate_cell_overlap_with_IMS/{project_name}_{sample}.txt",
     # conda:
     #    "env/image_registration_wsireg.yaml"
     container:
@@ -1713,6 +1771,8 @@ rule process_imzml:
     log:
         stdout="logs/process_imzml/{project_name}_{imzml_base}.stdout",
         stderr="logs/process_imzml/{project_name}_{imzml_base}.stderr",
+    benchmark:
+        "benchmarks/process_imzml/{project_name}_{imzml_base}.txt",
     container:
         config["container"]
     script:
@@ -1767,6 +1827,8 @@ rule combine_IMS_celloverlap_data:
         combined_data="results/{project_name}/data/cell_overlap/{project_name}_{imzml_base}_peak_cell_overlap.csv",
     log:
         stdout="logs/combine_IMS_celloverlap_data/{project_name}_{imzml_base}.stdout",
+    benchmark:
+        "benchmarks/combine_IMS_celloverlap_data/{project_name}_{imzml_base}.txt",
     container:
         config["container"]
     script:

@@ -3,7 +3,6 @@ from typing import Union
 import cv2
 import skimage
 from segment_anything import SamPredictor
-from wsireg.utils.im_utils import grayscale
 from wsireg.writers.ome_tiff_writer import OmeTiffWriter
 from wsireg.reg_transforms.reg_transform_seq import RegTransform, RegTransformSeq
 from wsireg.parameter_maps.transformations import BASE_RIG_TFORM
@@ -16,13 +15,21 @@ import shapely
 from sklearn.neighbors import KDTree
 import rembg
 
-def normalize_image(image: np.ndarray):
-    '''scale image by 0 to 1'''
-    return (image-np.nanmin(image))/(np.nanmax(image)- np.nanmin(image))
-
-
 def readimage_crop(image: str, bbox: list[int]):
-    '''Read crop of an image'''
+    '''
+    Read a cropped portion of an image.
+
+    This function reads an image from a file and returns a cropped portion of it.
+
+    Parameters:
+    image (str): The path to the image file to read.
+    bbox (list[int]): A list of four integers specifying the bounding box of the crop.
+                      The list should be in the format [x1, y1, x2, y2], where (x1, y1) is the
+                      bottom-left corner of the bounding box and (x2, y2) is the top-right corner.
+
+    Returns:
+    image_crop: The cropped portion of the image.
+    '''
     bbox = [int(b) for b in bbox]
     store = tifffile.imread(image, aszarr=True)
     z = zarr.open(store, mode='r')
@@ -35,8 +42,20 @@ def readimage_crop(image: str, bbox: list[int]):
         image_crop = z[bbox[0]:bbox[2],bbox[1]:bbox[3]]
     return image_crop
 
+
+
 def get_image_shape(image: str):
-    '''Read shape of an image'''
+    '''
+    Get the shape of an image.
+
+    This function reads an image from a file and returns its shape as a tuple.
+
+    Parameters:
+    image (str): The path to the image file to read.
+
+    Returns:
+    image_shape (tuple): The shape of the image.
+    '''
     store = tifffile.imread(image, aszarr=True)
     z = zarr.open(store, mode='r')
     if isinstance(z, zarr.hierarchy.Group): 
@@ -47,6 +66,19 @@ def get_image_shape(image: str):
 
 
 def saveimage_tile(image: np.ndarray, filename: str, resolution: float):
+    '''
+    Save an image as a tiled OME-TIFF file.
+
+    This function takes an image, its filename, and resolution as input, and saves the image as a tiled OME-TIFF file.
+
+    Parameters:
+    image (np.ndarray): The image to be saved. It should be a 2D numpy array.
+    filename (str): The path to the output file. The basename of this path is used as the base name for the OME-TIFF planes.
+    resolution (float): The resolution of the image in pixelsize in microns.
+
+    Returns:
+    None. The function writes the image to disk and does not return any value.
+    '''
     empty_transform = BASE_RIG_TFORM
     empty_transform['Spacing'] = (str(resolution),str(resolution))
     empty_transform['Size'] = (image.shape[1], image.shape[0])
@@ -60,43 +92,62 @@ def saveimage_tile(image: np.ndarray, filename: str, resolution: float):
 
 
 
-def prepare_image_for_sam(image: np.ndarray, scale): 
-    '''Convert image to grayscale, equalize and scale'''
-    img = grayscale(image, True)
-    # img = skimage.transform.rescale(img, scale, preserve_range = True)   
+def convert_and_scale_image(image: np.ndarray, scale: float=1.0) -> np.ndarray: 
+    '''
+    Convert an image to grayscale, equalize its histogram, and scale it.
+
+    Parameters:
+    image (np.ndarray): The input image. It should be a 3D numpy array.
+    scale (float): The scale factor to resize the image. If it's 1, the image is not resized.
+
+    Returns:
+    img (np.ndarray): The processed image. It's a grayscale image with enhanced contrast and possibly resized.
+    '''
+    img = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY) 
     if scale != 1:
         wn = int(img.shape[0]*scale)
         hn = int(img.shape[1]*scale)
         img = cv2.resize(img, (hn,wn), interpolation=cv2.INTER_NEAREST)
-    img = (img-np.nanmin(img))/(np.nanmax(img)- np.nanmin(img))
-    img = skimage.exposure.equalize_adapthist(img)
-    img = normalize_image(img)*255
-    img = img.astype(np.uint8)
+    cv2.normalize(img, img, 0, 255, cv2.NORM_MINMAX)
+    img = cv2.createCLAHE().apply(img)
     return img
 
-def apply_filter(image: np.ndarray):
-    '''Apply sobel filter and scaling'''
-    img = skimage.filters.sobel(image)
-    img = normalize_image(img)*255
-    img = img.astype(np.uint8)
-    img = np.stack([img, img, img], axis=2)
-    return img
+def preprocess_mask(mask: np.ndarray, image_resolution: float = 1.0) -> np.ndarray:
+    '''
+    Preprocess an image mask and return the largest connected region.
 
-def preprocess_mask(mask: np.ndarray, image_resolution, opening_size=5):
-    '''Process image mask and return largest connected region'''
-    mask1tmp = skimage.morphology.isotropic_opening(mask, np.ceil(image_resolution*5))
-    mask1tmp, count = skimage.measure.label(mask1tmp, connectivity=2, return_num=True)
-    counts = np.unique(mask1tmp, return_counts = True)
-    countsred = counts[1][counts[0] > 0]
-    indsred = counts[0][counts[0] > 0]
-    maxind = indsred[countsred == np.max(countsred)][0]
-    mask1tmp = mask1tmp == maxind
+    Parameters:
+    mask (np.ndarray): The input image mask. It should be a 2D numpy array.
+    image_resolution (float): The resolution of the image. This is used to determine the size of the structuring element.
+
+    Returns:
+    mask1tmp (np.ndarray): The processed mask. It's a binary image that only includes the largest connected component.
+    '''
+    kernel_size = int(np.ceil(image_resolution*5))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+    mask1tmp = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_OPEN, kernel)
+    _, labels = cv2.connectedComponents(mask1tmp)
+    counts = np.bincount(labels.flatten())
+    maxind = np.argmax(counts[1:]) + 1  # Ignore background
+    mask1tmp = (labels == maxind).astype(np.uint8)
     return mask1tmp
 
 
 
-def sam_core(img: np.ndarray, sam):
-    '''Run segment anything model on image'''
+def sam_core(img: np.ndarray, sam) -> (np.ndarray, np.ndarray):
+    '''
+    Run the Segment Anything Model (SAM) on an image.
+
+    As input to SAM a single point is used, which is the center of the image.
+
+    Parameters:
+    img (np.ndarray): The input image. It should be a 3D numpy array.
+    sam: The SAM model to use for segmentation.
+
+    Returns:
+    masks (np.ndarray): The segmentation masks produced by the SAM predictor. Each mask is a binary image that represents a different segment of the input image.
+    scores (np.ndarray): The scores assigned by the SAM predictor to each mask. Higher scores indicate more confident predictions.
+    '''
     predictor = SamPredictor(sam)
     predictor.set_image(img)
 
@@ -132,19 +183,6 @@ def get_max_dice_score(masks1: np.ndarray, masks2: np.ndarray):
 
     return mask_image1, mask_image2, dice_scores[indices[0][0],indices[1][0]]
 
-
-def smooth_mask(mask: np.ndarray, disklen: int):
-    '''Apply mean filter'''
-    tmmask = np.zeros((mask.shape[0]+2*disklen+10,mask.shape[1]+2*disklen+10,1))
-    tmmask[disklen:(mask.shape[0]+disklen),disklen:(mask.shape[1]+disklen),:] = mask
-    tmmaskm = skimage.filters.rank.mean(tmmask[:,:,0].astype(np.uint8)*255, footprint=skimage.morphology.disk(disklen))
-    maskm = np.stack([tmmaskm[disklen:(mask.shape[0]+disklen),disklen:(mask.shape[1]+disklen)]],axis=2)
-    maskm = maskm.astype(np.double)
-    maskm[np.logical_not(mask[:,:,0])] = np.nan
-    maskm = normalize_image(maskm)*255
-    maskm = maskm.astype(np.uint8)
-    return maskm
-
 def dist_centroids(cent1, cent2, rescale):
     '''Calculate euclidean distance between centroids'''
     euclid_dist_pixel = ((cent1[0]-cent2[0])**2 + (cent1[1]-cent2[1])**2)**0.5
@@ -153,20 +191,25 @@ def dist_centroids(cent1, cent2, rescale):
 
 
 
-def create_ring_mask(img, outscale, inscale):
+def create_ring_mask(img: np.ndarray, outscale: int, inscale: int) -> np.ndarray:
     '''
-    return a ring mask of an input mask
-    img: boolean image
-    outscale: pixels to scale outwards from current border
-    inscale: pixels to scale inwards from current border
+    Create a ring-shaped mask from an binary input image.
+
+    Parameters:
+    img (np.ndarray): The input image. It should be a 2D boolean array.
+    outscale (int): The number of pixels to scale outwards from the current border when creating the outer mask.
+    inscale (int): The number of pixels to scale inwards from the current border when creating the inner mask.
+
+    Returns:
+    ringmask (np.ndarray): The ring-shaped mask.
     '''
-    # outermask = skimage.morphology.isotropic_dilation(img, outscale)
     outermask = cv2.morphologyEx(src=img.astype(np.uint8), op = cv2.MORPH_DILATE, kernel = skimage.morphology.square(2*int(outscale))).astype(bool)
     tmmask = np.zeros((img.shape[0]+2,img.shape[1]+2))
     tmmask[1:(img.shape[0]+1),1:(img.shape[1]+1)] = img 
-    # innermask = skimage.morphology.isotropic_erosion(tmmask, inscale)
+
     innermask = cv2.morphologyEx(src=tmmask.astype(np.uint8), op = cv2.MORPH_ERODE, kernel = skimage.morphology.square(2*int(inscale))).astype(bool)
     innermask = innermask[1:(img.shape[0]+1),1:(img.shape[1]+1)]
+
     ringmask = np.logical_and(outermask, np.logical_not(innermask))
     return ringmask
 
@@ -216,15 +259,28 @@ def composite2affine(composite_transform, result_center=None):
     return sitk.AffineTransform(A.flatten(), t, c)
 
 
-def create_imz_coords(imzimg: np.ndarray, mask: Union[None, np.ndarray], imzrefcoords: np.ndarray, bbox, rotmat):
+def create_imz_coords(imzimg: np.ndarray, mask: Union[None, np.ndarray], imzrefcoords: np.ndarray, bbox: list, rotmat: np.ndarray) -> np.ndarray:
+    '''
+    Create coordinate matrices for image registration.
+
+    This function takes an image, an optional mask, reference coordinates, a bounding box, and a rotation matrix as input.
+    It creates coordinate matrices for the image, applies the mask if provided, and adjusts the coordinates based on the bounding box.
+    The function then rotates the reference coordinates using the rotation matrix.
+    Finally, it filters the image coordinates to only include those that are also in the reference coordinates.
+
+    Parameters:
+    imzimg (np.ndarray): The input image.
+    mask (Union[None, np.ndarray]): An optional mask to apply to the image.
+    imzrefcoords (np.ndarray): The reference coordinates for image registration.
+    bbox (list): The bounding box to apply to the image coordinates.
+    rotmat (np.ndarray): The rotation matrix to apply to the reference coordinates.
+
+    Returns:
+    imzcoords (np.ndarray): The filtered image coordinates.
+    '''
     # create coordsmatrices for IMS
-    indmatx = np.zeros(imzimg.shape)
-    for i in range(imzimg.shape[0]):
-        indmatx[i,:] = list(range(imzimg.shape[1]))
+    indmaty, indmatx = np.indices(imzimg.shape)
     indmatx = indmatx.astype(np.uint32)
-    indmaty = np.zeros(imzimg.shape)
-    for i in range(imzimg.shape[1]):
-        indmaty[:,i] = list(range(imzimg.shape[0]))
     indmaty = indmaty.astype(np.uint32)
 
     xminimz = bbox[0]
@@ -271,24 +327,16 @@ def get_sigma(threshold:float = 1,
     return 1/(5.5556*(1-((1-p)/p)**0.1186)/threshold)
 
 
-def image_from_points(shape, points: np.ndarray, sigma: float=1.0, half_pixel_size: int = 1):
+def image_from_points(shape, points: np.ndarray, sigma: float=1.0, half_pixel_size: int = 1)->np.ndarray:
     """Create image from set of points, given an image shape"""
-    img = np.zeros(shape, dtype=bool)
+    img = np.zeros(shape, dtype=np.uint8)
     for i in range(points.shape[0]):
-        xr = int(points[i,0])
-        if xr<0:
-            xr=0
-        if (xr)>=img.shape[0]:
-            xr=img.shape[0]-1
-        yr = int(points[i,1])
-        if yr<0:
-            yr=0
-        if (yr)>=img.shape[1]:
-            yr=img.shape[1]-1
-        img[xr,yr] = True
-    img = cv2.morphologyEx(src=img.astype(np.uint8), op = cv2.MORPH_DILATE, kernel = skimage.morphology.disk(half_pixel_size)).astype(bool)
-    img = cv2.GaussianBlur(img.astype(np.uint8)*255,ksize=[0,0],sigmaX=sigma)
-    return img/np.max(img)*255
+        xr, yr = np.clip(points[i].astype(int), 0, np.array(shape)-1)
+        img[xr,yr] = 255
+    cv2.morphologyEx(src=img, dst=img, op = cv2.MORPH_DILATE, kernel = skimage.morphology.disk(half_pixel_size))
+    cv2.GaussianBlur(src=img, dst=img,ksize=[0,0],sigmaX=sigma)
+    cv2.normalize(img, img, 0, 255, cv2.NORM_MINMAX)
+    return img
 
 
 # from: https://stackoverflow.com/a/26392655
@@ -305,7 +353,21 @@ def get_angle(p0, p1=np.array([0,0]), p2=None):
     angle = np.math.atan2(np.linalg.det([v0,v1]),np.dot(v0,v1))
     return np.degrees(angle)
 
-def angle_code_from_point_sequence(points: np.ndarray):
+# adapted from: https://stackoverflow.com/a/26392655
+def get_angle_vec(p0, p1=np.array([0,0]), p2=None):
+    ''' compute angle (in degrees) for p0p1p2 corner
+    Inputs:
+        p0,p1,p2 - points in the form of [x,y]
+    '''
+    if p2 is None:
+        p2 = p1 + np.array([1, 0])
+    v0 = np.array(p0) - np.array(p1)
+    v1 = np.array(p2) - np.array(p1)
+
+    return np.degrees(np.arctan2(np.linalg.det(np.stack((v0,np.tile(v1, (v0.shape[0], v0.shape[1], 1))),axis=-1)),np.dot(v0,v1)))
+
+
+def angle_code_from_point_sequence(points: np.ndarray)->str:
     """For a set of ordered points assign a code based on angle to following point"""
     angles = np.array([get_angle(points[j,:]-points[j+1,:],[0,0],[1,0]) for j in range(len(points)-1)])
     angdiffs = np.array([np.abs(angles-180), np.abs(angles-90), np.abs(angles), np.abs(angles+90), np.abs(angles+180)]).T
@@ -787,21 +849,39 @@ def subtract_postIMS_grid(img: np.ndarray) -> np.ndarray:
     complex_ishift = np.fft.ifftshift(complex)
 
     # do idft with normalization saving as real output
-    img_notch = cv2.idft(complex_ishift, flags=cv2.DFT_SCALE+cv2.DFT_REAL_OUTPUT)
-    img_notch = (normalize_image(img_notch)*255).astype(np.uint8)
+    img_notch = cv2.idft(complex_ishift, flags=cv2.DFT_SCALE+cv2.DFT_REAL_OUTPUT).astype(np.uint8)
 
     # equalize histogram
-    img_notch_stretched = skimage.exposure.equalize_adapthist(img_notch)
-    img_notch_stretched = (normalize_image(img_notch_stretched)*255).astype(np.uint8)
+    cv2.normalize(img_notch, img_notch, 0, 255, cv2.NORM_MINMAX)
+    img_notch = cv2.createCLAHE().apply(img_notch)
 
-    return img_notch_stretched
+    return img_notch
 
+def extract_mask(file: str, bb: list, session = None, rescale: int = 1, is_postIMS: bool = False) -> np.ndarray:
+    '''
+    Extract a tissue mask from an image file.
 
-def extract_mask(file, bb, session = None, rescale=1, is_postIMS=False):
+    This function takes an image file, a bounding box, an optional rembg session, a rescale factor, and a boolean indicating
+    whether the image is post-IMS as input. It reads and crops the image based on the bounding box, rescales the image,
+    and if the image is postIMS it subtracts the IMS grid.
+
+    The function then removes the background using rembg to create a mask. It removes small holes
+    in the mask and applies a morphological closing operation to the mask.
+
+    Parameters:
+    file (str): The path to the image file.
+    bb (list): The bounding box to apply when cropping the image.
+    session: An optional session for the background removal operation.
+    rescale (int): The factor by which to rescale the image.
+    is_postIMS (bool): Whether the image is post-IMS.
+
+    Returns:
+    masks (np.ndarray): The extracted mask. It's a 3D binary array.
+    '''
     if session == None:
         session = rembg.new_session("isnet-general-use")
     w = readimage_crop(file, bb)
-    w = prepare_image_for_sam(w, rescale)
+    w = convert_and_scale_image(w, rescale)
     if is_postIMS:
         w = subtract_postIMS_grid(w)
         w = cv2.blur(w, (5,5))

@@ -7,8 +7,7 @@ import pycpd
 import napari_imsmicrolink
 import skimage
 import numpy as np
-# from image_registration_IMS_to_preIMS_utils import *
-from image_registration_IMS_to_preIMS_utils import readimage_crop, saveimage_tile, normalize_image
+from image_registration_IMS_to_preIMS_utils import readimage_crop, saveimage_tile
 import sys,os
 import logging, traceback
 logging.basicConfig(filename=snakemake.log["stdout"],
@@ -165,10 +164,10 @@ logging.info(f"postIMS_pre_bbox filtered: {postIMS_pre_bbox}")
 logging.info(f"postIMS_pre_areas filtered: {postIMS_pre_areas}")
 logging.info("Find global bounding box of cores")
 global_bbox = [
-    np.min([p[0] for p in postIMS_pre_bbox])-int(1/resolution),
-    np.min([p[1] for p in postIMS_pre_bbox])-int(1/resolution),
-    np.max([p[2] for p in postIMS_pre_bbox])+int(1/resolution),
-    np.max([p[3] for p in postIMS_pre_bbox])+int(1/resolution),
+    np.max([0,np.min([p[0] for p in postIMS_pre_bbox])-int(1/resolution)]),
+    np.max([0,np.min([p[1] for p in postIMS_pre_bbox])-int(1/resolution)]),
+    np.min([np.max([p[2] for p in postIMS_pre_bbox])+int(1/resolution),postIMSregin.shape[0]]),
+    np.min([np.max([p[3] for p in postIMS_pre_bbox])+int(1/resolution),postIMSregin.shape[1]]),
 ]
 del tmpbool
 logging.info(f"\txmin: {global_bbox[0]}")
@@ -236,10 +235,7 @@ assert(np.all(np.array([tt in postIMSregions for tt in tmpuq[1:]])))
 del tmp,tmpuq
 
 logging.info("Remove cores in postIMS that are missing in imz")
-boolimg = np.zeros(postIMSregincut.shape, dtype=bool)
-for region in postIMSregions:
-    boolimg[postIMSregincut == region] = True
-boolimg = ~boolimg
+boolimg = ~np.isin(postIMSregincut, postIMSregions)
 
 logging.info("Calculate connectedComponents")
 # get centroids of imz regions
@@ -401,7 +397,9 @@ del tmp1, resampler
 
 logging.info("Save Image")
 # save matches image
-saveimage_tile((normalize_image(((postIMSro_trans>0).astype(int)-(fixed_np>0).astype(int))+1)*255).astype(np.uint8), snakemake.output["IMS_to_postIMS_matches_image"], 1)
+
+tmpoutimg = cv2.normalize((((postIMSro_trans>0).astype(int)-(fixed_np>0).astype(int))+1), 0, 255, cv2.NORM_MINMAX)
+saveimage_tile(tmpoutimg, snakemake.output["IMS_to_postIMS_matches_image"], 1)
 
 del fixed_np
 

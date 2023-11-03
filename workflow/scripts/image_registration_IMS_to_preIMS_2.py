@@ -1,5 +1,4 @@
 import pandas as pd
-import gc
 import cv2
 import SimpleITK as sitk
 import napari_imsmicrolink
@@ -7,11 +6,10 @@ import skimage
 import numpy as np
 import json
 import matplotlib.pyplot as plt
-from image_registration_IMS_to_preIMS_utils import readimage_crop, prepare_image_for_sam, create_ring_mask, composite2affine, saveimage_tile, normalize_image, get_image_shape, create_imz_coords,get_rotmat_from_angle, concave_boundary_from_grid, concave_boundary_from_grid_holes
+from image_registration_IMS_to_preIMS_utils import readimage_crop, convert_and_scale_image, create_ring_mask, saveimage_tile, get_image_shape, create_imz_coords,get_rotmat_from_angle, concave_boundary_from_grid_holes, get_angle, get_angle_vec
 from sklearn.neighbors import KDTree
-from scipy.sparse import lil_array
+from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import connected_components
-from scipy.ndimage import distance_transform_edt
 import shapely
 import shapely.affinity
 import sys,os
@@ -70,30 +68,30 @@ logging.info("Microscopy pixelsize: "+str(resolution))
 # postIMS_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS.ome.tiff"
 # postIMS_file = "/home/retger/Downloads/NASH_HCC_TMA_postIMS.ome.tiff"
 # resolution = 0.22537
-postIMS_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
+# postIMS_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
 postIMS_file = snakemake.input["postIMS_downscaled"]
 # postIMSr_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/postIMS/test_combined_postIMS_reduced_mask.ome.tiff"
 # postIMSr_file = "/home/retger/Downloads/cirrhosis_TMA_postIMS_reduced_mask.ome.tiff"
 # postIMSr_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS_reduced_mask.ome.tiff"
 # postIMSr_file = "/home/retger/Downloads/NASH_HCC_TMA_postIMS_reduced_mask.ome.tiff"
-postIMSr_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS_reduced_mask.ome.tiff"
+# postIMSr_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS_reduced_mask.ome.tiff"
 postIMSr_file = snakemake.input["postIMSmask_downscaled"]
 # imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/IMS_test_combined.imzML"
 # imzmlfile = "/home/retger/Downloads/cirrhosis_TMA_IMS.imzML"
 # imzmlfile = "/home/retger/Downloads/pos_mode_lipids_tma_02022023_imzml.imzML"
 # imzmlfile = "/home/retger/Downloads/hcc-tma-3_aaxl_20raster_06132022-total ion count.imzML"
-imzmlfile = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_IMS.imzML"
+# imzmlfile = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_IMS.imzML"
 imzmlfile = snakemake.input["imzml"]
 # imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/Lipid_TMA_37819_025_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/NASH_HCC_TMA-2_010_transformed.ome.tiff"
-imc_mask_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_032_transformed_on_postIMS.ome.tiff"
+# imc_mask_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_032_transformed_on_postIMS.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 # output_table = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/test_combined_IMS_test_combined_IMS_to_postIMS_matches.csv"
 # output_table = "/home/retger/Downloads/cirrhosis_TMA_cirrhosis_TMA_IMS_IMS_to_postIMS_matches.csv"
 # output_table = "/home/retger/Downloads/Lipid_TMA_3781_pos_mode_lipids_tma_02022023_imzml_IMS_to_postIMS_matches.csv"
 # output_table = "/home/retger/Downloads/NASH_HCC_TMA_NASH_HCC_TMA_IMS_IMS_to_postIMS_matches.csv"
-output_table = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_NASH_HCC_TMA_IMS_IMS_to_postIMS_matches.csv"
+# output_table = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_NASH_HCC_TMA_IMS_IMS_to_postIMS_matches.csv"
 output_table = snakemake.input["IMS_to_postIMS_matches"]
 
 masks_transform_filename = snakemake.output["masks_transform"]
@@ -123,16 +121,18 @@ imzregions[y_coords, x_coords] = imz.regions
 imzregions = skimage.transform.rotate(imzregions,rotation_imz, preserve_range=True)
 imzregions = np.round(imzregions)
 imzuqregs = np.unique(imz.regions)
+logging.info(f"imz regions: {imzregions.shape}")
+logging.info(f"imz regions: {imzuqregs}")
 
 # reference coordinates, actually in data
 imzrefcoords = np.stack([imz.y_coords_min,imz.x_coords_min],axis=1)
 del imz
-gc.collect()
 
 
 logging.info("Read postIMS region bounding box")
 # read crop bbox
 dfmeta = pd.read_csv(output_table)
+logging.info(f"{dfmeta}")
 imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed_on_postIMS","")
 imc_project = os.path.split(os.path.split(os.path.split(os.path.split(imc_mask_file)[0])[0])[0])[1]
 # imc_project = "cirrhosis_TMA"
@@ -160,32 +160,29 @@ logging.info(f"ymin: {ymin}")
 logging.info(f"ymax: {ymax}")
 # needed:
 regionimz = dfmeta[inds_arr]["imzregion"].tolist()[0]
+logging.info(f"imz region: {regionimz}")
 
 
 logging.info("Read cropped postIMS")
 # subset mask
-postIMScut = readimage_crop(postIMS_file, [int(xmin), int(ymin), int(xmax), int(ymax)])
-postIMScut = prepare_image_for_sam(postIMScut, 1)
+postIMSmpre = readimage_crop(postIMS_file, [int(xmin), int(ymin), int(xmax), int(ymax)])
+postIMSmpre = convert_and_scale_image(postIMSmpre, 1)
 logging.info("Median filter")
 ksize = np.round(((stepsize-pixelsize)/resolution)/3).astype(int)*2
 ksize = ksize+1 if ksize%2==0 else ksize
-postIMSmpre = cv2.medianBlur(postIMScut, ksize)
-del postIMScut
-gc.collect()
+cv2.medianBlur(src=postIMSmpre,dst=postIMSmpre, ksize=ksize)
 
 logging.info("Read cropped postIMS mask")
 postIMSrcut = readimage_crop(postIMSr_file, [int(xmin), int(ymin), int(xmax), int(ymax)])
+# to np.uint8
+cv2.convertScaleAbs(src=postIMSrcut, dst=postIMSrcut)
 logging.info("Create ringmask")
 postIMSringmask = create_ring_mask(postIMSrcut, (1/resolution)*stepsize*imspixel_outscale, (1/resolution)*stepsize*imspixel_inscale)
 logging.info("Isotropic dilation")
-# postIMSoutermask = skimage.morphology.isotropic_dilation(postIMSrcut, (1/resolution)*stepsize*imspixel_outscale)
-postIMSoutermask = cv2.morphologyEx(src=postIMSrcut.astype(np.uint8), op = cv2.MORPH_DILATE, kernel = skimage.morphology.square(2*int((1/resolution)*stepsize*imspixel_outscale))).astype(bool)
-# postIMSoutermask_small = skimage.morphology.isotropic_dilation(postIMSrcut, (1/resolution)*stepsize)
-postIMSoutermask_small = cv2.morphologyEx(src=postIMSrcut.astype(np.uint8), op = cv2.MORPH_DILATE, kernel = skimage.morphology.square(2*int((1/resolution)*stepsize))).astype(bool)
-# postIMSinnermask = skimage.morphology.isotropic_erosion(postIMSrcut, (1/resolution)*stepsize*imspixel_inscale)
-postIMSinnermask = cv2.morphologyEx(src=postIMSrcut.astype(np.uint8), op = cv2.MORPH_ERODE, kernel = skimage.morphology.square(2*int((1/resolution)*stepsize*imspixel_inscale))).astype(bool)
+postIMSoutermask = cv2.morphologyEx(src=postIMSrcut, op = cv2.MORPH_DILATE, kernel = skimage.morphology.square(2*int((1/resolution)*stepsize*imspixel_outscale))).astype(bool)
+postIMSoutermask_small = cv2.morphologyEx(src=postIMSrcut, op = cv2.MORPH_DILATE, kernel = skimage.morphology.square(2*int((1/resolution)*stepsize))).astype(bool)
+postIMSinnermask = cv2.morphologyEx(src=postIMSrcut, op = cv2.MORPH_ERODE, kernel = skimage.morphology.square(2*int((1/resolution)*stepsize*imspixel_inscale))).astype(bool)
 del postIMSrcut
-gc.collect()
 
 # subset and filter postIMS image
 kersize = int(stepsize/2)
@@ -193,43 +190,30 @@ kersize = kersize-1 if kersize%2==0 else kersize
 kernel = np.zeros((kersize,kersize))
 kernel[int((kersize-1)/2),:]=1
 kernel[:,int((kersize-1)/2)]=1
-# kernel = skimage.morphology.diamond(kersize)
 logging.info(f"Disk radius for rank threshold filter: {kersize}")
 
 # resize to 1um spacing
 if resolution != 1:
     wn = int(postIMSmpre.shape[0]*resolution)
     hn = int(postIMSmpre.shape[1]*resolution)
-    tmp1 = cv2.resize(postIMSmpre, (hn,wn), interpolation=cv2.INTER_NEAREST)
+    tmp2 = cv2.resize(postIMSmpre, (hn,wn), interpolation=cv2.INTER_NEAREST)
 else:
-    tmp1 = postIMSmpre.copy()
+    tmp2 = postIMSmpre.copy()
 
 # local rank filter, results in binary image
-tmp1 = skimage.filters.rank.threshold(tmp1, skimage.morphology.disk(kersize))
+tmp2 = skimage.filters.rank.threshold(tmp2, skimage.morphology.disk(kersize))
+cv2.normalize(tmp2, tmp2, 0, 255, cv2.NORM_MINMAX)
 
 logging.info("Mean filter")
 # mean filter, with cross shape footprint
-tmp2 = cv2.filter2D(src = tmp1*255, ddepth=-1, kernel=kernel/np.sum(kernel))
+cv2.filter2D(src = tmp2, dst = tmp2, ddepth=-1, kernel=kernel/np.sum(kernel))
     
 if resolution != 1:
     tmp2 = cv2.resize(tmp2, (postIMSmpre.shape[1],postIMSmpre.shape[0]), interpolation=cv2.INTER_NEAREST)
 
-del tmp1
 
-# from: https://stackoverflow.com/a/26392655
-def get_angle(p0, p1=np.array([0,0]), p2=None):
-    ''' compute angle (in degrees) for p0p1p2 corner
-    Inputs:
-        p0,p1,p2 - points in the form of [x,y]
-    '''
-    if p2 is None:
-        p2 = p1 + np.array([1, 0])
-    v0 = np.array(p0) - np.array(p1)
-    v1 = np.array(p2) - np.array(p1)
-
-    angle = np.math.atan2(np.linalg.det([v0,v1]),np.dot(v0,v1))
-    return np.degrees(angle)
-
+def normalize_scores(arr):
+    return 1 if np.max(arr) == 0 else np.max(arr)
 
 
 logging.info("Find best threshold for IMS laser ablation marks detection")
@@ -244,21 +228,20 @@ def points_from_mask(
     '''
     
     # filter detected regions to obtain ablation marks
-    _,_,stats,cents = cv2.connectedComponentsWithStats(mask.astype(np.uint8))
+    _, _, stats, cents = cv2.connectedComponentsWithStatsWithAlgorithm(mask.astype(np.uint8), connectivity=4, ltype=cv2.CV_32S, ccltype=cv2.CCL_SAUF)
     stats=stats[1:,:]
     cents=np.flip(cents[1:,:],axis=1)
     
     # filter by area 
-    areas = stats[:,4]
-    widths = stats[:,2]
-    heights = stats[:,3]
+    # areas = stats[:,4]
+    # widths = stats[:,2]
+    # heights = stats[:,3]
 
-    # areas = np.asarray([c.area for c in regs])
     # minimal area is a circle with radius (empirical guess based on pixelsize and resolution) 
     min_radius = (pixelsize/8+(pixelsize/8-1)*2.5)/resolution
     min_area = min_radius**2*np.pi if min_radius>0 else np.pi
     area_range = [min_area,(pixelsize/resolution)**2]
-    inran = np.logical_and(areas > area_range[0], areas < area_range[1])
+    inran = np.logical_and(stats[:,4] > area_range[0], stats[:,4] < area_range[1])
 
     cents = cents[inran,:]
     # check length
@@ -266,7 +249,7 @@ def points_from_mask(
         return np.zeros((0,2))
 
     # filter by ratio of x-slice to y-slice
-    slice_ratio = widths[inran]/heights[inran]
+    slice_ratio = stats[:,2][inran]/stats[:,3][inran]
     is_round = np.abs(np.log10(slice_ratio))<np.log10(2)
     cents = cents[is_round,:]
 
@@ -286,15 +269,11 @@ def filter_points(points, min_n:int = 9):
     # expected for a grid are distances close to 1
     kdt = KDTree(points, leaf_size=30, metric='euclidean')
     distances, indices = kdt.query(points, k=5, return_distance=True)
-    dists = distances[:,1:]
-    del kdt, distances
-    to_keep_dist = np.logical_and(dists>0.93, dists < 1.07)
+    to_keep_dist = np.logical_and(distances[:,1:]>0.93, distances[:,1:] < 1.07)
 
     # restrict angles to nearest neighbors to certain ranges
-    angles = list()
-    for i in range(indices.shape[0]):
-        angles.append(np.array([get_angle(points[j,:]-points[i,:],[0,0],[1,0]) for j in indices[i,1:]]))
-    absangles = np.abs(np.array(angles))
+    diffs = points[indices[:, 1:], :] - points[:, None, :]
+    absangles = np.abs(get_angle_vec(diffs,[0,0],[1,0]))
     to_keep_angle = np.logical_or(
             np.logical_or(absangles < 9, absangles > 171),
             np.logical_and(absangles > 81, absangles < 99),
@@ -303,13 +282,17 @@ def filter_points(points, min_n:int = 9):
     some_neighbors = np.sum(to_keep, axis=1)>0
     
     # create adjaceny matrix
-    adjmat = lil_array((to_keep.shape[0],to_keep.shape[0]),dtype=bool)
     indices_sub = indices[some_neighbors,:]
     to_keep_sub = to_keep[some_neighbors,:]
-    for i in range(len(indices_sub[:,0])):
-        for j in indices_sub[i,1:][to_keep_sub[i,:]]:
-            adjmat[indices_sub[i,0],j]=True
-            adjmat[j,indices_sub[i,0]]=True
+    # Get the indices where to_keep_sub is True
+    i, j = np.where(to_keep_sub)
+    # Get the corresponding values from indices_sub
+    rows = indices_sub[np.arange(len(indices_sub)), 0][i]
+    cols = indices_sub[i, j+1]
+    # Create the adjacency matrix
+    adjmat = csr_matrix((np.ones(len(rows), dtype=bool), (rows, cols)), shape=(to_keep.shape[0], to_keep.shape[0]))    
+    # Make the matrix symmetric
+    adjmat = adjmat + adjmat.T
 
     concomp = connected_components(adjmat)
     components, n_points_in_component = np.unique(concomp[1], return_counts=True)
@@ -367,21 +350,18 @@ def find_threshold(img: np.ndarray, maskb_dist: np.ndarray, thr_range=[127,250],
     thresholds = list(range(thr_range[0],thr_range[1],10))
     if threads>1:
         with Pool(threads) as p:
-            n_points, n_border_points, weighted_dist, centsredls1 = zip(*p.map(scorer, thresholds))
+            nt1, bt1, wt1, centsredls1 = zip(*p.map(scorer, thresholds))
     else:
-        n_points, n_border_points, weighted_dist, centsredls1 = zip(*map(scorer, thresholds))
+        nt1, bt1, wt1, centsredls1 = zip(*map(scorer, thresholds))
 
-    wt1 = np.array(weighted_dist)
-    wt1m = 1 if np.max(wt1)==0 else np.max(wt1)
-    nt1 = np.array(n_points)
-    nt1m = 1 if np.max(nt1)==0 else np.max(nt1)
-    bt1 = np.array(n_border_points)
-    bt1m = 1 if np.max(bt1)==0 else np.max(bt1)
-    scores1 = 2*wt1/wt1m+nt1/nt1m+4*bt1/bt1m
+    nt1=np.array(nt1)
+    bt1=np.array(bt1)
+    wt1=np.array(wt1)
+    scores1 = 2*wt1/normalize_scores(wt1) + nt1/normalize_scores(nt1) + 4*bt1/normalize_scores(bt1)
     max_score=np.max(scores1)
-    max_points = np.max(n_points)
-    max_border_points = np.max(n_border_points)
-    max_weighted_dist = np.max(weighted_dist)
+    max_points = np.max(nt1)
+    max_border_points = np.max(bt1)
+    max_weighted_dist = np.max(wt1)
 
     threshold = np.asarray(thresholds)[scores1 == max_score][0]
 
@@ -389,21 +369,18 @@ def find_threshold(img: np.ndarray, maskb_dist: np.ndarray, thr_range=[127,250],
     thresholds = list(range(threshold-9,threshold+10,3))
     if threads>1:
         with Pool(threads) as p:
-            n_points, n_border_points, weighted_dist, centsredls2 = zip(*p.map(scorer, thresholds))
+            nt2, bt2, wt2, centsredls2 = zip(*p.map(scorer, thresholds))
     else:
-        n_points, n_border_points, weighted_dist, centsredls2 = zip(*map(scorer, thresholds))
+        nt2, bt2, wt2, centsredls2 = zip(*map(scorer, thresholds))
 
-    wt2 = np.array(weighted_dist)
-    wt2m = 1 if np.max(wt2)==0 else np.max(wt2)
-    nt2 = np.array(n_points)
-    nt2m = 1 if np.max(nt2)==0 else np.max(nt2)
-    bt2 = np.array(n_border_points)
-    bt2m = 1 if np.max(bt2)==0 else np.max(bt2)
-    scores2 = 2*wt2/wt2m+nt2/nt2m+4*bt2/bt2m
+    nt2=np.array(nt2)
+    bt2=np.array(bt2)
+    wt2=np.array(wt2)
+    scores2 = 2*wt2/normalize_scores(wt2) + nt2/normalize_scores(nt2) + 4*bt2/normalize_scores(bt2)
     max_score=np.max(scores2)
-    max_points = np.max(n_points)
-    max_border_points = np.max(n_border_points)
-    max_weighted_dist = np.max(weighted_dist)
+    max_points = np.max(nt2)
+    max_border_points = np.max(bt2)
+    max_weighted_dist = np.max(wt2)
 
     threshold = np.asarray(thresholds)[scores2 == max_score][0]
 
@@ -411,32 +388,26 @@ def find_threshold(img: np.ndarray, maskb_dist: np.ndarray, thr_range=[127,250],
     thresholds = list(range(threshold-2,threshold+3))
     if threads>1:
         with Pool(threads) as p:
-            n_points, n_border_points, weighted_dist, centsredls3 = zip(*p.map(scorer, thresholds))
+            nt3, bt3, wt3, centsredls3 = zip(*p.map(scorer, thresholds))
     else:
-        n_points, n_border_points, weighted_dist, centsredls3 = zip(*map(scorer, thresholds))
+        nt3, bt3, wt3, centsredls3 = zip(*map(scorer, thresholds))
 
-    wt3 = np.array(weighted_dist)
-    wt3m = 1 if np.max(wt3)==0 else np.max(wt3)
-    nt3 = np.array(n_points)
-    nt3m = 1 if np.max(nt3)==0 else np.max(nt3)
-    bt3 = np.array(n_border_points)
-    bt3m = 1 if np.max(bt3)==0 else np.max(bt3)
-    scores3 = 2*wt3/wt3m+nt3/nt3m+4*bt3/bt3m
+    nt3=np.array(nt3)
+    bt3=np.array(bt3)
+    wt3=np.array(wt3)
+    scores3 = 2*wt3/normalize_scores(wt3) + nt3/normalize_scores(nt3) + 4*bt3/normalize_scores(bt3)
     max_score=np.max(scores3)
-    max_points = np.max(n_points)
-    max_border_points = np.max(n_border_points)
-    max_weighted_dist = np.max(weighted_dist)
+    max_points = np.max(nt3)
+    max_border_points = np.max(bt3)
+    max_weighted_dist = np.max(wt3)
 
     threshold = np.asarray(thresholds)[scores3 == max_score][0]
 
     wt=np.concatenate([wt1,wt2,wt3])
-    wtm = 1 if np.max(wt)==0 else np.max(wt)
     nt=np.concatenate([nt1,nt2,nt3])
-    ntm = 1 if np.max(nt)==0 else np.max(nt)
     bt=np.concatenate([bt1,bt2,bt3])
-    btm = 1 if np.max(bt)==0 else np.max(bt)
-    scores = 2*wt/wtm+nt/ntm+4*bt/btm
-    max_score=np.max(scores3)
+    scores = 2*wt/normalize_scores(wt) + nt/normalize_scores(nt) + 4*bt/normalize_scores(bt)
+    max_score=np.max(scores)
 
     centsredls = centsredls1 + centsredls2 + centsredls3
     scoresred = np.array([scores[i] for i in range(len(scores)) if centsredls[i].shape[0]>0])
@@ -463,23 +434,11 @@ def score_find_w(w):
     postIMSm = w*img_median_in + (1-w)*img_convolved_in
     postIMSm = cv2.createCLAHE().apply(postIMSm.astype(np.uint8))
     postIMSm[np.logical_not(mask2_in)] = 0
-    if threads_in>1:
-        if current_threshold_in.value>0:
-            thr_range = [int(current_threshold_in.value)-31,int(current_threshold_in.value)+31]
-            thr_range[0] = 0 if thr_range[0]<0 else thr_range[0]
-            thr_range[1] = 255 if thr_range[1]>255 else thr_range[1]
-        else:
-            thr_range = [127,250]
-    else:
-        thr_range = [127,250]
-
-    threshold, max_points, max_border_points, max_weighted_dist, centsred= find_threshold(postIMSm, maskb_dist_in, thr_range=thr_range, threads=1)
+    threshold, max_points, max_border_points, max_weighted_dist, centsred= find_threshold(postIMSm, maskb_dist_in, thr_range=[127,250], threads=1)
     logging.info(f"weight: {w}, threshold: {threshold}, n_points: {max_points}, border points: {max_border_points}, sum of inverse distances {max_weighted_dist}")
-    if threads_in>1:
-        current_threshold_in.value = threshold
     return (threshold, max_points, max_border_points, max_weighted_dist, w, centsred)
 
-def init_worker(img_median, img_convolved, maskb_dist, mask2, threads, current_threshold):
+def init_worker(img_median, img_convolved, maskb_dist, mask2, threads):
     global img_median_in
     img_median_in = img_median
     global img_convolved_in
@@ -490,25 +449,21 @@ def init_worker(img_median, img_convolved, maskb_dist, mask2, threads, current_t
     mask2_in = mask2
     global threads_in
     threads_in = threads
-    global current_threshold_in
-    current_threshold_in = current_threshold
 
 
 logging.info("Find best threshold for points (outer points)")
 def find_w(img_median: np.ndarray, img_convolved: np.ndarray, mask1: np.ndarray, mask2: np.ndarray, ws, threads:int=1):
-    maskb_dist = distance_transform_edt(mask1) - distance_transform_edt(~mask1)
 
-    current_threshold = Value('i', 0)    
-    with Pool(threads, initializer= init_worker, initargs=(img_median, img_convolved, maskb_dist, mask2, threads, current_threshold)) as p:
-        thresholds, n_points, n_border_points, weighted_dist, wsobs, centsredls = zip(*p.map(score_find_w, ws))
+    # Compute the distance transforms
+    maskb_dist = cv2.distanceTransform(mask1.astype(np.uint8), cv2.DIST_L2, 3) - cv2.distanceTransform((~mask1).astype(np.uint8), cv2.DIST_L2, 3)
 
-    wt = np.array(weighted_dist)
-    wtm = 1 if np.max(wt)==0 else np.max(wt)
-    nt = np.array(n_points)
-    ntm = 1 if np.max(nt)==0 else np.max(nt)
-    bt = np.array(n_border_points)
-    btm = 1 if np.max(bt)==0 else np.max(bt)
-    scores = 2*wt/wtm+nt/ntm+4*bt/btm
+    with Pool(threads, initializer= init_worker, initargs=(img_median, img_convolved, maskb_dist, mask2, threads)) as p:
+        thresholds, nt, bt, wt, wsobs, centsredls = zip(*p.map(score_find_w, ws))
+
+    wt = np.array(wt)
+    nt = np.array(nt)
+    bt = np.array(bt)
+    scores = 2*wt/normalize_scores(wt) + nt/normalize_scores(nt) + 4*bt/normalize_scores(bt)
     max_score=np.max(scores)
     threshold = np.asarray(thresholds)[scores == max_score][0]
     w = np.asarray(wsobs)[scores == max_score][0]
@@ -563,7 +518,6 @@ def plot_plotly_scatter_image(img, pts):
 # fig.show()
 
 del postIMSringmask, postIMSoutermask_small
-gc.collect()
 
 logging.info("Find best threshold for points (inner points)")
 max_score_inner, threshold_inner, w_inner, centsred_inner = find_w(postIMSmpre, tmp2, postIMSinnermask, postIMSinnermask, ws, threads=threads)
@@ -578,87 +532,12 @@ logging.info("Max score (inner): "+str(max_score_inner))
 logging.info("Corresponding threshold (inner): "+str(threshold_inner))
 logging.info("Corresponding weight (inner): "+str(w_inner))
 
-def points_from_mask_two_thresholds(
-        img_median: np.ndarray,
-        img_convolved: np.ndarray,
-        mask_outer: np.ndarray,
-        mask_inner: np.ndarray,
-        w_outer: np.double,
-        w_inner: np.double,
-        threshold_outer:np.double,
-        threshold_inner:np.double,
-        pixelsize: np.double,
-        resolution: np.double,
-        stepsize: np.double,
-        min_n_outer: int = 9, 
-        min_n_inner: int = 9):
-
-    logging.info("Apply threshold (outer)")
-    tmpimg = w_outer*img_median + (1-w_outer)*img_convolved
-    tmpimg = skimage.exposure.equalize_adapthist(normalize_image(tmpimg))
-    tmpimg = normalize_image(tmpimg)*255
-    tmpimg = tmpimg.astype(np.uint8)
-    tmpimg[np.logical_not(mask_outer)] = 0
-    tmpimgb = tmpimg>threshold_outer
-    # get points from complete image
-    centsred_outer = points_from_mask(tmpimgb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize, min_n=min_n_outer)
-
-    logging.info("Apply threshold (inner)")
-    tmpimg = w_inner*img_median + (1-w_inner)*img_convolved
-    tmpimg = skimage.exposure.equalize_adapthist(normalize_image(tmpimg))
-    tmpimg = normalize_image(tmpimg)*255
-    tmpimg = tmpimg.astype(np.uint8)
-    tmpimg[np.logical_not(mask_inner)] = 0
-    tmpimgb = tmpimg>threshold_inner
-    # get points from complete image
-    centsred_inner = points_from_mask(tmpimgb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize, min_n=min_n_inner)
-
-    logging.info("Combine points")
-    centsred = np.vstack([centsred_outer,centsred_inner])
-    kdt = KDTree(centsred, leaf_size=30, metric='euclidean')
-    distances, indices = kdt.query(centsred, k=2, return_distance=True)
-
-    same_pixel = distances[:,1]<0.25
-
-    x=np.arange(centsred.shape[0])[same_pixel]
-    y=indices[same_pixel,1]
-    pairs = []
-    for i in range(len(x)):
-        pairs.append(sorted([x[i],y[i]]))
-    pairs = sorted(pairs)
-    doublet_to_keep = []
-    for i in range(len(pairs)):
-        if pairs[i][0] not in doublet_to_keep:
-            doublet_to_keep.append(pairs[i][0])
-    
-    centsred_1 = centsred[np.logical_not(same_pixel),:]
-    centsred_2 = centsred[doublet_to_keep,:]
-    centsred = np.vstack([centsred_1,centsred_2])
-    return centsred
-
-
-# centsred = points_from_mask_two_thresholds(
-#     img_median = postIMSmpre,
-#     img_convolved = tmp2,
-#     mask_outer = postIMSoutermask,
-#     mask_inner = postIMSinnermask,
-#     w_outer = w_outer,
-#     w_inner = w_inner,
-#     threshold_outer = threshold_outer,
-#     threshold_inner = threshold_inner,
-#     pixelsize = pixelsize,
-#     resolution = resolution,
-#     stepsize = stepsize,
-#     min_n_outer=6,
-#     min_n_inner=4
-# )
 centsred = combine_points(centsred_outer, centsred_inner)
 centsred = filter_points(centsred)
 
 # fig = plot_plotly_scatter_image(tmp2, centsred*stepsize/resolution)
 # fig.show()
 del postIMSoutermask, postIMSinnermask
-gc.collect()
 
 logging.info("Number of unique IMS pixels detected (both): "+str(centsred.shape[0]))
 # plt.scatter(centsred_inner[:,1]*stepsize/resolution,centsred_inner[:,0]*stepsize/resolution)
@@ -676,47 +555,45 @@ logging.info(f"xminimz: {xminimz}")
 logging.info(f"xmaximz: {xmaximz}")
 logging.info(f"yminimz: {yminimz}")
 logging.info(f"ymaximz: {ymaximz}")
-# logging.info("Create IMS coordinates")
-# imzcoords = create_imz_coords(imzimg, None, imzrefcoords, imz_bbox, rotmat)
-
-# init_translation = (-np.min(imzcoords,axis=0).astype(float)+np.min(centsred,axis=0).astype(float)).astype(int)
 
 logging.info("Prepare for initial registration with sitk")
 logging.info("Prepare postIMS image")
-postIMSpimg = np.zeros(postIMSmpre.shape, dtype=bool)
+postIMSpimg = np.zeros(postIMSmpre.shape, dtype=np.uint8)
 stepsize_px = int(stepsize/resolution)
 stepsize_px_half = int(stepsize_px/2)
-for i in range(centsred.shape[0]):
-    xc = int(centsred[i,0]*stepsize_px)
-    xr = [xc-stepsize_px_half,xc+stepsize_px_half]
-    if xr[0]<0:
-        xr[0]=0
-    if (xr[1]+1)>postIMSpimg.shape[0]:
-        xr[1]=postIMSpimg.shape[0]-1
-    yc = int(centsred[i,1]*stepsize_px)
-    yr = [yc-stepsize_px_half,yc+stepsize_px_half]
-    if yr[0]<0:
-        yr[0]=0
-    if (yr[1]+1)>postIMSpimg.shape[1]:
-        yr[1]=postIMSpimg.shape[1]-1
-    postIMSpimg[xr[0]:(xr[1]+1),yr[0]:(yr[1]+1)] = True
+
+# Calculate x and y coordinates
+x_coords = (centsred[:, 0] * stepsize_px).astype(int)
+y_coords = (centsred[:, 1] * stepsize_px).astype(int)
+
+# Calculate ranges
+x_ranges = np.clip([x_coords - stepsize_px_half, x_coords + stepsize_px_half], 0, postIMSpimg.shape[0]-1)
+y_ranges = np.clip([y_coords - stepsize_px_half, y_coords + stepsize_px_half], 0, postIMSpimg.shape[1]-1)
+
+# Fill the array
+for xr, yr in zip(x_ranges.T, y_ranges.T):
+    postIMSpimg[xr[0]:(xr[1]+1), yr[0]:(yr[1]+1)] = 255
+
 
 logging.info("    - Closing")
-postIMSpimg = cv2.morphologyEx(src=postIMSpimg.astype(np.uint8), op = cv2.MORPH_CLOSE, kernel = skimage.morphology.square(int(stepsize/resolution/4))).astype(bool)
+cv2.morphologyEx(src=postIMSpimg, dst=postIMSpimg, op = cv2.MORPH_CLOSE, kernel = skimage.morphology.square(int(stepsize/resolution/4))).astype(bool)
 
 logging.info("    - Remove small holes")
 postIMSpimg = skimage.morphology.remove_small_holes(postIMSpimg, int((stepsize/resolution*10)**2))
 logging.info("    - Rescale")
-postIMSpimg = skimage.transform.rescale(postIMSpimg, 1/(stepsize/resolution)*10)
+wn = int(postIMSpimg.shape[0]*(1/(stepsize/resolution)*10))
+hn = int(postIMSpimg.shape[1]*(1/(stepsize/resolution)*10))
+postIMSpimg = cv2.resize(postIMSpimg.astype(np.uint8), (hn,wn), interpolation=cv2.INTER_NEAREST)
 postIMSpimg = postIMSpimg.astype(float)*255
+
 
 logging.info("Prepare IMS image")
 imzimg_regin = imzimg[xminimz:xmaximz,yminimz:ymaximz]
 logging.info("    - Rescale")
-imzimg_regin = skimage.transform.rescale(imzimg_regin.astype(bool), 10)
+wn = int(imzimg_regin.shape[0]*10)
+hn = int(imzimg_regin.shape[1]*10)
+imzimg_regin = cv2.resize(imzimg_regin.astype(bool).astype(np.uint8), (hn,wn), interpolation=cv2.INTER_NEAREST)
 imzimg_regin = imzimg_regin.astype(float)*255
-
-
 
 
 logging.info("Convert images to sitk images")
@@ -769,7 +646,6 @@ logging.info(f"Save Image difference as: {tmpfilename}")
 saveimage_tile(postIMSro_trans-imzimg_regin, tmpfilename, resolution)
 # plt.imshow(postIMSro_trans.astype(float)+imzimg_regin.astype(float))
 del imzimg_regin, postIMSpimg, R, resampler
-gc.collect()
 # plt.show()
 
 # inverse transformation
@@ -800,10 +676,10 @@ fig.savefig(tmpfilename)
 
 logging.info("Create postIMS boundary from observed points")
 # create new ringmask based on found points
-postIMSn = np.zeros(postIMSmpre.shape)
-for i in range(centsred.shape[0]):
-    postIMSn[int(centsred[i,0]/resolution*stepsize),int(centsred[i,1]/resolution*stepsize)] = 1
-postIMSn = skimage.morphology.convex_hull_image(postIMSn)
+postIMSn = np.zeros(postIMSmpre.shape, dtype=np.uint8)
+hull = cv2.convexHull((centsred / resolution * stepsize).astype(int).reshape(-1, 1, 2))
+postIMSn = cv2.drawContours(postIMSn, [hull], 0, (1), thickness=cv2.FILLED)
+postIMSn = postIMSn.astype(bool)
 postIMSnringmask = create_ring_mask(postIMSn, imspixel_outscale*stepsize/resolution, imspixel_inscale*stepsize/resolution)
 
 logging.info("Extract postIMS boundary points")
@@ -817,155 +693,10 @@ centsred = filter_points(centsred)
 
 # fig = plot_plotly_scatter_image(postIMSmpre, centsred*stepsize/resolution)
 # fig.show()
-# centsred = points_from_mask_two_thresholds(
-#     img_median = postIMSmpre,
-#     img_convolved = tmp2,
-#     mask_outer = postIMSnringmask,
-#     mask_inner = postIMSn,
-#     w_outer = w_outer,
-#     w_inner = w_inner,
-#     threshold_outer = threshold_outer,
-#     threshold_inner = threshold_inner,
-#     pixelsize = pixelsize,
-#     resolution = resolution,
-#     stepsize = stepsize,
-#     min_n_outer=8,
-#     min_n_inner=8
-# )
 del tmp2
-gc.collect()
-
-# postIMSm = postIMSmforpoints.copy()
-# postIMSm[np.logical_not(postIMSnringmask)] = 0
-# postIMSmb = postIMSm>threshold
-# centsred = points_from_mask(postIMSmb, pixelsize=pixelsize, resolution=resolution, stepsize=stepsize)
-# plt.scatter(imzcoordsfilttrans[:,0], imzcoordsfilttrans[:,1],color="red")
-# plt.scatter(centsred[:,0], centsred[:,1],color="blue")
-# plt.title("matching points")
-# plt.show()
-
-if False:
-    postIMScent = skimage.measure.regionprops(skimage.measure.label(postIMSnringmask))[0].centroid
-    postIMScentred = np.array(postIMScent)/stepsize*resolution
-
-    # plt.imshow(postIMSmpre)
-    # plt.scatter(centsred[:,1]*stepsize,centsred[:,0]*stepsize)
-    # plt.scatter(postIMScentred[1]*stepsize,postIMScentred[0]*stepsize)
-    # plt.show()
-
-    angles = np.array([get_angle(centsred[i,:],postIMScentred) for i in range(centsred.shape[0])])
-    # angles = angles[centsred_has_match]
-    angles = angles +180
-    angles_order = pd.factorize(list(angles), sort=True)[0]
-    angles_sort = np.array(sorted(angles))
-    angles_sort_order = pd.factorize(list(angles_sort), sort=True)[0]
-
-    angle_max_error = 2.5
-    angles_min = angles_sort
-    angles_max = angles_sort+angle_max_error*2
-
-    angles_ls = [[angles_min[0], angles_max[0]]]
-    counts_ls = [1]
-    pos=0
-    angles_group = [[angles_min[0], pos]]
-    for i in range(len(angles_sort)-1):
-        if (angles_ls[pos][1]-angles_min[i+1])>0:
-            angles_ls[pos][1]=angles_max[i+1]
-            counts_ls[pos]+=1
-        else:
-            print(f"new: {i}")
-            angles_ls.append([angles_min[i+1],angles_max[i+1]])
-            counts_ls.append(1)
-            pos+=1
-        angles_group.append([angles_min[i], pos])
-    
-    angles_group = np.array(angles_group)
-    angles_group = np.concatenate([angles_group,np.reshape(np.array(list(range(angles_group.shape[0]))),(angles_group.shape[0],1))],axis=1)
-    if len(angles_ls)>1:
-        do_merge=False
-        if angles_ls[-1][1]>360 and angles_ls[0][0]<0:
-            do_merge=True
-        elif angles_ls[-1][1]>360 and angles_ls[0][0]>=0:
-            if angles_ls[-1][1]%360 - angles_ls[0][0] > 0:
-                do_merge=True
-        elif angles_ls[-1][1]<=360 and angles_ls[0][0]<0:
-            if angles_ls[-1][1] - angles_ls[0][0]%360 < 0:
-                do_merge=True
-        if do_merge:
-            angles_ls[0][0]=angles_ls[-1][0]
-            del angles_ls[-1]
-            counts_ls[0]+=counts_ls[-1]
-            del counts_ls[-1]
-            angles_group[angles_group[:,1]==angles_group[-1,1],1] = 0
-    angles_ls = [np.array(ang)-angle_max_error for ang in angles_ls]
-    angles_ls
-    counts_ls
-
-    if len(angles_ls) > 1:
-        total_angles = [(ang[1]-ang[0])%360 for ang in angles_ls]
-        points_per_angle = np.array(counts_ls)/np.array(total_angles)
-        grps = np.unique(angles_group[:,1])
-        if np.min(points_per_angle)*3<np.max(points_per_angle):
-            wanted_ratio = 2*np.min(points_per_angle)
-            inds_to_keep = []
-            for grp in grps[points_per_angle>wanted_ratio]:
-                n_points = np.array(counts_ls)[grps == grp][0]
-                npoints_to_keep = int(np.floor(n_points/(points_per_angle[grps==grp]-wanted_ratio))[0])
-                import random
-                ransam = random.sample(range(n_points),npoints_to_keep)
-                inds_to_keep += list(angles_group[angles_group[:,1] == grp,:][ransam,2])
-            for grp in grps[points_per_angle<=wanted_ratio]:
-                inds_to_keep += list(angles_group[angles_group[:,1] == grp,:][:,2])
-
-
-
-    # imzcent = np.mean(imzcoords,axis=0)
-    # angles = np.array([get_angle(imzcoords[i,:].astype(float),imzcent) for i in range(imzcoords.shape[0])])
-    # angles = angles +180
-    # # plt.hist(angles, bins=360)
-    # # plt.show()
-
-    # boolls = []
-    # for i in range(len(angles_ls)):
-    #     if angles_ls[i][0]>angles_ls[i][1]:
-    #         boolls.append(np.logical_or(angles > angles_ls[i][0],angles < angles_ls[i][1]))
-    #     else:
-    #         boolls.append(np.logical_and(angles > angles_ls[i][0],angles < angles_ls[i][1]))
-    # to_keep = np.sum(np.stack(boolls),axis=0).astype(bool)
-
-    # imzcoords = imzcoords[to_keep,:]
-
-    # # # plt.imshow(postIMSmb)
-    # plt.scatter(imzcoords[:,1]*stepsize/resolution,imzcoords[:,0]*stepsize/resolution)
-    # plt.scatter(imzcent[1]*stepsize/resolution,imzcent[0]*stepsize/resolution)
-    # plt.show()
-
-
-    centsredfilt = centsredfilt[np.array(inds_to_keep).astype(int),:]
-    matches = skimage.feature.match_descriptors(centsredfilt, imzcoordsfilt + np.array([xsh,ysh]), max_distance=1)
-    imzcoordsfilt = imzcoordsfilt[matches[:,1],:]
 
 logging.info("Grid search for fine transformation")
 # create polygon to check if centsred points are within polygon
-
-# create polygons of neighboring pixels, then combine to global polygon,
-# more exact than covex hull
-# kdt = KDTree(imzcoordsfilttrans, leaf_size=30, metric='euclidean')
-# imz_distances, indices = kdt.query(imzcoordsfilttrans, k=9, return_distance=True)
-# close = imz_distances<np.sqrt(1)+0.01
-# tmpch=[]
-# for i in range(len(imzcoordsfilttrans)):
-#     tmpind = indices[i,:][close[i,:]]
-#     tmpch.append(shapely.geometry.MultiPoint(imzcoordsfilttrans[tmpind,:]).convex_hull)
-# poly = shapely.unary_union(tmpch)
-# del tmpch
-# try:
-#     poly = shapely.geometry.Polygon(poly.exterior)
-#     logging.info("\tUse Grid")
-# except:
-#     logging.info("\tUse Convex hull")
-#     poly = shapely.geometry.MultiPoint(imzcoordsfilttrans).convex_hull
-
 try:
     poly = concave_boundary_from_grid_holes(imzcoordsfilttrans, direction=2)
     if poly.geom_type == "LineString":
@@ -991,7 +722,6 @@ postIMScent = skimage.measure.regionprops(skimage.measure.label(postIMSnringmask
 postIMScentred = np.array(postIMScent)/stepsize*resolution
 angles = np.array([get_angle(centsred_tmp[i,:],postIMScentred) for i in range(np.sum(np.logical_not(pconts)))])
 del postIMScent, postIMScentred
-gc.collect()
 def get_grp_weights(angles,n_groups=10):
     grps = (angles/(360/n_groups)).astype(int)
     np_grps = np.array([np.sum(grps==i) for i in range(n_groups)]).astype(np.double)
@@ -1010,11 +740,6 @@ for n_groups in [2,3,4,5,6,7,8,9,10,12]:
         wls.append(get_grp_weights((angles+sh)%360,n_groups))
 weights = np.mean(np.stack(wls),axis=0)**(1.5)
 weights = weights/np.sum(weights)*len(weights)
-# weights=weights/np.max(weights)
-# plt.scatter(angles,weights)
-# plt.scatter(centsred[np.logical_not(pconts),:][:,1],centsred[np.logical_not(pconts),:][:,0],c=np.sqrt(weights))
-# plt.show()
-
 
 # template transform
 tmp_transform = sitk.Euler2DTransform()
@@ -1059,7 +784,6 @@ def score_init_transform(tz):
     matches = a[bool_ind_comb,:2].astype(int)
     weighted_points = np.mean(weights[matches[:,0]])
     mean_dist = np.mean(a[bool_ind_comb,2])
-    # weighted_mean_dist = np.sum(a[bool_ind_comb,2]*weights[matches[:,0]])/np.sum(weights[matches[:,0]])/len(a[bool_ind_comb,2])
     weighted_mean_dist = np.sum(a[bool_ind_comb,2]*weights[matches[:,0]])/len(a[bool_ind_comb,2])
 
     # add metrics
@@ -1140,7 +864,6 @@ elif IMS_to_postIMS_init_gridsearch>2:
     with Pool(threads, initializer= init_worker, initargs=(poly, tpls, imzcoordsfilttrans, cents_indices, imz_indices, weights)) as p:
         n_points_ls = p.map(score_init_transform, tz)
     del poly, tpls
-    gc.collect()
     n_points_arr = np.array(n_points_ls)
     n_points_arr = n_points_arr[np.isfinite(n_points_arr).all(axis=1)]
     n_points_arr = np.vstack([n_points_arr_init_red,n_points_arr_init2_red, n_points_arr])
@@ -1173,12 +896,8 @@ else:
         e=1-(n_points_arr_red[:,4]-np.min(n_points_arr_red[:,4]))/(np.max(n_points_arr_red[:,4])-np.min(n_points_arr_red[:,4]))
 
     # score based on number of points and distances
-    # weighted_score = (2*b+4*d+e)/7
     weighted_score = (b+d+e)/3
-    # weighted_score = (n_points_arr_red[:,2]-0.99)*100*e
     inds = np.arange(0,len(weighted_score),1)
-    # inds = inds[d>0.95]
-    # weighted_score = weighted_score[d>0.95]
     ind = inds[weighted_score == np.max(weighted_score)][0]
 
     # best transformation parameters
@@ -1188,7 +907,6 @@ else:
     del n_points_arr_red
 
 del n_points_arr
-gc.collect()
 
 logging.info(f"Parameters: rotation: {rot}, x shift: {xsh}, yshift: {ysh}")
 

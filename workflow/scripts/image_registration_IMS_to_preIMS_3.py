@@ -8,7 +8,7 @@ import skimage
 import numpy as np
 import json
 import matplotlib.pyplot as plt
-from image_registration_IMS_to_preIMS_utils import readimage_crop,  create_ring_mask, composite2affine, saveimage_tile,  create_imz_coords,get_rotmat_from_angle, concave_boundary_from_grid, concave_boundary_from_grid_holes, indices_sequence_from_ordered_points, get_angle, angle_code_from_point_sequence, image_from_points, get_sigma
+from image_registration_IMS_to_preIMS_utils import readimage_crop, composite2affine, saveimage_tile,  create_imz_coords,get_rotmat_from_angle,  concave_boundary_from_grid_holes, indices_sequence_from_ordered_points, angle_code_from_point_sequence, image_from_points, get_sigma, get_angle, get_angle_vec
 from sklearn.neighbors import KDTree
 import shapely
 import shapely.affinity
@@ -67,27 +67,27 @@ logging.info(f"within_IMC_fine_registration: {do_within_IMC_fine_registration}")
 logging.info(f"min_n: {min_n}")
 logging.info(f"max_n: {max_n}")
 
-imzmlfile = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_IMS.imzML"
+# imzmlfile = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_IMS.imzML"
 imzmlfile = snakemake.input["imzml"]
 
-imc_mask_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_032_transformed_on_postIMS.ome.tiff"
+# imc_mask_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_032_transformed_on_postIMS.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 
 imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed_on_postIMS","")
 imc_project = os.path.split(os.path.split(os.path.split(os.path.split(imc_mask_file)[0])[0])[0])[1]
 project_name = "postIMS_to_IMS_"+imc_project+"-"+imc_samplename
 
-postIMS_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
+# postIMS_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
 postIMS_file = snakemake.input["postIMS_downscaled"]
 
-masks_transform_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_032_masks_transform.txt"
+# masks_transform_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_032_masks_transform.txt"
 masks_transform_filename = snakemake.input["masks_transform"]
-gridsearch_transform_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_032_gridsearch_transform.txt"
+# gridsearch_transform_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_032_gridsearch_transform.txt"
 gridsearch_transform_filename = snakemake.input["gridsearch_transform"]
 
-postIMS_ablation_centroids_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_032_postIMS_ablation_centroids.csv"
+# postIMS_ablation_centroids_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_032_postIMS_ablation_centroids.csv"
 postIMS_ablation_centroids_filename = snakemake.input["postIMS_ablation_centroids"]
-metadata_to_save_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_032_step1_metadata.json"
+# metadata_to_save_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_032_step1_metadata.json"
 metadata_to_save_filename = snakemake.input["metadata"]
 
 
@@ -264,8 +264,10 @@ for k in range(len(nn_combinations)):
         tmpinds = indices_sequence_from_ordered_points(tmpind,nn1,nn2,len(ordered_centsred_border_all))
         tmp = ordered_centsred_border_all[tmpinds,:]
         if tmp.shape[0]==(nn1+nn2+1):
-            dists = np.array([np.sqrt(np.sum((tmp[j,:]-tmp[j+1,:])**2)) for j in range(len(tmp)-1)])
-            angles = np.array([get_angle(tmp[j,:]-tmp[j+1,:],[0,0],[1,0]) for j in range(len(tmp)-1)])
+            dists = np.sqrt(np.sum(np.diff(tmp, axis=0)**2, axis=1))
+            # dists = np.array([np.sqrt(np.sum((tmp[j,:]-tmp[j+1,:])**2)) for j in range(len(tmp)-1)])
+            angles = get_angle_vec(-np.diff(tmp,axis=0).reshape(1,-1,2),[0,0],[1,0])
+            # angles = np.array([get_angle(tmp[j,:]-tmp[j+1,:],[0,0],[1,0]) for j in range(len(tmp)-1)])
             to_keep_dist = np.logical_and(dists > 1-max_dist_diff, dists < 1+max_dist_diff)
             absangles = np.abs(np.array(angles))
             to_keep_angle = np.logical_or(
@@ -326,7 +328,6 @@ for k in range(len(nn_combinations)):
     close_ims_inds = np.arange(len(close_ims))[n_matches==1]
 
     logging.info(f"\t{nn1:02}_{nn2:02}\t{np.sum(n_matches==1):6}\t{len(ind_to_keep):6}\t{len(indices):6}")
-    print(f"\t{nn1:02}_{nn2:02}\t{np.sum(n_matches==1):6}\t{len(ind_to_keep):6}\t{len(indices):6}")
 
     # create matching points
     ind_to_keep_filt = np.array(ind_to_keep)[np.array(n_matches)==1]

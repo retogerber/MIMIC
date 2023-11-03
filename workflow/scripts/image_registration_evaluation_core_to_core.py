@@ -8,7 +8,7 @@ import re
 import numpy as np
 from sklearn.neighbors import KDTree
 import cv2
-from image_registration_IMS_to_preIMS_utils import normalize_image, readimage_crop, prepare_image_for_sam, get_angle, saveimage_tile, subtract_postIMS_grid, extract_mask, get_image_shape, sam_core, preprocess_mask
+from image_registration_IMS_to_preIMS_utils import readimage_crop, convert_and_scale_image, get_angle, saveimage_tile, subtract_postIMS_grid, extract_mask, get_image_shape, sam_core, preprocess_mask
 import sys,os
 import logging, traceback
 logging.basicConfig(filename=snakemake.log["stdout"],
@@ -125,11 +125,11 @@ logging.info(f"bounding box mask whole image 1: {bb3}")
 
 logging.info("load microscopy image 1")
 microscopy_image_1 = readimage_crop(microscopy_file_1, bb1)
-microscopy_image_1 = prepare_image_for_sam(microscopy_image_1, input_spacing_1/output_spacing)
+microscopy_image_1 = convert_and_scale_image(microscopy_image_1, input_spacing_1/output_spacing)
 
 logging.info("load microscopy image 2")
 microscopy_image_2 = readimage_crop(microscopy_file_2, bb2)
-microscopy_image_2 = prepare_image_for_sam(microscopy_image_2, input_spacing_2/output_spacing)
+microscopy_image_2 = convert_and_scale_image(microscopy_image_2, input_spacing_2/output_spacing)
 
 logging.info("Extract mask for microscopy image 1")
 mask_2 = extract_mask(microscopy_file_1, bb3, rescale = input_spacing_1/output_spacing, is_postIMS=False)[0,:,:]
@@ -148,7 +148,7 @@ if mask_2_proportion < IMC_mask_proportion:
     sam.to(device=DEVICE)
     saminp = readimage_crop(microscopy_file_1, bb1)
     # to gray scale, rescale
-    saminp = prepare_image_for_sam(saminp, input_spacing_1/output_spacing)
+    saminp = convert_and_scale_image(saminp, input_spacing_1/output_spacing)
     saminp = np.stack([saminp, saminp, saminp], axis=2)
     # run SAM segmentation model
     masks, scores1 = sam_core(saminp, sam)

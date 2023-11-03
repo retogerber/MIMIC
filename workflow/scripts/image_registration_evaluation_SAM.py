@@ -5,7 +5,7 @@ from rembg import new_session
 import skimage
 import numpy as np
 import tifffile
-from image_registration_IMS_to_preIMS_utils import readimage_crop, prepare_image_for_sam, get_max_dice_score, dist_centroids, subtract_postIMS_grid, extract_mask
+from image_registration_IMS_to_preIMS_utils import get_max_dice_score, dist_centroids, extract_mask
 import sys,os
 import logging, traceback
 logging.basicConfig(filename=snakemake.log["stdout"],
@@ -63,15 +63,6 @@ rembg_session = new_session(model_name)
 
 logging.info("postIMC on preIMC bounding box extraction")
 postIMC_on_preIMC = skimage.io.imread(postIMC_on_preIMC_file)
-#_,_,pistats,picents = cv2.connectedComponentsWithStats((postIMC_on_preIMC[:,:,0]>0).astype(np.uint8), ltype=cv2.CV_16U)
-#del postIMC_on_preIMC
-#pistats=pistats[1:,:]
-#xs = pistats[:,0]
-#ys = pistats[:,1]
-#widths = pistats[:,2]
-#heights = pistats[:,3]
-#bb1 = []
-
 rp = skimage.measure.regionprops((postIMC_on_preIMC[:,:,0]>0).astype(np.uint8))
 bb1 = rp[0].bbox
 bb2 = [int(bb1[0]/input_spacing_2),int(bb1[1]/input_spacing_2),int(bb1[2]/input_spacing_2),int(bb1[3]/input_spacing_2)] 
@@ -158,20 +149,6 @@ postIMS_centroid = reg2[0].centroid
 
 preIMS_on_postIMS_to_postIMS_dist = dist_centroids(preIMS_on_postIMS_centroid, postIMS_centroid, 1/output_spacing)
 
-# logging.info("postIMS mask extraction")
-# # postIMS
-# postIMSw = readimage_crop(postIMS_file, bb1)
-# postIMSw = prepare_image_for_sam(postIMSw, rescale)
-# postIMS = postIMSw.copy()
-# tmpmask = skimage.morphology.isotropic_dilation(preIMSmasks[0], np.ceil(rescale*100))
-# postIMS[np.logical_not(tmpmask)] = 0
-# postIMS = skimage.filters.median(postIMS, skimage.morphology.disk(rescale * 5))
-# postIMS = normalize_image(postIMS)*255
-# postIMS = postIMS.astype(np.uint8)
-# postIMS = np.stack([postIMS, postIMS, postIMS], axis=2)
-# postIMSmasks, scores1 = sam_core(postIMS, sam)
-# postIMSmasks = np.stack([preprocess_mask(msk,rescale) for msk in postIMSmasks ])
-
 
 logging.info("Create and save csv")
 samplename = os.path.basename(postIMC_on_preIMC_file).replace("_transformed_on_preIMC.ome.tiff","")
@@ -203,39 +180,5 @@ tifffile.imwrite(snakemake.output['preIMCmask_preIMSmask'],tmpimg)
 
 tmpimg = preIMS_on_postIMSmasks[0,:,:].astype(np.uint8)*127+postIMSmasks[0,:,:].astype(np.uint8)*127
 tifffile.imwrite(snakemake.output['preIMSmask_postIMSmask'],tmpimg)
-
-# # save images for QC
-# tifffile.imwrite("",img1w)
-# tifffile.imwrite("",img2w)
-# tifffile.imwrite("",mask_image1[:,:,0])
-# tifffile.imwrite("",mask_image2[:,:,0])
-
-
-# fig, ax = plt.subplots(nrows=3, ncols=2)
-# ax[0,0].imshow(img3)
-# ax[0,0].set_title("preIMS")
-# ax[1,0].imshow(mask_image3, cmap='gray')
-# ax[1,0].set_title("preIMS mask")
-# ax[0,1].imshow(img2)
-# ax[0,1].set_title("postIMC")
-# ax[1,1].imshow(mask_image2, cmap='gray')
-# ax[1,1].set_title("postIMC mask")
-# ax[2,1].imshow(mask_image2.astype(np.uint8) - mask_image3.astype(np.uint8), cmap='gray')
-# ax[2,1].set_title("postIMC mask - postIMS mask")
-# plt.show()
-
-
-
-# fig, ax = plt.subplots(nrows=1, ncols=4)
-# ax[0].imshow(masks1[0], cmap='gray')
-# ax[0].set_title("0")
-# ax[1].imshow(masks1[1], cmap='gray')
-# ax[1].set_title("1")
-# ax[2].imshow(masks1[2], cmap='gray')
-# ax[2].set_title("2")
-# ax[3].imshow(img1, cmap='gray')
-# ax[3].set_title("3")
-# plt.show()
-
 
 logging.info("Finished")

@@ -1,11 +1,11 @@
-from rembg import remove, new_session
-from segment_anything import sam_model_registry, SamPredictor
+from rembg import new_session
+from segment_anything import sam_model_registry
 import torch
 import cv2
 import json
 import skimage
 import numpy as np
-from image_registration_IMS_to_preIMS_utils import *
+from image_registration_IMS_to_preIMS_utils import convert_and_scale_image, get_image_shape, extract_mask, readimage_crop, sam_core, saveimage_tile, preprocess_mask
 import sys,os
 import logging, traceback
 logging.basicConfig(filename=snakemake.log["stdout"],
@@ -84,20 +84,10 @@ for i,bb1 in enumerate(imcbboxls):
     # bounding box
     bbn = [0]*4
     # scale up by 1.35 mm in each direction, leading to image size of about 3.7mm * 3.7mm, which should be enough to include whole TMA core
-    bbn[0] = int(np.floor((bb1[0] - 1350)/resolution))
-    bbn[1] = int(np.floor((bb1[1] - 1350)/resolution))
-    bbn[2] = int(np.ceil((bb1[2] + 1350)/resolution))
-    bbn[3] = int(np.ceil((bb1[3] + 1350)/resolution))
-
-    # edges
-    if bbn[0]<0:
-        bbn[0] = 0
-    if bbn[1]<0:
-        bbn[1] = 0
-    if bbn[2]>imgshape[0]:
-        bbn[2] = imgshape[0]
-    if bbn[3]>imgshape[1]:
-        bbn[3] = imgshape[1]
+    bbn[0] = max(0, int(np.floor((bb1[0] - 1350)/resolution)))
+    bbn[1] = max(0, int(np.floor((bb1[1] - 1350)/resolution)))
+    bbn[2] = min(imgshape[0], int(np.ceil((bb1[2] + 1350)/resolution)))
+    bbn[3] = min(imgshape[1], int(np.ceil((bb1[3] + 1350)/resolution)))
     logging.info(f"\t\t{bbn}")
 
     img_mask = extract_mask(preIMS_file, bbn, session=rembg_session, rescale=resolution/4, is_postIMS = False)[0,:,:]
@@ -148,7 +138,7 @@ for i,bb1 in enumerate(imcbboxls):
 #     extract postIMS tissue location using rembg
 #     """
 #     # to grayscale, rescale
-#     w = prepare_image_for_sam(img, rescale)
+#     w = convert_and_scale_image(img, rescale)
 #     # using fft, remove IMS ablation grid
 #     #w = subtract_postIMS_grid(w)
 #     w = cv2.blur(w, (5,5))
@@ -179,14 +169,10 @@ postIMS_shape = (np.array(get_image_shape(postIMS_file)[:2])*resolution).astype(
 postIMSstitch = np.zeros(postIMS_shape)
 rembg_mask_areas = []
 for i in range(len(corebboxls)):
-    xmin = int(corebboxls[i][0]-expand_microns)
-    xmin = xmin if xmin>=0 else 0
-    ymin = int(corebboxls[i][1]-expand_microns)
-    ymin = ymin if ymin>=0 else 0
-    xmax = int(corebboxls[i][2]+expand_microns)
-    xmax = xmax if xmax<=postIMS_shape[0] else postIMS_shape[0]
-    ymax = int(corebboxls[i][3]+expand_microns)
-    ymax = ymax if ymax<=postIMS_shape[1] else postIMS_shape[1]
+    xmin = max(0, int(corebboxls[i][0] - expand_microns))
+    ymin = max(0, int(corebboxls[i][1] - expand_microns))
+    xmax = min(postIMS_shape[0], int(corebboxls[i][2] + expand_microns))
+    ymax = min(postIMS_shape[1], int(corebboxls[i][3] + expand_microns))
     print(f"i: {i}, {os.path.basename(imc_mask_files[i])}, coords:[{xmin}:{xmax},{ymin}:{ymax}]")
     tmpimg = extract_mask(postIMS_file,(np.ceil(np.array([xmin,ymin,xmax,ymax])/resolution)).astype(int), rembg_session, resolution)[0,:,:]
     rembg_mask_areas.append(np.sum(tmpimg>0))
@@ -222,22 +208,16 @@ sam.to(device=DEVICE)
 sam_mask_areas = []
 for i in inds:
     # bounding box
-    xmin = int(corebboxls[i][0]-expand_microns)
-    xmin = xmin if xmin>=0 else 0
-    ymin = int(corebboxls[i][1]-expand_microns)
-    ymin = ymin if ymin>=0 else 0
-    xmax = int(corebboxls[i][2]+expand_microns)
-    xmax = xmax if xmax<=postIMS_shape[0] else postIMS_shape[0]
-    ymax = int(corebboxls[i][3]+expand_microns)
-    ymax = ymax if ymax<=postIMS_shape[1] else postIMS_shape[1]
+    xmin = max(0, int(corebboxls[i][0] - expand_microns))
+    ymin = max(0, int(corebboxls[i][1] - expand_microns))
+    xmax = min(postIMS_shape[0], int(corebboxls[i][2] + expand_microns))
+    ymax = min(postIMS_shape[1], int(corebboxls[i][3] + expand_microns))
     logging.info(f"i: {i}, {os.path.basename(imc_mask_files[i])}, coords:[{xmin}:{xmax},{ymin}:{ymax}]")
 
     # read image
     saminp = readimage_crop(postIMS_file, (np.ceil(np.array([xmin,ymin,xmax,ymax])/resolution)).astype(int))
     # to gray scale, rescale
-    saminp = prepare_image_for_sam(saminp, resolution)
-    # remove postIMS IMS ablation grid
-    #saminp = subtract_postIMS_grid(saminp)
+    saminp = convert_and_scale_image(saminp, resolution)
     saminp = np.stack([saminp, saminp, saminp], axis=2)
     # run SAM segmentation model
     postIMSmasks, scores1 = sam_core(saminp, sam)
@@ -284,10 +264,6 @@ logging.info(f"Difference of the mask areas:")
 logging.info(f"SAM-rembg\t,(SAM-rembg)/(0.5*(SAM+rembg))\t,Name")
 for i in range(len(imcbboxls)):
     logging.info(f"{sam_mask_areas[i]-rembg_mask_areas[i]}\t, {(sam_mask_areas[i]-rembg_mask_areas[i])/(0.5*(sam_mask_areas[i]+rembg_mask_areas[i])):.4f}\t, {os.path.basename(imc_mask_files[i])}")
-    # if (ratio_sam_to_rembg[i]<np.log10(1/1.1)) or (ratio_sam_to_rembg[i]>np.log10(1.1/1)):
-    # logging.info(f"Difference of the mask areas (SAM-rembg) for {os.path.basename(imc_mask_files[i])}: {sam_mask_areas[i]-rembg_mask_areas[i]} ((SAM-rembg)/(0.5*(SAM+rembg)): {(sam_mask_areas[i]-rembg_mask_areas[i])/(0.5*(sam_mask_areas[i]+rembg_mask_areas[i])):.4f}")
-
-
 
 
 logging.info(f"Get convex hull")
