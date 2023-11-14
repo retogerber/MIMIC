@@ -70,7 +70,7 @@ logging.info(f"max_n: {max_n}")
 # imzmlfile = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_IMS.imzML"
 imzmlfile = snakemake.input["imzml"]
 
-# imc_mask_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_032_transformed_on_postIMS.ome.tiff"
+# imc_mask_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_012_transformed_on_postIMS.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 
 imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed_on_postIMS","")
@@ -80,14 +80,14 @@ project_name = "postIMS_to_IMS_"+imc_project+"-"+imc_samplename
 # postIMS_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
 postIMS_file = snakemake.input["postIMS_downscaled"]
 
-# masks_transform_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_032_masks_transform.txt"
+# masks_transform_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_012_masks_transform.txt"
 masks_transform_filename = snakemake.input["masks_transform"]
-# gridsearch_transform_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_032_gridsearch_transform.txt"
+# gridsearch_transform_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_012_gridsearch_transform.txt"
 gridsearch_transform_filename = snakemake.input["gridsearch_transform"]
 
-# postIMS_ablation_centroids_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_032_postIMS_ablation_centroids.csv"
+# postIMS_ablation_centroids_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_012_postIMS_ablation_centroids.csv"
 postIMS_ablation_centroids_filename = snakemake.input["postIMS_ablation_centroids"]
-# metadata_to_save_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_032_step1_metadata.json"
+# metadata_to_save_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_012_step1_metadata.json"
 metadata_to_save_filename = snakemake.input["metadata"]
 
 
@@ -458,71 +458,110 @@ else:
         points_found = False
 
 if points_found:
-    logging.info(f"Run pycpd registration on matching points") 
-    reg = pycpd.AffineRegistration(Y=centsred_borderfilt.astype(float), X=tmpimzrotfilt.astype(float), w=0, s=1, scale=False)
-    postIMScoordsout, (R_reg, t_reg) = reg.register()
-
-    logging.info(f"Create transformations") 
-    tmp_transform_inverse = sitk.Euler2DTransform()
-    tmp_transform_inverse.SetCenter(tmp_transform.GetCenter())
-    tmp_transform_inverse.SetAngle(-tmp_transform.GetAngle())
-    tmp_transform_inverse.SetTranslation(-np.array(tmp_transform.GetTranslation()))
-    # centsredtrans = np.array([tmp_transform_inverse.TransformPoint(centsred[i,:]) for i in range(centsred.shape[0])])
-    pycpd_transform = sitk.AffineTransform(2)
-    pycpd_transform.SetTranslation(t_reg)
-    pycpd_transform.SetMatrix(R_reg.T.flatten())
-    # postIMScoordsout = np.array([pycpd_transform.TransformPoint(centsredtrans[i,:]) for i in range(centsredtrans.shape[0])])
-
-    tm = sitk.CompositeTransform(2)
-    tm.AddTransform(pycpd_transform)
-    tm.AddTransform(tmp_transform_inverse)
-    init_transform = composite2affine(tm, [0,0])
+    logging.info(f"Run skimage ransac registration on matching points")
+    inliersls = []
+    modells=[]
+    for i in range(1000):
+        mat, inliers = skimage.measure.ransac((centsred_borderfilt,tmpimzrotfilt), skimage.transform.AffineTransform, min_samples=7, residual_threshold=0.1, max_trials=10000)
+        modells.append(mat.params)
+        inliersls.append(np.array(inliers))
+    inliers = np.vstack(inliersls)
     
-    postIMScoordsout = np.array([init_transform.TransformPoint(centsred[i,:]) for i in range(centsred.shape[0])])
+    # np.sum(np.sum(inliers,axis=1)==np.max(np.sum(inliers,axis=1)))
+    # np.array(modells)[np.array(inliersls)==np.max(inliersls)]
+    outlier = np.sum(inliers,axis=0)<900
+    logging.info(f"Number of outliers: {np.sum(outlier)}/{len(outlier)}")
 
-    pycpd_transform_inverse = sitk.AffineTransform(2)
-    pycpd_transform_inverse.SetTranslation(-t_reg)
-    R_reg_inv = np.array([[1-(R_reg[0,0]-1),-R_reg[1,0]],[-R_reg[0,1],1-(R_reg[1,1]-1)]])
-    pycpd_transform_inverse.SetMatrix(R_reg_inv.flatten())
-
-    tm = sitk.CompositeTransform(2)
-    tm.AddTransform(pycpd_transform_inverse)
-    tm.AddTransform(tmp_transform)
-    init_transform_inverse = composite2affine(tm, [0,0])
- 
-    tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_cpd_registration.svg"
-    plt.close()
-    plt.scatter(imzcoordsfilttrans[:,1], imzcoordsfilttrans[:,0],color="red",alpha=0.2)
-    plt.scatter(postIMScoordsout[:,1], postIMScoordsout[:,0],color="blue",alpha=0.2)
-    tmppostIMScoordsout = np.array([init_transform.TransformPoint(centsred_borderfilt[i,:]) for i in range(centsred_borderfilt.shape[0])])
-    plt.scatter(imzcoordsfilttrans[matching_inds,1], imzcoordsfilttrans[matching_inds,0],color="red",alpha=0.5)
-    plt.scatter(tmppostIMScoordsout[:,1], tmppostIMScoordsout[:,0],color="blue",alpha=0.5)
-    plt.title("matching points")
-    fig = plt.gcf()
-    fig.set_size_inches(20,20)
-    fig.savefig(tmpfilename)
-    # plt.show()
-
-    # IMSpoly = shapely.concave_hull(shapely.geometry.MultiPoint(imzcoordsfilttrans), ratio=0.001).buffer(0.15, cap_style='square', join_style='mitre')
-    tpts = np.array(tmpIMSpoly.exterior.coords.xy).T
-    imzcoordsfilttranstrans = np.array([tmp_transform_inverse.TransformPoint(tpts[i,:]) for i in range(tpts.shape[0])])
-    tmpIMSpolytrans = shapely.Polygon(imzcoordsfilttranstrans)
-    # plt.scatter(imzcoordsfilttrans[:,0], imzcoordsfilttrans[:,1],color="blue",alpha=0.5)
-    # plt.scatter(imzcoordsfilttranstrans[:,0], imzcoordsfilttranstrans[:,1],color="red",alpha=0.5)
-    # shapely.plotting.plot_polygon(tmpIMSpolytrans)
-    # plt.show()
-
-    IMSpolytrans = tmpIMSpolytrans.buffer(0.15)
-    shapely.prepare(IMSpolytrans)
-    # shapely.plotting.plot_polygon(IMSpolytrans)
-    # plt.show()
-
-    tpls = [shapely.geometry.Point(postIMScoordsout[i,:]) for i in range(postIMScoordsout.shape[0])]
-    pconts = np.array([IMSpolytrans.contains(tpls[i]) for i in range(len(tpls))])
-    if np.sum(pconts)/len(pconts) < 0.98:
-        logging.info(f"only {np.sum(pconts):6}/{len(pconts):6} points ({np.sum(pconts)/len(pconts):1.4}) lie inside of IMS polygon: Registration is not used!") 
+    if np.sum(outlier)/len(outlier)>0.1:
+        logging.info(f"Too many outliers, registration not used")
         R_reg = np.array([[1.0,0.0],[0.0,1.0]])
         t_reg = np.array([0.0,0.0])
+        init_transform = tmp_transform.GetInverse()
+        init_transform_inverse = tmp_transform
+        pycpd_transform_inverse = sitk.AffineTransform(2)
+        pycpd_transform = sitk.AffineTransform(2)
+    else:
+        centsred_borderfilt=centsred_borderfilt[~outlier,:]
+        tmpimzrotfilt=tmpimzrotfilt[~outlier,:]
+        logging.info(f"Filter outliers")
+
+        logging.info(f"Run pycpd registration on matching points") 
+        reg = pycpd.AffineRegistration(Y=centsred_borderfilt.astype(float), X=tmpimzrotfilt.astype(float), w=0, s=1, scale=False)
+        postIMScoordsout, (R_reg, t_reg) = reg.register()
+# 
+        # target_pts_flat = [c for p in centsred_borderfilt[:, [1, 0]] for c in p]
+        # source_pts_flat = [c for p in tmpimzrotfilt[:, [1, 0]] for c in p]
+        # landmark_initializer = sitk.LandmarkBasedTransformInitializerFilter()
+        # transform = sitk.AffineTransform(
+            # sitk.LandmarkBasedTransformInitializer(
+                # sitk.AffineTransform(2), target_pts_flat, source_pts_flat
+            # )
+        # )
+        # tmpmat = transform.GetMatrix()
+        # R_reg = np.array([[tmpmat[3],tmpmat[1]],[tmpmat[2],tmpmat[0]]])
+        # t_reg = np.flip(np.array(transform.GetTranslation()))
+
+        logging.info(f"Create transformations") 
+        tmp_transform_inverse = sitk.Euler2DTransform()
+        tmp_transform_inverse.SetCenter(tmp_transform.GetCenter())
+        tmp_transform_inverse.SetAngle(-tmp_transform.GetAngle())
+        tmp_transform_inverse.SetTranslation(-np.array(tmp_transform.GetTranslation()))
+        # centsredtrans = np.array([tmp_transform_inverse.TransformPoint(centsred[i,:]) for i in range(centsred.shape[0])])
+        pycpd_transform = sitk.AffineTransform(2)
+        pycpd_transform.SetTranslation(t_reg)
+        pycpd_transform.SetMatrix(R_reg.T.flatten())
+        # postIMScoordsout = np.array([pycpd_transform.TransformPoint(centsredtrans[i,:]) for i in range(centsredtrans.shape[0])])
+
+        tm = sitk.CompositeTransform(2)
+        tm.AddTransform(pycpd_transform)
+        tm.AddTransform(tmp_transform_inverse)
+        init_transform = composite2affine(tm, [0,0])
+    
+        postIMScoordsout = np.array([init_transform.TransformPoint(centsred[i,:]) for i in range(centsred.shape[0])])
+
+        pycpd_transform_inverse = sitk.AffineTransform(2)
+        pycpd_transform_inverse.SetTranslation(-t_reg)
+        R_reg_inv = np.array([[1-(R_reg[0,0]-1),-R_reg[1,0]],[-R_reg[0,1],1-(R_reg[1,1]-1)]])
+        pycpd_transform_inverse.SetMatrix(R_reg_inv.flatten())
+
+        tm = sitk.CompositeTransform(2)
+        tm.AddTransform(pycpd_transform_inverse)
+        tm.AddTransform(tmp_transform)
+        init_transform_inverse = composite2affine(tm, [0,0])
+ 
+        tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_cpd_registration.svg"
+        plt.close()
+        plt.scatter(imzcoordsfilttrans[:,1], imzcoordsfilttrans[:,0],color="red",alpha=0.2)
+        plt.scatter(postIMScoordsout[:,1], postIMScoordsout[:,0],color="blue",alpha=0.2)
+        tmppostIMScoordsout = np.array([init_transform.TransformPoint(centsred_borderfilt[i,:]) for i in range(centsred_borderfilt.shape[0])])
+        plt.scatter(imzcoordsfilttrans[matching_inds,1], imzcoordsfilttrans[matching_inds,0],color="red",alpha=0.5)
+        plt.scatter(tmppostIMScoordsout[:,1], tmppostIMScoordsout[:,0],color="blue",alpha=0.5)
+        plt.title("matching points")
+        fig = plt.gcf()
+        fig.set_size_inches(20,20)
+        fig.savefig(tmpfilename)
+        # plt.show()
+
+        # IMSpoly = shapely.concave_hull(shapely.geometry.MultiPoint(imzcoordsfilttrans), ratio=0.001).buffer(0.15, cap_style='square', join_style='mitre')
+        tpts = np.array(tmpIMSpoly.exterior.coords.xy).T
+        imzcoordsfilttranstrans = np.array([tmp_transform_inverse.TransformPoint(tpts[i,:]) for i in range(tpts.shape[0])])
+        tmpIMSpolytrans = shapely.Polygon(imzcoordsfilttranstrans)
+        # plt.scatter(imzcoordsfilttrans[:,0], imzcoordsfilttrans[:,1],color="blue",alpha=0.5)
+        # plt.scatter(imzcoordsfilttranstrans[:,0], imzcoordsfilttranstrans[:,1],color="red",alpha=0.5)
+        # shapely.plotting.plot_polygon(tmpIMSpolytrans)
+        # plt.show()
+
+        IMSpolytrans = tmpIMSpolytrans.buffer(0.15)
+        shapely.prepare(IMSpolytrans)
+        # shapely.plotting.plot_polygon(IMSpolytrans)
+        # plt.show()
+
+        tpls = [shapely.geometry.Point(postIMScoordsout[i,:]) for i in range(postIMScoordsout.shape[0])]
+        pconts = np.array([IMSpolytrans.contains(tpls[i]) for i in range(len(tpls))])
+        if np.sum(pconts)/len(pconts) < 0.98:
+            logging.info(f"only {np.sum(pconts):6}/{len(pconts):6} points ({np.sum(pconts)/len(pconts):1.4}) lie inside of IMS polygon: Registration is not used!") 
+            R_reg = np.array([[1.0,0.0],[0.0,1.0]])
+            t_reg = np.array([0.0,0.0])
 else:
     logging.info(f"Criteria not met, don't run pycpd registration") 
     R_reg = np.array([[1.0,0.0],[0.0,1.0]])

@@ -24,16 +24,18 @@ sys.excepthook = handle_exception
 sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
 sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 
-# threads = 2
+# threads = 20
 threads = int(snakemake.threads)
 cv2.setNumThreads(threads)
 logging.info("Start")
 
 # parameters
 # stepsize = 30
+# stepsize = 20
 # stepsize = 10
 stepsize = float(snakemake.params["IMS_pixelsize"])
 # pixelsize = 24
+# pixelsize = 16
 # pixelsize = 8 
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
 # resolution = 1
@@ -45,9 +47,11 @@ rotation_imz = float(snakemake.params["IMS_rotation_angle"])
 assert(rotation_imz in [-270,-180,-90,0,90,180,270])
 rotmat = get_rotmat_from_angle(rotation_imz)
 
+# IMS_to_postIMS_n_splits = 19
 IMS_to_postIMS_n_splits = snakemake.params["IMS_to_postIMS_n_splits"]
 logging.info(f"IMS_to_postIMS_n_splits: {IMS_to_postIMS_n_splits}")
 assert(IMS_to_postIMS_n_splits in [3,5,7,9,11,13,15,17,19])
+# IMS_to_postIMS_init_gridsearch = 3
 IMS_to_postIMS_init_gridsearch = snakemake.params["IMS_to_postIMS_init_gridsearch"]
 logging.info(f"IMS_to_postIMS_init_gridsearch: {IMS_to_postIMS_init_gridsearch}")
 assert(IMS_to_postIMS_init_gridsearch in [0,1,2,3])
@@ -85,7 +89,7 @@ imzmlfile = snakemake.input["imzml"]
 # imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/Lipid_TMA_37819_025_transformed.ome.tiff"
 # imc_mask_file = "/home/retger/Downloads/NASH_HCC_TMA-2_010_transformed.ome.tiff"
-# imc_mask_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_032_transformed_on_postIMS.ome.tiff"
+# imc_mask_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_011_transformed_on_postIMS.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 # output_table = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/test_combined_IMS_test_combined_IMS_to_postIMS_matches.csv"
 # output_table = "/home/retger/Downloads/cirrhosis_TMA_cirrhosis_TMA_IMS_IMS_to_postIMS_matches.csv"
@@ -574,12 +578,16 @@ y_ranges = np.clip([y_coords - stepsize_px_half, y_coords + stepsize_px_half], 0
 for xr, yr in zip(x_ranges.T, y_ranges.T):
     postIMSpimg[xr[0]:(xr[1]+1), yr[0]:(yr[1]+1)] = 255
 
+logging.info("    - {np.sum(postIMSpimg)/255/np.prod(postIMSpimg.shape)} area proportion")
 
 logging.info("    - Closing")
 cv2.morphologyEx(src=postIMSpimg, dst=postIMSpimg, op = cv2.MORPH_CLOSE, kernel = skimage.morphology.square(int(stepsize/resolution/4))).astype(bool)
 
+logging.info("    - {np.sum(postIMSpimg)/np.prod(postIMSpimg.shape)} area proportion")
+
 logging.info("    - Remove small holes")
 postIMSpimg = skimage.morphology.remove_small_holes(postIMSpimg, int((stepsize/resolution*10)**2))
+logging.info("    - {np.sum(postIMSpimg)/np.prod(postIMSpimg.shape)} area proportion")
 logging.info("    - Rescale")
 wn = int(postIMSpimg.shape[0]*(1/(stepsize/resolution)*10))
 hn = int(postIMSpimg.shape[1]*(1/(stepsize/resolution)*10))
@@ -600,39 +608,69 @@ logging.info("Convert images to sitk images")
 fixed = sitk.GetImageFromArray(imzimg_regin)
 moving = sitk.GetImageFromArray(postIMSpimg)
 
-# initial transformation
-centsrange = np.max(centsred,axis=0)-np.min(centsred,axis=0)
-imzsrange = np.array([xmaximz-xminimz,ymaximz-yminimz])
-centsmin_adj = np.min(centsred,axis=0)+(centsrange-imzsrange)/2
-init_transform = sitk.Euler2DTransform()
-init_transform.SetTranslation(centsmin_adj[[1,0]]*10)
-
-logging.info("Setup registration")
-R = sitk.ImageRegistrationMethod()
-R.SetMetricAsCorrelation()
-R.SetMetricSamplingStrategy(R.REGULAR)
-R.SetMetricSamplingPercentage(1)
-R.SetInterpolator(sitk.sitkNearestNeighbor)
-R.SetOptimizerAsGradientDescent(
-    learningRate=1000, numberOfIterations=1000, 
-    convergenceMinimumValue=1e-9, convergenceWindowSize=30,
-    estimateLearningRate=R.EachIteration
-)
-R.SetOptimizerScalesFromIndexShift()
-R.SetInitialTransform(init_transform)
-
 def command_iteration(method):
     print(
         f"{method.GetOptimizerIteration():3} "
         + f"= {method.GetMetricValue():10.8f} "
         + f": {method.GetOptimizerPosition()}"
     )
-# setup sitk images
-R.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration(R))
 
-logging.info("Run registration")
-# run registration
-transform = R.Execute(fixed, moving)
+def init_mask_registration(fixed, moving, yx_translation):
+    init_transform = sitk.Euler2DTransform()
+    init_transform.SetTranslation(yx_translation)
+
+    logging.info("Setup registration")
+    R = sitk.ImageRegistrationMethod()
+    R.SetMetricAsCorrelation()
+    R.SetMetricSamplingStrategy(R.REGULAR)
+    R.SetMetricSamplingPercentage(1)
+    R.SetInterpolator(sitk.sitkNearestNeighbor)
+    R.SetOptimizerAsGradientDescent(
+        learningRate=1000, numberOfIterations=1000, 
+        convergenceMinimumValue=1e-9, convergenceWindowSize=30,
+        estimateLearningRate=R.EachIteration
+    )
+    R.SetOptimizerScalesFromIndexShift()
+    R.SetInitialTransform(init_transform)
+
+    # setup sitk images
+    R.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration(R))
+
+    # run registration
+    transform = R.Execute(fixed, moving)
+    return transform, R.GetMetricValue()
+
+
+# initial transformation
+centsrange = np.max(centsred,axis=0)-np.min(centsred,axis=0)
+imzsrange = np.array([xmaximz-xminimz,ymaximz-yminimz])
+if np.any(np.abs(centsrange-imzsrange)>imzsrange*0.2):
+    # if the range of the points is not similar to the range of the IMS image, shift the points
+    shifted_axis = np.array([0,1])[np.abs(centsrange-imzsrange)>imzsrange*0.2]
+    shifts_all = []
+    for s in shifted_axis:
+        shifts = np.ones((3,2))*0.5
+        shifts[:,s] = np.array([0,0.5,1])
+        shifts_all.append(shifts)
+    shifts = np.vstack(shifts_all)
+    centsmin_adj_ls = [ np.min(centsred,axis=0)+(centsrange-imzsrange)*s for s in shifts ]
+
+    logging.info("Run registrations")
+    trls = []
+    metls = []
+    for xytr in centsmin_adj_ls:
+        tr,met = init_mask_registration(fixed, moving, xytr[[1,0]]*10)
+        trls.append(tr)
+        metls.append(met)
+    trls = np.array(trls)
+    metls = np.array(metls)
+    transform = trls[np.argmin(metls)]
+else:
+    centsmin_adj = np.min(centsred,axis=0)+(centsrange-imzsrange)/2
+
+    logging.info("Run registration")
+    transform,_ = init_mask_registration(fixed, moving, centsmin_adj[[1,0]]*10)
+
 
 # visualize
 resampler = sitk.ResampleImageFilter()
@@ -645,7 +683,7 @@ tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(sna
 logging.info(f"Save Image difference as: {tmpfilename}")
 saveimage_tile(postIMSro_trans-imzimg_regin, tmpfilename, resolution)
 # plt.imshow(postIMSro_trans.astype(float)+imzimg_regin.astype(float))
-del imzimg_regin, postIMSpimg, R, resampler
+del imzimg_regin, postIMSpimg, resampler
 # plt.show()
 
 # inverse transformation

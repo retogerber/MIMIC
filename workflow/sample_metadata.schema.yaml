@@ -64,13 +64,13 @@ properties:
     description: should fine registration of IMS ablation marks in IMC location be performed when registering IMS to postIMS
   min_index_length:
     type: number
-    default: 6
+    default: 10
     minimum: 3
     multipleOf: 1
     description: minimum sequence length to determine unique index of border points
   max_index_length:
     type: number
-    default: 20
+    default: 30
     minimum: 6
     multipleOf: 1
     description: maximum sequence length to determine unique index of border points

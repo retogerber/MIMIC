@@ -805,7 +805,7 @@ def subtract_postIMS_grid(img: np.ndarray) -> np.ndarray:
     mag, phase = cv2.cartToPolar(dft_shift[:,:,0], dft_shift[:,:,1])
 
     # get spectrum for viewing only
-    spec = (np.log(mag) / 20)
+    spec = np.log(mag)
 
     # get local threshold
     local_thresh = skimage.filters.threshold_local(spec, block_size=191)
@@ -818,10 +818,16 @@ def subtract_postIMS_grid(img: np.ndarray) -> np.ndarray:
     # increase peaks
     mask = cv2.morphologyEx(src=mask.astype(np.uint8), op = cv2.MORPH_DILATE, kernel = skimage.morphology.diamond(1)).astype(bool).astype(np.uint8)
 
+    # detect regions and get distance of centroids to calculate radius
+    _, _, stats, cents = cv2.connectedComponentsWithStatsWithAlgorithm(mask.astype(np.uint8), connectivity=4, ltype=cv2.CV_32S, ccltype=cv2.CCL_SAUF)
+    kdt = KDTree(cents, leaf_size=30, metric='euclidean')
+    dists, indices = kdt.query(cents, k=2, return_distance=True)
+    radius = int(np.median(dists[:,1])*0.25)
+
     # blacken out center DC region from mask
     cx = ww // 2
     cy = hh // 2
-    mask = cv2.circle(mask, (cx,cy), 12, 0, -1)
+    mask = cv2.circle(mask, (cx,cy), radius, 0, -1)
 
     # invert mask
     mask = 1 - mask
@@ -829,15 +835,19 @@ def subtract_postIMS_grid(img: np.ndarray) -> np.ndarray:
 
     # apply mask to magnitude image
     mag_notch = mask*mag
-
+    
+    ksize = int(np.median(dists[:,1])*0.25)
     # get local average magnitude
-    magmedian = cv2.medianBlur(mag, ksize=5)
-    magmedian = cv2.blur(magmedian, ksize=(51,51))
+    tmp_mag_notch = mag_notch.copy()
+    tmp_mag_notch[mask==0] = 0
+    tmp_mag_notch = cv2.circle(tmp_mag_notch, (cx,cy), radius, 0, -1)
+    magmedian = cv2.medianBlur(tmp_mag_notch, ksize=5)
+    magmedian = cv2.blur(magmedian, ksize=(ksize,ksize))
     magmedian = cv2.medianBlur(magmedian, ksize=5)
-    magmedian = cv2.blur(magmedian, ksize=(51,51))
-    magmedian = cv2.medianBlur(magmedian, ksize=5)
+
     # replace masked regions with local average
-    mag_notch[mask==0] = local_thresh[mask==0]*magmedian[mask==0]
+    # mag_notch[mask==0] = local_thresh[mask==0]*magmedian[mask==0]
+    mag_notch[mask==0] = magmedian[mask==0]
 
     # convert magnitude and phase into cartesian real and imaginary components
     real, imag = cv2.polarToCart(mag_notch, phase)
@@ -849,10 +859,10 @@ def subtract_postIMS_grid(img: np.ndarray) -> np.ndarray:
     complex_ishift = np.fft.ifftshift(complex)
 
     # do idft with normalization saving as real output
-    img_notch = cv2.idft(complex_ishift, flags=cv2.DFT_SCALE+cv2.DFT_REAL_OUTPUT).astype(np.uint8)
+    img_notch = cv2.idft(complex_ishift, flags=cv2.DFT_SCALE+cv2.DFT_REAL_OUTPUT)
 
     # equalize histogram
-    cv2.normalize(img_notch, img_notch, 0, 255, cv2.NORM_MINMAX)
+    img_notch = cv2.normalize(src=img_notch, dst=img_notch, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
     img_notch = cv2.createCLAHE().apply(img_notch)
 
     return img_notch
