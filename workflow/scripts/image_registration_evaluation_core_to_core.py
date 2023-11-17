@@ -499,17 +499,10 @@ json.dump(reg_measure_dic, open(snakemake.output["error_stats"],"w"))
 # ax[1].set_xlim([y_segs[0],y_segs[-1]])
 # plt.show()
 
-
-import matplotlib as mpl
-viridis = mpl.colormaps['viridis'].resampled(8)
-dists_real_norm = mpl.colors.Normalize()(dists_realfilt)
-dists_real_color = (viridis(dists_real_norm)*255).astype(int)[:,:3]
-
 arrowed_microscopy_image_1 = np.stack([microscopy_image_1, microscopy_image_1, microscopy_image_1], axis=2)
 for k in range(len(kpf1complfilt)):
-    # tc = (int(dists_real_color[k,2]),int(dists_real_color[k,1]),int(dists_real_color[k,0]))
-    tc = (int(dists_real_color[k,0]),int(dists_real_color[k,1]),int(dists_real_color[k,2]))
-    arrowed_microscopy_image_1 = cv2.arrowedLine(arrowed_microscopy_image_1, pt1=kpf1complfilt[k,:].astype(int), pt2=kpf2complfilt[k,:].astype(int), color=tc, thickness=int(5/(input_spacing_1/output_spacing)), tipLength=0.3)
+    arrowed_microscopy_image_1 = cv2.arrowedLine(arrowed_microscopy_image_1, pt1=kpf1complfilt[k,:].astype(int), pt2=kpf2complfilt[k,:].astype(int), color=(255,255,255), thickness=int(4/(input_spacing_1/output_spacing)), tipLength=0.3, line_type=cv2.LINE_AA)
+    arrowed_microscopy_image_1 = cv2.arrowedLine(arrowed_microscopy_image_1, pt1=kpf1complfilt[k,:].astype(int), pt2=kpf2complfilt[k,:].astype(int), color=(0,0,255), thickness=int(2/(input_spacing_1/output_spacing)), tipLength=0.3, line_type=cv2.LINE_AA)
 
 # plt.imshow(arrowed_microscopy_image_1[x_segs[0]:x_segs[-1],y_segs[0]:y_segs[-1]])
 # plt.show()
@@ -519,9 +512,8 @@ saveimage_tile(arrowed_microscopy_image_1[x_segs[0]:x_segs[-1],y_segs[0]:y_segs[
 
 arrowed_microscopy_image_2 = np.stack([microscopy_image_2, microscopy_image_2, microscopy_image_2], axis=2)
 for k in range(len(kpf2complfilt)):
-    # tc = (int(dists_real_color[k,2]),int(dists_real_color[k,1]),int(dists_real_color[k,0]))
-    tc = (int(dists_real_color[k,0]),int(dists_real_color[k,1]),int(dists_real_color[k,2]))
-    arrowed_microscopy_image_2 = cv2.arrowedLine(arrowed_microscopy_image_2, pt1=kpf2complfilt[k,:].astype(int), pt2=kpf1complfilt[k,:].astype(int), color=tc, thickness=int(5/(input_spacing_1/output_spacing)), tipLength=0.3)
+    arrowed_microscopy_image_2 = cv2.arrowedLine(arrowed_microscopy_image_2, pt1=kpf2complfilt[k,:].astype(int), pt2=kpf1complfilt[k,:].astype(int), color=(255,255,255), thickness=int(4/(input_spacing_1/output_spacing)), tipLength=0.3, line_type=cv2.LINE_AA)
+    arrowed_microscopy_image_2 = cv2.arrowedLine(arrowed_microscopy_image_2, pt1=kpf2complfilt[k,:].astype(int), pt2=kpf1complfilt[k,:].astype(int), color=(0,0,255), thickness=int(2/(input_spacing_1/output_spacing)), tipLength=0.3, line_type=cv2.LINE_AA)
 
 saveimage_tile(arrowed_microscopy_image_2[x_segs[0]:x_segs[-1],y_segs[0]:y_segs[-1]], microscopy_file_out_2 ,1)
 # px.imshow(arrowed_microscopy_image_1).show()

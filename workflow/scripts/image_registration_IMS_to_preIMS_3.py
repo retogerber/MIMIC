@@ -801,11 +801,11 @@ imzcoordstransformed = np.array([pycpd_transform_comb.TransformPoint(imzcoords_i
 
 tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_combined_registration_all.svg"
 plt.close()
-plt.scatter(imzcoordstransformed[:,1]*stepsize/resolution, imzcoordstransformed[:,0]*stepsize/resolution,color="red")
-plt.scatter(centsred[:,1]*stepsize/resolution, centsred[:,0]*stepsize/resolution,color="blue")
+plt.scatter(imzcoordstransformed[:,1]*stepsize/resolution, imzcoordstransformed[:,0]*stepsize/resolution,color="green",alpha=0.5)
+plt.scatter(centsred[:,1]*stepsize/resolution, centsred[:,0]*stepsize/resolution,color="blue",alpha=0.5)
 plt.title("matching points")
 fig = plt.gcf()
-fig.set_size_inches(20,20)
+fig.set_size_inches(30,30)
 fig.savefig(tmpfilename)
 # plt.show()
 

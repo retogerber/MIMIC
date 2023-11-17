@@ -144,6 +144,37 @@ def choose_imsml_coordsfile(wildcards):
             filename_out = f"results/{wildcards.project_name}/data/IMS/{filename}"
         return filename_out
 
+def choose_imsml_coordsfile(wildcards):
+        filename = get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
+        filename = str(filename).strip()
+        if filename == "":
+            filename_out = f"results/{wildcards.project_name}/data/IMS/postIMS_to_IMS_{wildcards.project_name}-{wildcards.sample}-IMSML-coords.h5"
+        else:
+            filename_out = f"results/{wildcards.project_name}/data/IMS/{filename}"
+        return filename_out
+
+def choose_IMS_to_postIMS_svg(wildcards):
+        sample_names = get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all = True)
+        filenames_out = list()
+        for sample in sample_names:
+            filename = get_column_entry_from_metadata_two_conditions(sample, wildcards.project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
+            filename = str(filename).strip()
+            if filename == "":
+                filenames_out.append(f"logs/register_IMS_to_postIMS_single_core_2/{wildcards.project_name}_{sample}_combined_registration_all.svg")
+        return filenames_out
+
+def choose_IMS_to_postIMS_png(wildcards):
+        sample_names = get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all = True)
+        filenames_out = list()
+        for sample in sample_names:
+            filename = get_column_entry_from_metadata_two_conditions(sample, wildcards.project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
+            filename = str(filename).strip()
+            if filename == "":
+                filenames_out.append(f"results/{wildcards.project_name}/data/registration_metric/report/{sample}_IMS_to_postIMS_reg_metrics_auto.png")
+        return filenames_out
+
+
+
 def choose_imsml_metafile(wildcards):
         filename = get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
         filename = str(filename).strip()

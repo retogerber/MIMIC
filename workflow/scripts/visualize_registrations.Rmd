@@ -1,0 +1,479 @@
+---
+title: "Visualize Filtering"
+author: ""
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    self_contained: FALSE 
+    code_folding: "hide"
+    toc: true
+    toc_float: false 
+    toc_collapsed: true
+toc_depth: 3
+number_sections: true
+theme: lumen
+editor_options:
+  chunk_output_type: inline
+---
+<style type="text/css">
+.main-container {
+  max-width: 1800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+
+```{r}
+basedir <- getwd()
+# basedir <- "."
+# tmp <- "results/{project_name}/data/registration_metric/report/{project_name}_registration_evaluation.html"
+# basedir <- Reduce(file.path, rep("..",length(strsplit(dirname(snakemake@output[["html"]]),"/")[[1]])))
+
+input_csv_files <- snakemake@input[["registration_metrics_combined"]]
+project_name <- basename(dirname(dirname(dirname(input_csv_files))))
+sample_names <- read.csv(input_csv_files[1])$sample
+
+IMS_to_postIMS_svg <- sapply(snakemake@input[["IMS_to_postIMS_svg"]], function(s) file.path(basedir,s))
+
+IMS_to_postIMS_png <- sapply(snakemake@input[["IMS_to_postIMS_png"]], function(s) file.path(basedir,s))
+
+preIMSmask_to_postIMSmask_png <- sapply(snakemake@input[["preIMSmask_to_postIMSmask_png"]], function(s) file.path(basedir,s))
+
+preIMCmask_to_preIMSmask_png <- sapply(snakemake@input[["preIMCmask_to_preIMSmask_png"]], function(s) file.path(basedir,s))
+
+postIMCmask_to_preIMCmask_png <- sapply(snakemake@input[["postIMCmask_to_preIMCmask_png"]], function(s) file.path(basedir,s))
+
+landmarks_postIMC_transformed_on_preIMC_png <- sapply(snakemake@input[["landmarks_postIMC_transformed_on_preIMC_png"]], function(s) file.path(basedir,s))
+landmarks_preIMC_png <- sapply(snakemake@input[["landmarks_preIMC_png"]], function(s) file.path(basedir,s))
+
+landmarks_preIMC_transformed_on_preIMS_png <- sapply(snakemake@input[["landmarks_preIMC_transformed_on_preIMS_png"]], function(s) file.path(basedir,s))
+landmarks_preIMS_png <- sapply(snakemake@input[["landmarks_preIMS_png"]], function(s) file.path(basedir,s))
+
+landmarks_preIMS_transformed_on_postIMS_png <- sapply(snakemake@input[["landmarks_preIMS_transformed_on_postIMS_png"]], function(s) file.path(basedir,s))
+landmarks_postIMS_png <- sapply(snakemake@input[["landmarks_postIMS_png"]], function(s) file.path(basedir,s))
+```
+
+
+```{r}
+# basedir <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow"
+# project_name <- "test_combined"
+# sample_names <- c("Cirrhosis-TMA-5_New_Detector_001", "Cirrhosis-TMA-5_New_Detector_002")
+# input_csv_files <- c("/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/registration_metric/test_combined_reg_metrics_combined.csv")
+```
+
+```{r}
+create_error_plot <- function(input_csv_files, vis_type){
+    colname_reg <- paste0(vis_type, "_")
+    
+    dfls <- lapply(input_csv_files, function(x) {
+        df <- read.csv(x)
+        df$project <- stringr::str_replace(basename(x),"_reg_metrics_combined.csv","")
+        df <- df[,grepl(colname_reg, colnames(df)) | colnames(df) %in% c("sample", "project")]
+    
+        colnames(df) <- stringr::str_replace(colnames(df), colname_reg, "")
+        colnames(df) <- stringr::str_replace(colnames(df),"quantile","Q" )
+        df
+    })
+    df <- Reduce(rbind, dfls)
+    
+    x_axis_var_names <- colnames(df)[grepl("error", colnames(df))]
+    create_buttons <- function(df, x_axis_var_names) {
+      lapply(
+        x_axis_var_names,
+        FUN = function(var_name, df) {
+          button <- list(
+            method = 'restyle',
+            args = list('x', list(df[, var_name])),
+            label = stringr::str_to_title(stringr::str_replace(var_name,"_"," "))
+          )
+        },
+        df
+      )
+    }
+    
+    global_x_range <- range(unlist(lapply(x_axis_var_names, function(x) df[[x]])))
+    global_x_range[1] <- 0 
+    global_x_range[2] <- global_x_range[2]+2
+    
+    if (vis_type == "IMS_to_postIMS") {
+      df$completeness <- df$n_points/df$n_points_total
+      y_axis_colname <- "completeness"
+      y_axis_name <- "Completeness"
+    } else {
+      y_axis_colname <- "n_points_total"
+      y_axis_name <- "Number of Landmarks"
+    }
+    
+    dfls <- split(df, df$project)
+    figls <- lapply(dfls, function(df){
+        plotly::plot_ly(
+            data = df,
+            x = ~mean_error,
+            y = dplyr::quo(!!dplyr::sym(y_axis_colname)),
+            text = ~sample,
+            # hoverinfo = "text",
+            hovertemplate = paste0('<b>%{text}</b><br>',y_axis_name,': %{y:.2f}<br>Error: %{x:.2f}'),
+            type = "scatter",
+            mode = "markers",
+            color = ~project,
+            colors = "Set1",
+            marker = list(size = 10)
+        ) |>
+             plotly::layout(
+                 title = paste0(stringr::str_replace_all(vis_type,"_"," "),":   Error vs ",y_axis_name),
+                 xaxis = list(domain = c(0.1, 1), range=global_x_range, title = ""),
+                 yaxis = list(title = y_axis_name),
+                 updatemenus = list(
+                     list(
+                         y = -0.05,
+                         x = 0.5,
+                         buttons = create_buttons(df, x_axis_var_names)
+                     )
+                 )
+                 )
+    })
+    fig <- plotly::subplot(figls, nrows = 1, shareX = TRUE, shareY = TRUE) |>
+        plotly::layout(margin = list(t=50, b=150, l=50, r=50))
+    fig
+}
+
+
+sitk_error_plot <- function(input_csv_files, vis_type="preIMS_to_postIMS"){
+    colname_reg <- paste0(vis_type, "_")
+    
+    dfls <- lapply(input_csv_files, function(x) {
+        df <- read.csv(x)
+        df$project <- stringr::str_replace(basename(x),"_reg_metrics_combined.csv","")
+        df <- df[,grepl(colname_reg, colnames(df)) | colnames(df) %in% c("sample", "project")]
+
+        colnames(df) <- stringr::str_replace(colnames(df), colname_reg, "")
+        colnames(df) <- stringr::str_replace(colnames(df),"quantile","Q" )
+        df
+    })
+    df <- Reduce(rbind, dfls)
+
+    # df$global_shift <- sqrt(colSums(rbind(df$global_x_shift**2, df$global_y_shift**2)))
+    df$global_shift <- df$mean_error
+    df$sitk_global_shift <- sqrt(colSums(rbind(df$sitk_global_x_shift**2, df$sitk_global_y_shift**2)))
+
+
+    global_range <- range(unlist(lapply(colnames(df)[grepl("_shift",colnames(df))], function(x) df[[x]])))
+    global_range[1] <- global_range[1]-1 
+    global_range[2] <- global_range[2]+1
+
+    d <- plotly::highlight_key(df, ~sample)
+    base <- plotly::plot_ly(
+        d, 
+        text = ~sample,
+        # hoverinfo = "text",
+        type = "scatter",
+        mode = "markers",
+        color = ~project,
+        colors = "Set1",
+        marker = list(size = 10),
+        showlegend = FALSE
+    )
+    fig <- plotly::subplot(
+      plotly::add_markers(base, x = ~global_x_shift, y = ~sitk_global_x_shift,
+        hovertemplate = paste0('<b>%{text}</b><br>X error Landmarks: %{y:.2f}<br>X error sitk: %{x:.2f}')) |>
+        plotly::layout(
+        xaxis = list(range=global_range, title = "X translation"),
+        yaxis = list(range=global_range, title = "X translation sitk")
+      ),
+      plotly::add_markers(base, x = ~global_y_shift, y = ~sitk_global_y_shift,
+        hovertemplate = paste0('<b>%{text}</b><br>Y error Landmarks: %{y:.2f}<br>Y error sitk: %{x:.2f}')) |>
+        plotly::layout(
+        xaxis = list(range=global_range, title = "Y translation"),
+        yaxis = list(range=global_range, title = "Y translation sitk")
+      ),
+      plotly::add_markers(base, x = ~global_shift, y = ~sitk_global_shift,
+        hovertemplate = paste0('<b>%{text}</b><br>Error Landmarks: %{y:.2f}<br>Error sitk: %{x:.2f}')) |>
+        plotly::layout(
+        xaxis = list(title = "translation"),
+        yaxis = list(title = "translation sitk")
+      )
+    ) |> 
+      plotly::add_annotations(
+        text = "X translation",
+        x = 0.15,
+        y = 1,
+        yref = "paper",
+        xref = "paper",
+        yanchor = "bottom",
+        showarrow = FALSE,
+        font = list(size = 15)
+      ) |> 
+      plotly::add_annotations(
+        text = "Y translation",
+        x = 0.5,
+        y = 1,
+        yref = "paper",
+        xref = "paper",
+        yanchor = "bottom",
+        showarrow = FALSE,
+        font = list(size = 15)
+      ) |> 
+      plotly::add_annotations(
+        text = "Error",
+        x = 0.85,
+        y = 1,
+        yref = "paper",
+        xref = "paper",
+        yanchor = "bottom",
+        showarrow = FALSE,
+        font = list(size = 15)
+      ) |>
+        plotly::layout(
+        xaxis = list(title = "Landmarks"),
+        yaxis = list(title = "sitk"),
+        margin = list(t=50, b=150, l=50, r=50)
+      ) |>
+      plotly::highlight(on = "plotly_hover", off = "plotly_doubleclick")
+    fig
+}
+```
+
+
+```{r}
+dice_distance_plot <- function(input_csv_files, vis_type){
+    df <- read.csv(input_csv_files)
+    vis_type_ls <- strsplit(vis_type,"_to_")[[1]]
+
+
+    library(ggplot2)
+    df$dice_score <- df[[colnames(df)[grepl(sprintf("dice_score_%s_%s",vis_type_ls[1],vis_type_ls[2]),colnames(df))]]]
+    df$centroid_distances <- df[[colnames(df)[grepl(sprintf("euclidean_distance_centroids_%s",vis_type),colnames(df))]]]
+
+    ggplot(df, aes(dice_score, centroid_distances)) +
+     geom_point() +
+     theme_minimal()
+}
+```
+
+
+
+# IMS to postIMS
+
+## Ablation marks & registered IMS pixels {.tabset}
+
+| Color | Description  |
+|-------|--------------|
+| Blue  | Ablation marks |
+| Green | IMS pixel    |
+
+```{r, results='asis', fig.width=8, fig.height=8}
+cat("\n\n")
+for (i in seq_along(IMS_to_postIMS_svg)) {
+    filename <- IMS_to_postIMS_svg[i]
+    if(file.exists(filename)){
+        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
+        cat(sprintf("![](%s)",filename))
+    }
+}
+cat("\n\n")
+```
+
+
+## Distances ablation marks to IMS pixels
+
+```{r, fig.width=8, fig.height=8}
+create_error_plot(input_csv_files, "IMS_to_postIMS")
+```
+
+
+# preIMS to postIMS
+
+## preIMS image registered to postIMS images
+Global images or images per core
+
+## Tissue masks {.tabset}
+
+| Color | Description |
+|-------|-------------|
+| Black | Neither     |
+| White | Both        |
+| Gray  | One of the two |
+
+
+```{r, results='asis', fig.width=8, fig.height=8}
+cat("\n\n")
+for (i in seq_along(preIMSmask_to_postIMSmask_png)) {
+    filename <- preIMSmask_to_postIMSmask_png[i]
+    if(file.exists(filename)){
+        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
+        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"1000\"/>",filename))
+        # cat(sprintf("![](%s)",filename))
+    }
+}
+cat("\n\n")
+```
+
+
+## Distances between centroids of masks
+
+```{r, fig.width=8, fig.height=8}
+plotly::ggplotly(dice_distance_plot(input_csv_files, "preIMS_to_postIMS"))
+```
+
+## Images of Landmarks {.tabset}
+
+```{r, results='asis', fig.width=8, fig.height=8}
+cat("\n\n")
+for (i in seq_along(landmarks_preIMS_transformed_on_postIMS_png)) {
+    filename1 <- landmarks_preIMS_transformed_on_postIMS_png[i]
+    filename2 <- landmarks_postIMS_png[i]
+    if(file.exists(filename1) & file.exists(filename2)){
+        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
+        cat("<p float=\"left\">")
+        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"50%%\"/>",filename1))
+        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"50%%\"/>",filename2))
+        cat("</p>")
+    }
+}
+cat("\n\n")
+```
+
+
+## Distances between Landmarks
+
+```{r, fig.width=8, fig.height=8}
+create_error_plot(input_csv_files, "preIMS_to_postIMS")
+```
+
+
+## Translations based on grid subtracted postIMS to preIMS registration
+
+```{r, fig.width=10, fig.height=5}
+fig <- sitk_error_plot(input_csv_files, "preIMS_to_postIMS")
+fig
+```
+
+
+# preIMC to preIMS
+
+## preIMC images registered to preIMS images
+Global or per region
+
+## Tissue masks {.tabset}
+
+| Color | Description |
+|-------|-------------|
+| Black | Neither     |
+| White | Both        |
+| Gray  | One of the two |
+
+
+```{r, results='asis', fig.width=8, fig.height=8}
+cat("\n\n")
+for (i in seq_along(preIMCmask_to_preIMSmask_png)) {
+    filename <- preIMCmask_to_preIMSmask_png[i]
+    if(file.exists(filename)){
+        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
+        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"1000\"/>",filename))
+        # cat(sprintf("![](%s)",filename))
+    }
+}
+cat("\n\n")
+```
+
+
+## Distances between centroids of masks
+
+```{r, fig.width=8, fig.height=8}
+dice_distance_plot(input_csv_files, "preIMC_to_preIMS")
+```
+
+
+## Images of Landmarks {.tabset}
+
+```{r, results='asis', fig.width=8, fig.height=8}
+cat("\n\n")
+for (i in seq_along(landmarks_preIMC_transformed_on_preIMS_png)) {
+    filename1 <- landmarks_preIMC_transformed_on_preIMS_png[i]
+    filename2 <- landmarks_preIMS_png[i]
+    if(file.exists(filename1) & file.exists(filename2)){
+        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
+        cat("<p float=\"left\">")
+        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"50%%\"/>",filename1))
+        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"50%%\"/>",filename2))
+        cat("</p>")
+    }
+}
+cat("\n\n")
+```
+
+
+## Distances between Landmarks
+
+```{r, fig.width=8, fig.height=8}
+create_error_plot(input_csv_files, "preIMC_to_preIMS")
+```
+
+
+## Distances between MSER's
+
+
+
+
+# postIMC to preIMC
+
+## postIMC images registered to preIMC images
+Global
+
+## Tissue masks {.tabset}
+
+| Color | Description |
+|-------|-------------|
+| Black | Neither     |
+| White | Both        |
+| Gray  | One of the two |
+
+
+```{r, results='asis', fig.width=8, fig.height=8}
+cat("\n\n")
+for (i in seq_along(postIMCmask_to_preIMCmask_png)) {
+    filename <- postIMCmask_to_preIMCmask_png[i]
+    if(file.exists(filename)){
+        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
+        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"1000\"/>",filename))
+        # cat(sprintf("![](%s)",filename))
+    }
+}
+cat("\n\n")
+```
+
+
+## Distances between centroids of masks
+
+```{r, fig.width=8, fig.height=8}
+dice_distance_plot(input_csv_files, "postIMC_to_preIMC")
+```
+
+## Images of Landmarks {.tabset}
+
+```{r, results='asis', fig.width=8, fig.height=8}
+cat("\n\n")
+for (i in seq_along(landmarks_postIMC_transformed_on_preIMC_png)) {
+    filename1 <- landmarks_postIMC_transformed_on_preIMC_png[i]
+    filename2 <- landmarks_preIMC_png[i]
+    if(file.exists(filename1) & file.exists(filename2)){
+        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
+        cat("<p float=\"left\">")
+        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"50%%\"/>",filename1))
+        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"50%%\"/>",filename2))
+        cat("</p>")
+    }
+}
+cat("\n\n")
+```
+
+
+
+## Distances between Landmarks
+
+```{r, fig.width=8, fig.height=8}
+create_error_plot(input_csv_files, "postIMC_to_preIMC")
+```
+
+
