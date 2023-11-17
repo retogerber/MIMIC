@@ -176,6 +176,7 @@ if snakemake.params["remove_postIMS_grid"]:
     img = microscopy_image_2[imcbbox_outer[0]:imcbbox_outer[2],imcbbox_outer[1]:imcbbox_outer[3]].copy()
     mask_2_on_2 = cv2.resize(mask_2, (microscopy_image_2.shape[1], microscopy_image_2.shape[0]), interpolation=cv2.INTER_NEAREST)
     cv2.morphologyEx(src=mask_2_on_2, dst=mask_2_on_2, op = cv2.MORPH_DILATE, kernel = skimage.morphology.square(20))
+    mask_2_on_2 = cv2.resize(mask_2_on_2, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST)
     img[mask_2_on_2==0]=0
     out = subtract_postIMS_grid(img)
     out[mask_2_on_2==0]=0

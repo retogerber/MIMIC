@@ -136,6 +136,7 @@ logging.info("Find IMC to postIMS overlap")
 picents_reduced = list()
 postIMSregions = list()
 postIMS_pre_bbox = list()
+postIMS_pre_areas = list()
 for bb in imcbboxls:
     tmpuqs = np.unique([postIMSregin[bb[0],bb[1]], postIMSregin[bb[0],bb[3]], postIMSregin[bb[2],bb[1]], postIMSregin[bb[2],bb[3]]])
     tmpuqs = tmpuqs[tmpuqs>0]
@@ -144,12 +145,13 @@ for bb in imcbboxls:
     r = tmpuqs-1
     postIMS_pre_bbox.append([xs[r][0],ys[r][0],xs[r][0]+widths[r][0], ys[r][0]+heights[r][0]])
     picents_reduced.append(picents[r,:])
+    postIMS_pre_areas.append(pistats[r,4][0])
 picents = np.vstack(picents_reduced)
 del tmpuqs
 
 logging.info(f"postIMSregions: {postIMSregions}")
 logging.info(f"postIMS_pre_bbox: {postIMS_pre_bbox}")
-postIMS_pre_areas = pistats[:,4]
+logging.info(f"postIMS_pre_areas: {postIMS_pre_areas}")
 
 # filter
 tmpbool = np.array([p in np.array(postIMSregions) for p in postIMSregions])
