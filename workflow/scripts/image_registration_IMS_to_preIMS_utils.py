@@ -897,7 +897,10 @@ def extract_mask(file: str, bb: list, session = None, rescale: int = 1, is_postI
         w = cv2.blur(w, (9,9))
     w = np.stack([w, w, w], axis=2)
     wr = rembg.remove(w, only_mask=True, session=session)
-    th = skimage.filters.threshold_minimum(wr, nbins=256)
+    try:
+        th = skimage.filters.threshold_minimum(wr, nbins=256)
+    except:
+        th = skimage.filters.threshold_otsu(wr, nbins=256)
     masks = wr>th
     masks = skimage.morphology.remove_small_holes(masks,100**2*np.pi)
     masks = cv2.morphologyEx(masks.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((5,5),np.uint8)).astype(bool)
