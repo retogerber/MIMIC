@@ -1787,6 +1787,15 @@ use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downs
         output_image="results/{project_name}/data/registration_metric/report/{sample}_postIMS_registration_comparison.png",
 
 
+rule symlink_IMS_to_postIMS_svg:
+    input:
+        input_image="logs/register_IMS_to_postIMS_single_core_2/{project_name}_{sample}_combined_registration_all.svg",
+    output:
+        output_image="results/{project_name}/data/registration_metric/report/{project_name}_{sample}_IMS_to_postIMS_combined_registration_all.svg",
+    log:
+        stdout="logs/symlink_IMS_to_postIMS_svg/{project_name}_{sample}.stdout",
+    shell:
+        "ln -sr -T {input.input_image} {output.output_image} > {log.stdout} 2> {log.stdout}"
 
 
 

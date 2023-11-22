@@ -56,10 +56,10 @@ landmarks_postIMS_png <- sapply(snakemake@input[["landmarks_postIMS_png"]], func
 
 
 ```{r}
-# basedir <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow"
+basedir <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow"
 # project_name <- "test_combined"
 # sample_names <- c("Cirrhosis-TMA-5_New_Detector_001", "Cirrhosis-TMA-5_New_Detector_002")
-# input_csv_files <- c("/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/registration_metric/test_combined_reg_metrics_combined.csv")
+input_csv_files <- c("/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/registration_metric/test_combined_reg_metrics_combined.csv")
 ```
 
 ```{r}
@@ -240,14 +240,22 @@ dice_distance_plot <- function(input_csv_files, vis_type){
     df <- read.csv(input_csv_files)
     vis_type_ls <- strsplit(vis_type,"_to_")[[1]]
 
-
     library(ggplot2)
     df$dice_score <- df[[colnames(df)[grepl(sprintf("dice_score_%s_%s",vis_type_ls[1],vis_type_ls[2]),colnames(df))]]]
     df$centroid_distances <- df[[colnames(df)[grepl(sprintf("euclidean_distance_centroids_%s",vis_type),colnames(df))]]]
+    df$text <- sprintf('<b>%s</b><br>Dice score: %.2f<br>Error centroids: %.2f',df$sample,df$dice_score, df$centroid_distances)
 
-    ggplot(df, aes(dice_score, centroid_distances)) +
+    p <- ggplot(
+      df, 
+      aes(
+        dice_score, 
+        centroid_distances,
+        text = text
+        )
+      )  +
      geom_point() +
      theme_minimal()
+     plotly::ggplotly(p,tooltip=c("text"))
 }
 ```
 
@@ -256,6 +264,9 @@ dice_distance_plot <- function(input_csv_files, vis_type){
 # IMS to postIMS
 
 ## Ablation marks & registered IMS pixels {.tabset}
+
+The images shown below are the ablation marks (from the postIMS microscopy image) and the IMS pixels (from the IMS image) after registration. 
+Color legend for the below images:
 
 | Color | Description  |
 |-------|--------------|
@@ -277,6 +288,8 @@ cat("\n\n")
 
 ## Distances ablation marks to IMS pixels
 
+The plot below shows the distances (mean, median, etc.) on the x-axis versus the completeness (number of detected ablation marks divided by the total number of IMS pixels) on the y-axis.
+
 ```{r, fig.width=8, fig.height=8}
 create_error_plot(input_csv_files, "IMS_to_postIMS")
 ```
@@ -289,11 +302,15 @@ Global images or images per core
 
 ## Tissue masks {.tabset}
 
+Shown below are the masks of the tissue masks, overlayed on top of each other. Extraction of the tissue masks is not always exact (especially for the postIMS images), so the results might be unreliable.
+Color legend for the below images:
+
 | Color | Description |
 |-------|-------------|
 | Black | Neither     |
+| Dark gray  | preIMS only |
+| Light gray  | postIMS only |
 | White | Both        |
-| Gray  | One of the two |
 
 
 ```{r, results='asis', fig.width=8, fig.height=8}
@@ -311,6 +328,8 @@ cat("\n\n")
 
 
 ## Distances between centroids of masks
+
+The distances between the centroids of the two tissue masks from the above images are shown below.
 
 ```{r, fig.width=8, fig.height=8}
 plotly::ggplotly(dice_distance_plot(input_csv_files, "preIMS_to_postIMS"))
@@ -337,12 +356,17 @@ cat("\n\n")
 
 ## Distances between Landmarks
 
+The plot below shows the distances (mean, median, etc.) on the x-axis versus the completeness (number of detected ablation marks divided by the total number of IMS pixels) on the y-axis.
+
 ```{r, fig.width=8, fig.height=8}
 create_error_plot(input_csv_files, "preIMS_to_postIMS")
 ```
 
 
 ## Translations based on grid subtracted postIMS to preIMS registration
+
+The plot below shows the translations (x and y) based on the grid subtracted postIMS to preIMS registration (using image intensities). The leftmost plot shows the translation in the X direction with the x-axis representing the infered translation from the landmarks and the y-axis the infered translation from the grid subtracted registration. The middle plot shows the same but in the Y direction. The rightmost plot shows the global translation (sqrt(x^2+y^2)) with the x-axis representing the infered translation from the landmarks and the y-axis the infered translation from the grid subtracted registration.
+
 
 ```{r, fig.width=10, fig.height=5}
 fig <- sitk_error_plot(input_csv_files, "preIMS_to_postIMS")
@@ -357,11 +381,15 @@ Global or per region
 
 ## Tissue masks {.tabset}
 
+Shown below are the masks of the tissue masks, overlayed on top of each other. Extraction of the tissue masks is not always exact, so the results might be unreliable.
+Color legend for the below images:
+
 | Color | Description |
 |-------|-------------|
 | Black | Neither     |
+| Dark gray  | preIMC only |
+| Light gray  | preIMS only |
 | White | Both        |
-| Gray  | One of the two |
 
 
 ```{r, results='asis', fig.width=8, fig.height=8}
@@ -379,6 +407,8 @@ cat("\n\n")
 
 
 ## Distances between centroids of masks
+
+The distances between the centroids of the two tissue masks from the above images are shown below.
 
 ```{r, fig.width=8, fig.height=8}
 dice_distance_plot(input_csv_files, "preIMC_to_preIMS")
@@ -406,6 +436,8 @@ cat("\n\n")
 
 ## Distances between Landmarks
 
+The plot below shows the distances (mean, median, etc.) on the x-axis versus the completeness (number of detected ablation marks divided by the total number of IMS pixels) on the y-axis.
+
 ```{r, fig.width=8, fig.height=8}
 create_error_plot(input_csv_files, "preIMC_to_preIMS")
 ```
@@ -423,11 +455,15 @@ Global
 
 ## Tissue masks {.tabset}
 
+Shown below are the masks of the tissue masks, overlayed on top of each other. Extraction of the tissue masks is not always exact, so the results might be unreliable.
+Color legend for the below images:
+
 | Color | Description |
 |-------|-------------|
 | Black | Neither     |
+| Dark gray  | postIMC only |
+| Light gray  | preIMC only |
 | White | Both        |
-| Gray  | One of the two |
 
 
 ```{r, results='asis', fig.width=8, fig.height=8}
@@ -445,6 +481,8 @@ cat("\n\n")
 
 
 ## Distances between centroids of masks
+
+The distances between the centroids of the two tissue masks from the above images are shown below.
 
 ```{r, fig.width=8, fig.height=8}
 dice_distance_plot(input_csv_files, "postIMC_to_preIMC")

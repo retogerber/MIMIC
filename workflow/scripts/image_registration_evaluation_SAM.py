@@ -30,7 +30,7 @@ preIMC_file = snakemake.input["preIMC"]
 preIMC_on_preIMS_file = snakemake.input["preIMC_on_preIMS"]
 # preIMS_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre_preIMS.ome.tiff"
 preIMS_file = snakemake.input["preIMS"]
-# preIMS_on_postIMS_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/Cirrhosis-TMA-5_New_Detector_001_transformed_on_postIMS.ome.tiff"
+# preIMS_on_postIMS_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/Cirrhosis-TMA-5_New_Detector_002_transformed_on_postIMS.ome.tiff"
 preIMS_on_postIMS_file = snakemake.input["preIMS_on_postIMS"]
 # postIMS_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMS/test_split_pre_postIMS.ome.tiff"
 postIMS_file = snakemake.input["postIMS"]
@@ -44,11 +44,11 @@ postIMS_file = snakemake.input["postIMS"]
 # preIMS_file = snakemake.input["preIMS_downscaled"]
 # # resize factor to speedup computations
 # rescale = 0.22537
-# input_spacing = 1
+# input_spacing_1 = 1
 input_spacing_1 = snakemake.params["input_spacing_1"]
-# input_spacing = 0.22537
+# input_spacing_2 = 0.22537
 input_spacing_2 = snakemake.params["input_spacing_2"]
-# input_spacing = 1
+# output_spacing = 1
 output_spacing = snakemake.params["output_spacing"]
 
 
@@ -135,7 +135,6 @@ logging.info(f"\tMask crop: {(s1,s2)}")
 preIMS_on_postIMSmasks = preIMS_on_postIMSmasks[:,:s1,:s2]
 postIMSmasks = postIMSmasks[:,:s1,:s2]
 
-
 logging.info("score calculation")
 preIMS_on_postIMS_to_postIMS, postIMS_to_preIMS_on_postIMS, dice_score_preIMS_on_postIMS_to_postIMS = get_max_dice_score(preIMS_on_postIMSmasks, postIMSmasks)
 
@@ -172,13 +171,13 @@ df.to_csv(output_df, index=False)
 
 logging.info("Create and save images")
 
-tmpimg = postIMC_on_preIMCmasks[0,:,:].astype(np.uint8)*127+preIMCmasks[0,:,:].astype(np.uint8)*127
+tmpimg = postIMC_on_preIMCmasks[0,:,:].astype(np.uint8)*85+preIMCmasks[0,:,:].astype(np.uint8)*170
 tifffile.imwrite(snakemake.output['postIMCmask_preIMCmask'],tmpimg)
 
-tmpimg = preIMC_on_preIMSmasks[0,:,:].astype(np.uint8)*127+preIMSmasks[0,:,:].astype(np.uint8)*127
+tmpimg = preIMC_on_preIMSmasks[0,:,:].astype(np.uint8)*85+preIMSmasks[0,:,:].astype(np.uint8)*170
 tifffile.imwrite(snakemake.output['preIMCmask_preIMSmask'],tmpimg)
 
-tmpimg = preIMS_on_postIMSmasks[0,:,:].astype(np.uint8)*127+postIMSmasks[0,:,:].astype(np.uint8)*127
+tmpimg = preIMS_on_postIMSmasks[0,:,:].astype(np.uint8)*85+postIMSmasks[0,:,:].astype(np.uint8)*170
 tifffile.imwrite(snakemake.output['preIMSmask_postIMSmask'],tmpimg)
 
 logging.info("Finished")

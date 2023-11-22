@@ -894,10 +894,11 @@ def extract_mask(file: str, bb: list, session = None, rescale: int = 1, is_postI
     w = convert_and_scale_image(w, rescale)
     if is_postIMS:
         w = subtract_postIMS_grid(w)
-        w = cv2.blur(w, (5,5))
+        w = cv2.blur(w, (9,9))
     w = np.stack([w, w, w], axis=2)
     wr = rembg.remove(w, only_mask=True, session=session)
-    masks = wr>127
+    th = skimage.filters.threshold_minimum(wr, nbins=256)
+    masks = wr>th
     masks = skimage.morphology.remove_small_holes(masks,100**2*np.pi)
     masks = cv2.morphologyEx(masks.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((5,5),np.uint8)).astype(bool)
     masks = np.stack([masks])

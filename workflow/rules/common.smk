@@ -160,7 +160,7 @@ def choose_IMS_to_postIMS_svg(wildcards):
             filename = get_column_entry_from_metadata_two_conditions(sample, wildcards.project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
             filename = str(filename).strip()
             if filename == "":
-                filenames_out.append(f"logs/register_IMS_to_postIMS_single_core_2/{wildcards.project_name}_{sample}_combined_registration_all.svg")
+                filenames_out.append(f"results/{wildcards.project_name}/data/registration_metric/report/{wildcards.project_name}_{sample}_IMS_to_postIMS_combined_registration_all.svg")
         return filenames_out
 
 def choose_IMS_to_postIMS_png(wildcards):
