@@ -24,7 +24,7 @@ sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 logging.info("Start")
 
 logging.info("Setup segment anything")
-# CHECKPOINT_PATH = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/Misc/sam_vit_h_4b8939.pth"
+CHECKPOINT_PATH = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/Misc/sam_vit_h_4b8939.pth"
 CHECKPOINT_PATH = snakemake.input["sam_weights"]
 DEVICE = 'cpu'
 MODEL_TYPE = "vit_h"
@@ -35,8 +35,8 @@ MODEL_TYPE = "vit_h"
 # microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA-2_020_transformed_on_postIMS.ome.tiff"
 # microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA-2_004_transformed_on_postIMS.ome.tiff"
 # microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMC/NASH_HCC_TMA-2_022_transformed_on_preIMS.ome.tiff"
-microscopy_file_1 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/Cirrhosis-TMA-5_New_Detector_002_transformed_on_preIMS.ome.tiff"
-# microscopy_file_1 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/Cirrhosis-TMA-5_New_Detector_002_transformed_on_preIMC.ome.tiff"
+microscopy_file_1 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/Cirrhosis-TMA-5_New_Detector_001_transformed_on_preIMS.ome.tiff"
+# microscopy_file_1 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/Cirrhosis-TMA-5_New_Detector_001_transformed_on_preIMC.ome.tiff"
 # microscopy_file_1 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/Cirrhosis-TMA-5_New_Detector_002_transformed_on_preIMS.ome.tiff"
 microscopy_file_1 = snakemake.input['microscopy_image_1']
 
@@ -51,7 +51,8 @@ microscopy_file_2 = snakemake.input['microscopy_image_2']
 # IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_C9.geojson"
 # IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_A2.geojson"
 # IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_preIMS_D2.geojson"
-IMC_location = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_preIMS_B1.geojson"
+IMC_location = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_preIMS_A1.geojson"
+# IMC_location = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_preIMC_A1.geojson"
 IMC_location=snakemake.input["IMC_location"]
 
 if isinstance(IMC_location, list):
@@ -105,13 +106,29 @@ xmin=np.min(boundary_points[:,1])
 xmax=np.max(boundary_points[:,1])
 ymin=np.min(boundary_points[:,0])
 ymax=np.max(boundary_points[:,0])
+# pixel_expansion = 1001
+pixel_expansion = 501 
 
 s1f = input_spacing_1/input_spacing_IMC_location
-bb1 = [int(xmin/s1f-201/input_spacing_1),int(ymin/s1f-201/input_spacing_1),int(xmax/s1f+201/input_spacing_1),int(ymax/s1f+201/input_spacing_1)]
+bb1 = [int(xmin/s1f-pixel_expansion/input_spacing_1),int(ymin/s1f-pixel_expansion/input_spacing_1),int(xmax/s1f+pixel_expansion/input_spacing_1),int(ymax/s1f+pixel_expansion/input_spacing_1)]
+imxmax, imymax, _ = get_image_shape(microscopy_file_1)
+imxmax=int(imxmax/input_spacing_1)
+imymax=int(imymax/input_spacing_1)
+bb1[0] = bb1[0] if bb1[0]>=0 else 0
+bb1[1] = bb1[1] if bb1[1]>=0 else 0
+bb1[2] = bb1[2] if bb1[2]<=imxmax else imxmax
+bb1[3] = bb1[3] if bb1[3]<=imymax else imymax
 logging.info(f"bounding box whole image 1: {bb1}")
 
 s2f = input_spacing_2/input_spacing_IMC_location
-bb2 = [int(xmin/s2f-201/input_spacing_2),int(ymin/s2f-201/input_spacing_2),int(xmax/s2f+201/input_spacing_2),int(ymax/s2f+201/input_spacing_2)]
+bb2 = [int(xmin/s2f-pixel_expansion/input_spacing_2),int(ymin/s2f-pixel_expansion/input_spacing_2),int(xmax/s2f+pixel_expansion/input_spacing_2),int(ymax/s2f+pixel_expansion/input_spacing_2)]
+imxmax, imymax, _ = get_image_shape(microscopy_file_2)
+imxmax=int(imxmax/input_spacing_1)
+imymax=int(imymax/input_spacing_1)
+bb2[0] = bb2[0] if bb2[0]>=0 else 0
+bb2[1] = bb2[1] if bb2[1]>=0 else 0
+bb2[2] = bb2[2] if bb2[2]<=imxmax else imxmax
+bb2[3] = bb2[3] if bb2[3]<=imymax else imymax
 logging.info(f"bounding box whole image 2: {bb2}")
 
 m2full_shape = get_image_shape(microscopy_file_1)
@@ -181,12 +198,71 @@ if snakemake.params["remove_postIMS_grid"]:
     out[mask_2_on_2==0]=0
     microscopy_image_2[imcbbox_outer[0]:imcbbox_outer[2],imcbbox_outer[1]:imcbbox_outer[3]] = out 
 
+def get_regions(img, min_area=96**2,max_area=1024**2,delta=2):
+    regions,_ = cv2.MSER_create(min_area=min_area,max_area=max_area,delta=delta).detectRegions(img)
+
+    regionsnew = []
+    bboxesnew = []
+    for k in range(len(regions)):
+        timg = cv2.drawContours(
+            np.zeros(img.shape,dtype=np.uint8), 
+            [regions[k]], 
+            -1, 
+            255)
+        timg = cv2.morphologyEx(timg, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (19, 19)))
+        ct = cv2.findContours(timg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0][0].reshape(-1,2)
+        bboxesnew.append(cv2.boundingRect(ct))
+        regionsnew.append(ct)
+    return regionsnew, bboxesnew
+
+
+def get_moments(regions):
+    moments = np.zeros((len(regions),10))
+    for k in range(len(regions)):
+        ms = cv2.moments(regions[k])
+        # area
+        # ms['m00']
+        # 'mu..' are the central moments
+        if ms['m00']>0:
+            # moments1[k,:]=np.array([ms['m00'], ms['m01']/ms['m00'], ms['m10']/ms['m00'], ms['mu20'], ms['mu11'], ms['mu02'], ms['mu30'], ms['mu21'], ms['mu12'], ms['mu03']])
+            moments[k,:]=np.array([ms['m00'], ms['m10']/ms['m00'],ms['m01']/ms['m00'],  ms['nu20'], ms['nu11'], ms['nu02'], ms['nu30'], ms['nu21'], ms['nu12'], ms['nu03']])      
+    return moments
+
+
+def get_descriptors(regions, bboxes, maxdim, descriptor, px_exand=3):
+    # coords = np.zeros((len(regions),2))
+    moments = np.zeros((len(regions),10))
+    kp = list()
+    for k in range(len(regions)):
+        timg = cv2.drawContours(
+            np.zeros((bboxes[k][3]+px_exand*2,bboxes[k][2]+px_exand*2),dtype=np.uint8), 
+            [regions[k] - regions[k].min(axis=0)+px_exand], 
+            -1, 
+            1,
+            thickness=-1)
+        M=get_moments([timg])
+        # coords[k,1] = bboxes[k][0]+M[0,2]-px_exand
+        M[0,2] = bboxes[k][1]+M[0,2]-px_exand
+        # coords[k,0] = bboxes[k][1]+M[0,1]-px_exand
+        M[0,1] = bboxes[k][0]+M[0,1]-px_exand
+        moments[k,:] = M.flatten()
+        sc = maxdim/(max([bboxes[k][2],bboxes[k][3]])+px_exand*2)
+        timg = cv2.resize(timg, (int(timg.shape[1]*sc),int(timg.shape[0]*sc)), interpolation=cv2.INTER_NEAREST)
+        ttimg=np.zeros((maxdim,maxdim),dtype=np.uint8)
+        offset = (np.array(ttimg.shape)-np.array(timg.shape))//2
+        ttimg[offset[0]:offset[0]+timg.shape[0],offset[1]:offset[1]+timg.shape[1]] = timg
+        kp.append(descriptor.compute(timg, [cv2.KeyPoint(x=px_exand+offset[0]+bboxes[k][2]/2,y=px_exand+offset[1]+bboxes[k][3]/2,size=1)]))
+
+    return kp, moments
+
 logging.info("Setup split into segments")
-x_segs = np.arange(imcbbox_outer[0],imcbbox_outer[2],(imcbbox_outer[2]-imcbbox_outer[0])/8).astype(int)
+x_segs = np.arange(imcbbox_outer[0],imcbbox_outer[2],(imcbbox_outer[2]-imcbbox_outer[0])/1).astype(int)
 x_segs = np.append(x_segs,imcbbox_outer[2])
-y_segs = np.arange(imcbbox_outer[1],imcbbox_outer[3],(imcbbox_outer[3]-imcbbox_outer[1])/8).astype(int)
+y_segs = np.arange(imcbbox_outer[1],imcbbox_outer[3],(imcbbox_outer[3]-imcbbox_outer[1])/1).astype(int)
 y_segs = np.append(y_segs,imcbbox_outer[3])
 
+
+ 
 logging.info("Loop over segments")
 dists_real = np.zeros(0)
 dists = np.zeros(0)
@@ -197,59 +273,49 @@ kpf2compl = np.zeros((0,2))
 ij_array = np.zeros((0,2))
 matdic = {}
 homography_mask = np.zeros(0)
-n_shift = 3
+regions1_all = []
+regions2_all = []
+areas1_all = np.zeros((0))
+areas2_all = np.zeros((0))
+n_shift = 1
+# n_shift = 3
 logging.info("segment | n_found | n_used | dx | dy")
-# for j in range((len(x_segs)-n_shift)):
-    # for i in range((len(x_segs)-n_shift)):
+for j in range((len(x_segs)-n_shift)):
+    for i in range((len(x_segs)-n_shift)):
         cv2.setRNGSeed(2391)
+        
+        # descriptor = cv2.SIFT_create(nOctaveLayers=1, contrastThreshold=0.04, edgeThreshold=10, sigma=1.6)
+        descriptor = cv2.BRISK_create(octaves=1)
+        maxdim=128
+
+
         # extract keypoints and descriptors
         img1 = microscopy_image_1[x_segs[i]:x_segs[i+n_shift],y_segs[j]:y_segs[j+n_shift]]
-        regions1,bboxes1 = cv2.MSER_create(min_area=100).detectRegions(img1)
-        sift = cv2.SIFT_create()
-        brisk = cv2.BRISK_create()
-        kpls = list()
-        maxdim=64
-        for k in range(len(regions1)):
-            timg = cv2.drawContours(
-                np.zeros((bboxes1[k][3]+2,bboxes1[k][2]+2),dtype=np.uint8), 
-                [regions1[k] - regions1[k].min(axis=0)+1], 
-                -1, 
-                255)
-            sc = maxdim/(max([bboxes1[k][2],bboxes1[k][3]])+2)
-            timg = cv2.resize(timg, (int(timg.shape[1]*sc),int(timg.shape[0]*sc)), interpolation=cv2.INTER_NEAREST)
+        img1 = cv2.bitwise_not(img1)
+        # img1 = cv2.medianBlur(img1, 3)
+        regions1, bboxes1 = get_regions(img1)
 
-            # kpls.append(sift.compute(timg, [cv2.KeyPoint(x=10+bboxes1[k][2]/2,y=10+bboxes1[k][3]/2,size=1)]))
-            kpls.append(brisk.compute(timg, [cv2.KeyPoint(x=10+bboxes1[k][2]/2,y=10+bboxes1[k][3]/2,size=1)]))
-
-
-        # hulls = [cv2.convexHull(p.reshape(-1, 1, 2)) for p in regions]
-        # vis = img1.copy()
-        # cv2.polylines(vis, hulls, 1, (255, 0, 255), 1)
-        # plt.figure(figsize=(10,10))
-        # plt.imshow(vis);
-
-        moments1 = np.zeros((len(regions1),10))
-        for k in range(len(regions1)):
-            ms = cv2.moments(regions1[k])
-            # area
-            # ms['m00']
-            # 'mu..' are the central moments
-            if ms['m00']>0:
-                # moments1[k,:]=np.array([ms['m00'], ms['m01']/ms['m00'], ms['m10']/ms['m00'], ms['mu20'], ms['mu11'], ms['mu02'], ms['mu30'], ms['mu21'], ms['mu12'], ms['mu03']])
-                moments1[k,:]=np.array([ms['m00'], ms['m01']/ms['m00'], ms['m10']/ms['m00'], ms['nu20'], ms['nu11'], ms['nu02'], ms['nu30'], ms['nu21'], ms['nu12'], ms['nu03']])
+        kp1,moments1 = get_descriptors(regions1, bboxes1, maxdim, descriptor, px_exand=3)
+        areas1 = moments1[:,0]
+        notempty1 = np.array([len(m[0])>0 for m in kp1])
+        des1 = np.float32([ m[1][0] for l,m in enumerate(kp1) if notempty1[l]])
+        moments1 = moments1[notempty1,:]
+        areas1=np.array(areas1)[notempty1]
+        regions1 = [ regions1[l] for l in range(len(regions1)) if notempty1[l]]
 
         img2 = microscopy_image_2[x_segs[i]:x_segs[i+n_shift],y_segs[j]:y_segs[j+n_shift]]
-        regions2,bboxes2 = cv2.MSER_create(min_area=100).detectRegions(img2)
+        img2 = cv2.bitwise_not(img2)
+        # img2 = cv2.medianBlur(img2, 3)
+        regions2, bboxes2 = get_regions(img2)
 
-        moments2 = np.zeros((len(regions2),10))
-        for k in range(len(regions2)):
-            ms = cv2.moments(regions2[k])
-            # area
-            # ms['m00']
-            # 'mu..' are the central moments
-            if ms['m00']>0:
-                # moments2[k,:]=np.array([ms['m00'], ms['m01']/ms['m00'], ms['m10']/ms['m00'], ms['mu20'], ms['mu11'], ms['mu02'], ms['mu30'], ms['mu21'], ms['mu12'], ms['mu03']])
-                moments2[k,:]=np.array([ms['m00'], ms['m01']/ms['m00'], ms['m10']/ms['m00'], ms['nu20'], ms['nu11'], ms['nu02'], ms['nu30'], ms['nu21'], ms['nu12'], ms['nu03']])
+        kp2, moments2 = get_descriptors(regions2, bboxes2, maxdim, descriptor, px_exand=3)
+        areas2 = moments2[:,0]
+
+        notempty2 = np.array([len(m[0])>0 for m in kp2])
+        des2 = np.float32([ m[1][0] for l,m in enumerate(kp2) if notempty2[l]])
+        moments2 = moments2[notempty2,:]
+        areas2=np.array(areas2)[notempty2]
+        regions2 = [ regions2[l] for l in range(len(regions2)) if notempty2[l]]
 
         if moments1.shape[0] < 5 or moments2.shape[0] < 5:
             logging.info(f"{i}_{j}: {0:4} {0:4} {np.nan:8.3} {np.nan:8.3}")
@@ -260,23 +326,80 @@ logging.info("segment | n_found | n_used | dx | dy")
         kdt = KDTree(moments1[:,1:3], leaf_size=30, metric='euclidean')
         physical_distances, indices = kdt.query(moments2[:,1:3], k=np.min([500,len(moments1[:,1:3])]), return_distance=True)
 
+        # k=10
+        # moments1[indices[k,physical_distances[k,:]<dmax],1:3]
+        # moments2[k,1:3]
+
         def single_match(k):  
-            distances = np.sum(np.abs(moments1[indices[k,physical_distances[k,:]<dmax],3:] - moments2[k,3:]), axis=1)
-            if len(distances)<3:
+            b1 = physical_distances[k,:]<dmax
+            area_log = np.abs(np.log10(areas1[indices[k,:]]/areas2[k]))
+            b2 = area_log<np.log10(1.5/1)
+            bb = np.logical_and(b1,b2)
+            filt_indices = indices[k,bb].copy()
+
+            # moments1[filt_indices,1:3]
+            # moments2[k,1:3]
+            # np.linalg.norm(moments1[filt_indices,1:3] - moments2[k,1:3], axis=1)
+
+            # [ np.linalg.norm(np.mean(regions1[filt_indices[p]],axis=0)-np.mean(regions2[k],axis=0)) for p in range(len(filt_indices)) ]
+
+            distances = np.linalg.norm(des1[filt_indices,:] - des2[k,:], axis=1)
+            # distances = np.linalg.norm(moments1[filt_indices,3:] - moments2[k,3:], axis=1)
+            # distances = np.linalg.norm(moments1[indices[k,physical_distances[k,:]<dmax],3:] - moments2[k,3:], axis=1)
+            if np.sum(bb)<3:
                 return [cv2.DMatch(),cv2.DMatch()]
             else:
                 ind = np.argpartition(distances, 2)[:2]
-                return list(map(lambda l: cv2.DMatch(_distance=distances[l], _queryIdx=indices[k,:][l], _trainIdx=k), ind))
+                # np.linalg.norm(moments1[filt_indices[ind[1]],3:] - moments2[k,3:])
+                return list(map(lambda l: cv2.DMatch(_distance=distances[l], _queryIdx=filt_indices[l], _trainIdx=k), ind))
 
-        matches = list(map(single_match, range(len(moments2))))
+        matches = list(map(single_match, range(len(des2))))
 
         # Apply ratio test
         matches_filt = []
         matches_filt_dist_ratio = []
+        l=0
+        p=0
         for m,n in matches:
             if m.distance < 0.8*n.distance:
+                # print(f"{l} {p}")
                 matches_filt.append(m)
                 matches_filt_dist_ratio.append(m.distance/n.distance)
+                l+=1
+            p+=1
+       
+        regions1_filt = [ regions1[m.queryIdx] for m in matches_filt ]
+        bboxes1_filt = [ bboxes1[m.queryIdx] for m in matches_filt ]
+        areas1_filt = np.array([ areas1[m.queryIdx] for m in matches_filt ])
+        regions2_filt = [ regions2[m.trainIdx] for m in matches_filt ]
+        bboxes2_filt = [ bboxes2[m.trainIdx] for m in matches_filt ]
+        areas2_filt = np.array([ areas2[m.trainIdx] for m in matches_filt ])
+
+        arrowed_microscopy_image_1 = np.stack([img1, img1, img1], axis=2)
+        for k in range(len(regions1_filt)):
+            arrowed_microscopy_image_1 = cv2.drawContours(
+                arrowed_microscopy_image_1, 
+                [regions1_filt[k]], 
+                -1, 
+                255,
+                -1)
+
+        arrowed_microscopy_image_2 = np.stack([img2, img2, img2], axis=2)
+        for k in range(len(regions2_filt)):
+            arrowed_microscopy_image_2 = cv2.drawContours(
+                arrowed_microscopy_image_2, 
+                [regions2_filt[k]], 
+                -1, 
+                255,
+                -1)
+
+        fig, ax = plt.subplots(nrows=2, ncols=2)
+        ax[0,0].imshow(arrowed_microscopy_image_1)
+        ax[0,1].imshow(img1, cmap='gray')
+        ax[1,0].imshow(arrowed_microscopy_image_2)
+        ax[1,1].imshow(img2, cmap='gray')
+        plt.show()
+
 
         src_pts = np.float32([ moments1[m.queryIdx,1:3] for m in matches_filt ]).reshape(-1,1,2)
         dst_pts = np.float32([ moments2[m.trainIdx,1:3] for m in matches_filt ]).reshape(-1,1,2)
@@ -305,6 +428,10 @@ logging.info("segment | n_found | n_used | dx | dy")
         matches_filt_dist_ratio = np.array(matches_filt_dist_ratio)[to_keep]
         src_pts = src_pts[to_keep,:,:]  
         dst_pts = dst_pts[to_keep,:,:]  
+        regions1_filt = [ regions1_filt[k] for k in to_keep]
+        regions2_filt = [ regions2_filt[k] for k in to_keep]
+        areas1_filt = areas1_filt[to_keep]
+        areas2_filt = areas2_filt[to_keep]
 
         if src_pts.shape[0] < 5 or dst_pts.shape[0] < 5:
             logging.info(f"{i}_{j}: {0:4} {0:4} {np.nan:8.3} {np.nan:8.3}")
@@ -358,6 +485,11 @@ logging.info("segment | n_found | n_used | dx | dy")
         matches_filt_dist_ratio = np.array(matches_filt_dist_ratio)[to_keep]
         src_pts = src_pts[to_keep,:,:]  
         dst_pts = dst_pts[to_keep,:,:]  
+        regions1_filt = [ regions1_filt[k] for k in to_keep]
+        regions2_filt = [ regions2_filt[k] for k in to_keep]
+        areas1_filt = areas1_filt[to_keep]
+        areas2_filt = areas2_filt[to_keep]
+
 
         if src_pts.shape[0] < 5 or dst_pts.shape[0] < 5:
             logging.info(f"{i}_{j}: {0:4} {0:4} {np.nan:8.3} {np.nan:8.3}")
@@ -407,6 +539,7 @@ logging.info("segment | n_found | n_used | dx | dy")
         # plt.show()
 
         logging.info(f"{i}_{j}: {len(matches_filt):4} {np.sum(matchesMask):4} {M[0,2]:8.3} {M[1,2]:8.3}")
+        print(f"{i}_{j}: {len(matches_filt):4} {np.sum(matchesMask):4} {M[0,2]:8.3} {M[1,2]:8.3}")
 
         
         # matches_filt = np.array(matches_filt)[matchesMask==1]
@@ -423,11 +556,21 @@ logging.info("segment | n_found | n_used | dx | dy")
         kpf1compl = np.append(kpf1compl,kpf1,axis=0)
         kpf2compl = np.append(kpf2compl,kpf2,axis=0)
         
+        # TODO: add image square offset
+        regions1_filt = [rp+np.array([y_segs[j],x_segs[i]]) for rp in regions1_filt]
+        regions2_filt = [rp+np.array([y_segs[j],x_segs[i]]) for rp in regions2_filt]
+        regions1_all.append(regions1_filt)
+        regions2_all.append(regions2_filt)
+        areas1_all = np.append(areas1_all,areas1_filt)
+        areas2_all = np.append(areas2_all,areas2_filt)
+
         ij_array = np.append(ij_array,np.vstack([np.zeros(len(kpf1),dtype=int)+i,np.zeros(len(kpf1),dtype=int)+j]).T,axis=0)
 
         homography_mask = np.append(homography_mask,matchesMask,axis=0)
         matdic[f"{i}_{j}"] = {'matrix': M, 'i':i, 'j':j, 'n': np.sum(matchesMask)}
 
+regions1_all = [r for rs in regions1_all for r in rs]
+regions2_all = [r for rs in regions2_all for r in rs]
 
 logging.info(f"Check if points are on tissue")
 contours, hierarchy = cv2.findContours(mask_2*255, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -458,11 +601,16 @@ logging.info("Save points")
 np.savetxt(matching_points_filename_out,combined_output,header=f"p1x,p1y,p2x,p2y,distance,distance_ratio,homography_mask,on_tissue,distance_physical,angle,i,j",delimiter=',')
 
 logging.info("Apply filter to points")
-homography_mask = dists<np.quantile(dists,0.05)
+# homography_mask = areas1_all>np.quantile(areas1_all,0.95)
+# homography_mask = np.logical_and(areas1_all>np.quantile(areas1_all,0.95),np.logical_and(ij_array[:,0]==0,ij_array[:,1]==0))
+# homography_mask = dists<np.quantile(dists,0.05)
 dists_realfilt = dists_real[np.logical_and(homography_mask==1,in_mask)]
 ij_arrayfilt = ij_array[np.logical_and(homography_mask==1,in_mask)]
 kpf1complfilt = kpf1compl[np.logical_and(homography_mask==1,in_mask)]
 kpf2complfilt = kpf2compl[np.logical_and(homography_mask==1,in_mask)]
+np.arange(len(regions1_all))[np.logical_and(homography_mask==1,in_mask)]
+regions1_allfilt = [regions1_all[k] for k in np.arange(len(regions1_all))[np.logical_and(homography_mask==1,in_mask)]]
+regions2_allfilt = [regions2_all[k] for k in np.arange(len(regions2_all))[np.logical_and(homography_mask==1,in_mask)]]
 
 
 tc = np.sum(np.logical_and(homography_mask==1, in_mask))>=5
@@ -533,6 +681,30 @@ json.dump(reg_measure_dic, open(snakemake.output["error_stats"],"w"))
 # plt.show()
 
 
+arrowed_microscopy_image_1 = np.stack([microscopy_image_1, microscopy_image_1, microscopy_image_1], axis=2)
+for k in range(len(regions1_allfilt)):
+    arrowed_microscopy_image_1 = cv2.drawContours(
+        arrowed_microscopy_image_1, 
+        [regions1_allfilt[k]], 
+        -1, 
+        255)
+
+arrowed_microscopy_image_2 = np.stack([microscopy_image_2, microscopy_image_2, microscopy_image_2], axis=2)
+for k in range(len(regions2_allfilt)):
+    arrowed_microscopy_image_2 = cv2.drawContours(
+        arrowed_microscopy_image_2, 
+        [regions2_allfilt[k]], 
+        -1, 
+        255)
+
+fig, ax = plt.subplots(nrows=1, ncols=2)
+ax[0].imshow(arrowed_microscopy_image_1[x_segs[0]:x_segs[-1],y_segs[0]:y_segs[-1]])
+ax[1].imshow(arrowed_microscopy_image_2[x_segs[0]:x_segs[-1],y_segs[0]:y_segs[-1]])
+plt.show()
+
+
+
+
 import matplotlib as mpl
 viridis = mpl.colormaps['viridis'].resampled(8)
 dists_real_norm = mpl.colors.Normalize()(dists_realfilt)
@@ -544,8 +716,8 @@ for k in range(len(kpf1complfilt)):
     tc = (int(dists_real_color[k,0]),int(dists_real_color[k,1]),int(dists_real_color[k,2]))
     arrowed_microscopy_image_1 = cv2.arrowedLine(arrowed_microscopy_image_1, pt1=kpf1complfilt[k,:].astype(int), pt2=kpf2complfilt[k,:].astype(int), color=tc, thickness=int(5/(input_spacing_1/output_spacing)), tipLength=0.3)
 
-# plt.imshow(arrowed_microscopy_image_1[x_segs[0]:x_segs[-1],y_segs[0]:y_segs[-1]])
-# plt.show()
+plt.imshow(arrowed_microscopy_image_1[x_segs[0]:x_segs[-1],y_segs[0]:y_segs[-1]])
+plt.show()
 
 saveimage_tile(arrowed_microscopy_image_1[x_segs[0]:x_segs[-1],y_segs[0]:y_segs[-1]], microscopy_file_out_1 ,1)
 

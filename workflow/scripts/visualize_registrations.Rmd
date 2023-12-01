@@ -52,10 +52,17 @@ landmarks_preIMS_png <- sapply(snakemake@input[["landmarks_preIMS_png"]], functi
 
 landmarks_preIMS_transformed_on_postIMS_png <- sapply(snakemake@input[["landmarks_preIMS_transformed_on_postIMS_png"]], function(s) file.path(basedir,s))
 landmarks_postIMS_png <- sapply(snakemake@input[["landmarks_postIMS_png"]], function(s) file.path(basedir,s))
+
+
+regions_postIMC_transformed_on_preIMC_png <- sapply(snakemake@input[["regions_postIMC_transformed_on_preIMC_png"]], function(s) file.path(basedir,s))
+regions_preIMC_transformed_on_preIMS_png <- sapply(snakemake@input[["regions_preIMC_transformed_on_preIMS_png"]], function(s) file.path(basedir,s))
+regions_preIMS_transformed_on_postIMS_png <- sapply(snakemake@input[["regions_preIMS_transformed_on_postIMS_png"]], function(s) file.path(basedir,s))
+```
+
 ```
 
 
-```{r}
+```{r, eval=FALSE}
 basedir <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow"
 # project_name <- "test_combined"
 # sample_names <- c("Cirrhosis-TMA-5_New_Detector_001", "Cirrhosis-TMA-5_New_Detector_002")
@@ -63,21 +70,32 @@ input_csv_files <- c("/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/i
 ```
 
 ```{r}
-create_error_plot <- function(input_csv_files, vis_type){
+create_error_plot <- function(input_csv_files, vis_type, errors = "landmarks", error_type = "distance"){
+    errors <- match.arg(errors, c("landmarks", "regions"))
+    error_type <- match.arg(error_type, c("distance", "dice"))
     colname_reg <- paste0(vis_type, "_")
     
     dfls <- lapply(input_csv_files, function(x) {
         df <- read.csv(x)
         df$project <- stringr::str_replace(basename(x),"_reg_metrics_combined.csv","")
-        df <- df[,grepl(colname_reg, colnames(df)) | colnames(df) %in% c("sample", "project")]
-    
-        colnames(df) <- stringr::str_replace(colnames(df), colname_reg, "")
+        if(errors=="landmarks"){
+          df <- df[,stringr::str_detect(colnames(df), paste0(colname_reg,"(?!regions)")) | colnames(df) %in% c("sample", "project")]
+          colnames(df) <- stringr::str_replace(colnames(df), colname_reg, "")
+        } else{
+          df <- df[,stringr::str_detect(colnames(df), paste0(colname_reg,"(?=regions)")) | colnames(df) %in% c("sample", "project")]
+          colnames(df) <- stringr::str_replace(colnames(df), paste0(colname_reg,"regions_"), "")
+        }
         colnames(df) <- stringr::str_replace(colnames(df),"quantile","Q" )
         df
     })
     df <- Reduce(rbind, dfls)
     
-    x_axis_var_names <- colnames(df)[grepl("error", colnames(df))]
+    if (error_type=="distance"){
+      x_axis_var_names <- colnames(df)[grepl("error", colnames(df))]
+    } else{
+      x_axis_var_names <- colnames(df)[grepl("dice", colnames(df))]
+    }
+     
     create_buttons <- function(df, x_axis_var_names) {
       lapply(
         x_axis_var_names,
@@ -94,7 +112,11 @@ create_error_plot <- function(input_csv_files, vis_type){
     
     global_x_range <- range(unlist(lapply(x_axis_var_names, function(x) df[[x]])))
     global_x_range[1] <- 0 
-    global_x_range[2] <- global_x_range[2]+2
+    if (error_type=="distance"){
+      global_x_range[2] <- global_x_range[2]+0.5
+    } else{
+      global_x_range[2] <- 1
+    }
     
     if (vis_type == "IMS_to_postIMS") {
       df$completeness <- df$n_points/df$n_points_total
@@ -109,7 +131,7 @@ create_error_plot <- function(input_csv_files, vis_type){
     figls <- lapply(dfls, function(df){
         plotly::plot_ly(
             data = df,
-            x = ~mean_error,
+            x = dplyr::quo(!!dplyr::sym(x_axis_var_names[1])),
             y = dplyr::quo(!!dplyr::sym(y_axis_colname)),
             text = ~sample,
             # hoverinfo = "text",
@@ -374,6 +396,34 @@ fig
 ```
 
 
+## Images of Regions {.tabset}
+
+```{r, results='asis', fig.width=8, fig.height=8}
+cat("\n\n")
+for (i in seq_along(regions_preIMS_transformed_on_postIMS_png)) {
+    filename <- regions_preIMS_transformed_on_postIMS_png[i]
+    if(file.exists(filename)){
+        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
+        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"1000\"/>",filename))
+    }
+}
+cat("\n\n")
+```
+
+## Distances between Regions
+
+```{r, fig.width=8, fig.height=8}
+create_error_plot(input_csv_files, "preIMS_to_postIMS", errors="regions")
+```
+
+## Dice between Regions
+
+```{r, fig.width=8, fig.height=8}
+create_error_plot(input_csv_files, "preIMS_to_postIMS", errors="regions", error_type="dice")
+```
+
+
+
 # preIMC to preIMS
 
 ## preIMC images registered to preIMS images
@@ -443,7 +493,32 @@ create_error_plot(input_csv_files, "preIMC_to_preIMS")
 ```
 
 
-## Distances between MSER's
+## Images of Regions {.tabset}
+
+```{r, results='asis', fig.width=8, fig.height=8}
+cat("\n\n")
+for (i in seq_along(regions_preIMC_transformed_on_preIMS_png)) {
+    filename <- regions_preIMC_transformed_on_preIMS_png[i]
+    if(file.exists(filename)){
+        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
+        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"1000\"/>",filename))
+    }
+}
+cat("\n\n")
+```
+
+## Distances between Regions
+
+```{r, fig.width=8, fig.height=8}
+create_error_plot(input_csv_files, "preIMC_to_preIMS", errors="regions")
+```
+
+## Dice between Regions
+
+```{r, fig.width=8, fig.height=8}
+create_error_plot(input_csv_files, "preIMC_to_preIMS", errors="regions", error_type="dice")
+```
+
 
 
 
@@ -512,6 +587,33 @@ cat("\n\n")
 
 ```{r, fig.width=8, fig.height=8}
 create_error_plot(input_csv_files, "postIMC_to_preIMC")
+```
+
+
+## Images of Regions {.tabset}
+
+```{r, results='asis', fig.width=8, fig.height=8}
+cat("\n\n")
+for (i in seq_along(regions_postIMC_transformed_on_preIMC_png)) {
+    filename <- regions_postIMC_transformed_on_preIMC_png[i]
+    if(file.exists(filename)){
+        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
+        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"1000\"/>",filename))
+    }
+}
+cat("\n\n")
+```
+
+## Distances between Regions
+
+```{r, fig.width=8, fig.height=8}
+create_error_plot(input_csv_files, "postIMC_to_preIMC", errors="regions")
+```
+
+## Dice between Regions
+
+```{r, fig.width=8, fig.height=8}
+create_error_plot(input_csv_files, "postIMC_to_preIMC", errors="regions", error_type="dice")
 ```
 
 

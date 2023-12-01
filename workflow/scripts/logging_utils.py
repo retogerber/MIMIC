@@ -26,3 +26,15 @@ class StreamToLogger(object):
     def flush(self):
         pass
 
+
+def setNThreads(n):
+    if "cv2" in sys.modules:
+        import cv2
+        cv2.setNumThreads(n)
+    if "SimpleITK" in sys.modules:
+        import SimpleITK as sitk
+        sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(n)
+    if "segment_anything" in sys.modules:
+        import torch
+        torch.set_num_threads(n)
+
