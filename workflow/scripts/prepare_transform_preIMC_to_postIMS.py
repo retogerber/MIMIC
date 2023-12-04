@@ -1,31 +1,27 @@
 import json
+from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+import logging_utils
 
-logging.info("Start")
+if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+    snakemake = snakeMakeMock()
+    snakemake.input["preIMC_to_preIMS_transform"] = ""
+    snakemake.input["preIMS_orig_size_transform"] = ""
+    snakemake.input["preIMS_to_postIMS_transform"] = ""
+    snakemake.output["preIMC_to_postIMS_transform"] = ""
+    if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+        raise Exception("Running in interactive mode!!")
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
+setNThreads(snakemake.threads)
 
-#transform_file_preIMC_to_preIMS="/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/registrations/preIMC_to_preIMS/1/NASH_HCC_TMA_1-preIMC_to_preIMS_transformations.json"
+# inputs
 transform_file_preIMC_to_preIMS = snakemake.input["preIMC_to_preIMS_transform"]
-#orig_size_tform_preIMC_to_preIMS="/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/registrations/preIMC_to_preIMS/1/.imcache_NASH_HCC_TMA_1/preIMS_orig_size_tform.json"
 orig_size_tform_preIMC_to_preIMS=snakemake.input["preIMS_orig_size_transform"]
-#transform_file_preIMS_to_postIMS="/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/registrations/postIMC_to_postIMS/NASH_HCC_TMA-preIMS_to_postIMS_transformations.json"
 transform_file_preIMS_to_postIMS=snakemake.input["preIMS_to_postIMS_transform"]
-
+# outputs
 preIMC_to_postIMS_transform = snakemake.output["preIMC_to_postIMS_transform"]
 
 logging.info("Read transformations")

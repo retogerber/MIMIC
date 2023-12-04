@@ -5,55 +5,52 @@ import cv2
 import json
 import skimage
 import numpy as np
-from image_registration_IMS_to_preIMS_utils import convert_and_scale_image, get_image_shape, extract_mask, readimage_crop, sam_core, saveimage_tile, preprocess_mask
+from image_utils import convert_and_scale_image, get_image_shape, extract_mask, readimage_crop, sam_core, saveimage_tile, preprocess_mask
+from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+import logging_utils
 
-logging.info("Start")
-torch.set_num_threads(snakemake.threads)
-cv2.setNumThreads(snakemake.threads)
+if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+    snakemake = snakeMakeMock()
 
-logging.info("Setup rembg")
-model_name = "isnet-general-use"
-os.environ["OMP_NUM_THREADS"] = str(snakemake.threads)
-rembg_session = new_session(model_name)
+    snakemake.params["IMS_pixelsize"] = 30
+    snakemake.params["IMS_shrink_factor"] = 0.8
+    snakemake.params["IMC_pixelsize"] = 0.22537
+    snakemake.input["sam_weights"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/Misc/sam_vit_h_4b8939.pth"
+    snakemake.input["postIMS_downscaled"] = ""
+    snakemake.input["preIMS_downscaled"] = ""
+    snakemake.input["IMCmask"] = ["/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_E9.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_A2.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_B5.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_B1.geojson"]
+    snakemake.output["postIMSmask_downscaled"] = ""
 
-logging.info("Setup segment anything")
-CHECKPOINT_PATH = snakemake.input["sam_weights"]
-DEVICE = 'cpu'
-MODEL_TYPE = "vit_h"
-
+    if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+        raise Exception("Running in interactive mode!!")
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
+setNThreads(snakemake.threads)
 
 # parameters
 stepsize = float(snakemake.params["IMS_pixelsize"])
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
 resolution = float(snakemake.params["microscopy_pixelsize"])
-postIMS_file = snakemake.input["postIMS_downscaled"]
-preIMS_file = snakemake.input["preIMS_downscaled"]
-postIMSr_file = snakemake.output["postIMSmask_downscaled"]
-imc_mask_files = snakemake.input["IMCmask"]
-
 # upscale in all directions from TMA location 
 expand_microns = stepsize*15
 
-logging.info("Input:")
-logging.info(f"\tstepsize: {stepsize}")
-logging.info(f"\tpixelsize: {pixelsize}")
-logging.info(f"\tresolution: {resolution}")
-logging.info(f"\tpostIMS_file: {postIMS_file}")
-logging.info(f"\tpostIMS_file: {preIMS_file}")
-logging.info(f"\tpostIMSr_file: {postIMSr_file}")
-logging.info(f"\timc_mask_files: {imc_mask_files}")
-logging.info(f"\texpand_microns: {expand_microns}")
+# inputs
+postIMS_file = snakemake.input["postIMS_downscaled"]
+preIMS_file = snakemake.input["preIMS_downscaled"]
+imc_mask_files = snakemake.input["IMCmask"]
+
+model_name = "isnet-general-use"
+os.environ["OMP_NUM_THREADS"] = str(snakemake.threads)
+rembg_session = new_session(model_name)
+CHECKPOINT_PATH = snakemake.input["sam_weights"]
+DEVICE = 'cpu'
+MODEL_TYPE = "vit_h"
+
+# outputs
+postIMSr_file = snakemake.output["postIMSmask_downscaled"]
 
 
 logging.info("get IMC locations")

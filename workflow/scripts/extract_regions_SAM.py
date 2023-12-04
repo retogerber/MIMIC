@@ -7,52 +7,30 @@ import skimage
 import skimage.exposure
 import numpy as np
 import cv2
-from image_registration_IMS_to_preIMS_utils import readimage_crop, convert_and_scale_image, subtract_postIMS_grid, extract_mask, get_image_shape, sam_core, preprocess_mask
+from image_utils import readimage_crop, convert_and_scale_image, subtract_postIMS_grid, extract_mask, get_image_shape, sam_core, preprocess_mask
+from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger, setNThreads
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+import logging_utils
 
-class snakeMakeMock():
-    def __init__(self):
-        self.threads = 4
-        self.params = dict()
-        self.params["pixel_expansion"] = 501
-        self.params["min_area"] = 24**2
-        self.params["max_area"] = 512**2
-        self.params["input_spacing"] = 0.22537
-        self.params["input_spacing_IMC_location"] = 0.22537
-        self.params["output_spacing"] = 1
-        self.params["remove_postIMS_grid"] = False
-        self.params["region_extraction_method"]="sam_prefilter"
-        self.input = dict()
-        self.input["sam_weights"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/Misc/sam_vit_h_4b8939.pth"
-        self.input["microscopy_image"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/test_split_pre_postIMC.ome.tiff"
-        self.input["IMC_location"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_postIMC_A1.geojson"
-        self.output = dict()
-        self.output["contours_out"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/contours_out/test_split_pre_postIMC_contours.json"
 if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake = snakeMakeMock()
+    snakemake.params["pixel_expansion"] = 501
+    snakemake.params["min_area"] = 24**2
+    snakemake.params["max_area"] = 512**2
+    snakemake.params["input_spacing"] = 0.22537
+    snakemake.params["input_spacing_IMC_location"] = 0.22537
+    snakemake.params["output_spacing"] = 1
+    snakemake.params["remove_postIMS_grid"] = False
+    snakemake.params["region_extraction_method"]="sam_prefilter"
+    snakemake.input["sam_weights"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/Misc/sam_vit_h_4b8939.pth"
+    snakemake.input["microscopy_image"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/test_split_pre_postIMC.ome.tiff"
+    snakemake.input["IMC_location"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_postIMC_A1.geojson"
     if bool(getattr(sys, 'ps1', sys.flags.interactive)):
         raise Exception("Running in interactive mode!!")
-
-logging.info("Start")
-logging.info(f"snakemake config:")
-logging.info(f"\tthreads: {snakemake.threads}")
-for key in snakemake.params.keys():
-    logging.info(f"\tparams: {key}: {snakemake.params[key]}")
-for key in snakemake.input.keys():
-    logging.info(f"\tinput: {key}: {snakemake.input[key]}")
-for key in snakemake.output.keys():
-    logging.info(f"\toutput: {key}: {snakemake.output[key]}")
-
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
 setNThreads(snakemake.threads)
 
 # params
@@ -62,7 +40,8 @@ max_area = snakemake.params["max_area"]
 input_spacing = snakemake.params["input_spacing"]
 input_spacing_IMC_location = snakemake.params["input_spacing_IMC_location"]
 output_spacing = snakemake.params["output_spacing"]
-assert(snakemake.params["region_extraction_method"] in ["sam_prefilter","sam"])
+used_region_extraction_method = snakemake.params["region_extraction_method"]
+assert(used_region_extraction_method in ["sam_prefilter","sam"])
 
 # inputs
 DEVICE = 'cpu'
@@ -132,8 +111,8 @@ mask_2_proportion = np.sum(mask_2)/np.prod(mask_2.shape)
 logging.info(f"proportion image covered by mask (rembg): {mask_2_proportion:5.4}")
 
 bb0 = [int(xmin/s1f),int(ymin/s1f),int(xmax/s1f),int(ymax/s1f)]
-IMC_mask_proportion = ((bb0[2]-bb0[0])*(bb0[3]-bb0[1]))/((bb1[2]-bb1[0])*(bb1[3]-bb1[1]))
-if mask_2_proportion < IMC_mask_proportion:
+IMC_mask_proportion = ((bb0[2]-bb0[0])*(bb0[3]-bb0[1]))/((bb3[2]-bb3[0])*(bb3[3]-bb3[1]))
+if mask_2_proportion < 1.5*IMC_mask_proportion:
     sam = sam_model_registry[MODEL_TYPE](checkpoint=CHECKPOINT_PATH)
     sam.to(device=DEVICE)
     saminp = readimage_crop(microscopy_file, bb1)
@@ -149,8 +128,10 @@ if mask_2_proportion < IMC_mask_proportion:
     mask_2 = masks[indmax,:,:].astype(np.uint8)
     mask_2_proportion = np.sum(mask_2)/np.prod(mask_2.shape)
     logging.info(f"proportion image covered by mask (SAM): {mask_2_proportion:5.4}")
-    if mask_2_proportion < IMC_mask_proportion:
+    if mask_2_proportion < 1.5*IMC_mask_proportion:
         mask_2 = np.ones(microscopy_image.shape, dtype=np.uint8)
+        logging.info(f"Mask detection failed, using full image and 'region_extraction_method'='sam'")
+        used_region_extraction_method='sam'
 
 xmax = microscopy_image.shape[0]
 ymax = microscopy_image.shape[1]
@@ -257,7 +238,7 @@ bb31 = [round(bb31[0]*s1f),round(bb31[1]*s1f),round(bb31[2]*s1f),round(bb31[3]*s
 
 
 
-if snakemake.params["region_extraction_method"]=="sam_prefilter":
+if used_region_extraction_method == "sam_prefilter":
     regions, bboxes = get_regions_sam_prefilter(microscopy_image[bb31[0]:bb31[2],bb31[1]:bb31[3]], mask_2[bb31[0]:bb31[2],bb31[1]:bb31[3]], sam, min_area=min_area, max_area=max_area)
 else:
     regions, bboxes = get_regions_sam(microscopy_image[bb31[0]:bb31[2],bb31[1]:bb31[3]], sam, min_area=min_area, max_area=max_area)

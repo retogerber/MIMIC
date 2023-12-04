@@ -2,29 +2,31 @@ from wsireg.writers.ome_tiff_writer import OmeTiffWriter
 from wsireg.reg_transforms.reg_transform_seq import RegTransform, RegTransformSeq
 from wsireg.parameter_maps.transformations import BASE_RIG_TFORM
 from wsireg.reg_images.loader import reg_image_loader
-from tifffile import imread
-from image_registration_IMS_to_preIMS_utils import get_image_shape 
+from image_utils import get_image_shape 
+from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+import logging_utils
 
-logging.info("Start")
+if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+    snakemake = snakeMakeMock()
+    snakemake.params["input_spacing"] = 0.22537
+    snakemake.params["output_spacing"] = 0.22537
+    snakemake.input["postIMS"] = ""
+    snakemake.output["postIMS_downscaled"] = ""
+    if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+        raise Exception("Running in interactive mode!!")
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
+setNThreads(snakemake.threads)
 
+# params 
 input_spacing = snakemake.params["input_spacing"]
 output_spacing = snakemake.params["output_spacing"]
-
-# img_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/test_split_pre_postIMC.ome.tiff"
+# inputs
 img_file = snakemake.input["postIMS"]
-
-# img_out = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/A1_postIMC_transformed.ome.tiff"
+# outputs
 img_out = snakemake.output["postIMS_downscaled"]
 img_basename = os.path.basename(img_out).split(".")[0]
 img_dirname = os.path.dirname(img_out)

@@ -5,59 +5,32 @@ import wsireg
 import numpy as np
 import json
 import cv2
-import SimpleITK as sitk
-from image_registration_IMS_to_preIMS_utils import readimage_crop, convert_and_scale_image, get_image_shape 
+from image_utils import readimage_crop, convert_and_scale_image, get_image_shape 
+from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger, setNThreads
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+import logging_utils
 
-class snakeMakeMock():
-    def __init__(self):
-        self.threads = 4
-        self.params = dict()
-        self.params["pixel_expansion"] = 501
-        self.params["min_area"] = 24**2
-        self.params["max_area"] = 512**2
-        self.params["input_spacing"] = 0.22537
-        self.params["input_spacing_IMC_location"] = 0.22537
-        self.params["output_spacing"] = 1
-        # self.params['transform_target'] = "preIMC"
-        self.params['transform_target'] = "preIMS"
-        self.params['transform_type'] = "shape"
-        self.input = dict()
-        # self.input["microscopy_image"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/test_split_pre_postIMC.ome.tiff"
-        self.input["microscopy_image"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/preIMC/test_split_ims_preIMC.ome.tiff"
-        # self.input['transform_file'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/registrations/postIMC_to_postIMS/B1/test_split_pre_B1-postIMC_to_postIMS_transformations.json"
-        self.input['transform_file'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/registrations/postIMC_to_postIMS/test_split_ims-postIMC_to_postIMS_transformations.json"
-        # self.input['contours_in'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/Cirrhosis-TMA-5_New_Detector_002_postIMC_landmark_regions.json"
-        self.input['contours_in'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/preIMC/Cirrhosis-TMA-5_New_Detector_001_preIMC_landmark_regions.json"
-        # self.input["IMC_location"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_postIMC_B1.geojson"
-        self.input['IMC_location'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMC_location/test_split_ims_IMC_mask_on_preIMC_A1.geojson"
-        self.output = dict()
-        self.output["contours_out"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/Cirrhosis-TMA-5_New_Detector_002_postIMC_on_preIMC_landmark_regions.json"
 if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake = snakeMakeMock()
+    snakemake.params["pixel_expansion"] = 501
+    snakemake.params["min_area"] = 24**2
+    snakemake.params["max_area"] = 512**2
+    snakemake.params["input_spacing"] = 0.22537
+    snakemake.params["input_spacing_IMC_location"] = 0.22537
+    snakemake.params["output_spacing"] = 1
+    snakemake.params['transform_target'] = "preIMS"
+    snakemake.params['transform_type'] = "shape"
+    snakemake.input["microscopy_image"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/preIMC/test_split_ims_preIMC.ome.tiff"
+    snakemake.input['transform_file'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/registrations/postIMC_to_postIMS/test_split_ims-postIMC_to_postIMS_transformations.json"
+    snakemake.input['contours_in'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/preIMC/Cirrhosis-TMA-5_New_Detector_001_preIMC_landmark_regions.json"
+    snakemake.input['IMC_location'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMC_location/test_split_ims_IMC_mask_on_preIMC_A1.geojson"
+    snakemake.output["contours_out"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/Cirrhosis-TMA-5_New_Detector_002_postIMC_on_preIMC_landmark_regions.json"
     if bool(getattr(sys, 'ps1', sys.flags.interactive)):
         raise Exception("Running in interactive mode!!")
-
-logging.info("Start")
-logging.info(f"snakemake config:")
-logging.info(f"\tthreads: {snakemake.threads}")
-for key in snakemake.params.keys():
-    logging.info(f"\tparams: {key}: {snakemake.params[key]}")
-for key in snakemake.input.keys():
-    logging.info(f"\tinput: {key}: {snakemake.input[key]}")
-for key in snakemake.output.keys():
-    logging.info(f"\toutput: {key}: {snakemake.output[key]}")
-
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
 setNThreads(snakemake.threads)
 
 # params
@@ -318,12 +291,12 @@ elif snakemake.params['transform_type'] == "shape":
     # translate regions
     regions_scaled_translated = [reg+np.array([bb1[1],bb1[0]]) for reg in regions_scaled]
     # transform regions
-    rs = wsireg.reg_shapes.RegShapes(regions_scaled, source_res=input_spacing, target_res=output_spacing)
+    rs = wsireg.reg_shapes.RegShapes(regions_scaled_translated, source_res=input_spacing, target_res=output_spacing)
     rs.transform_shapes(rtsn)
 
     transformed_regions_regshapes = [rs.transformed_shape_data[k]['array'][:-1,:].astype(int) for k in range(len(regions))]
     # translate regions
-    transformed_regions = [(reg-np.array([bb1tr[1]-int(bb1[1]*input_spacing),bb1tr[0]-int(bb1[0]*input_spacing)])).astype(int) for reg in transformed_regions_regshapes]
+    transformed_regions = [(reg-np.array([bb1tr[1],bb1tr[0]])).astype(int) for reg in transformed_regions_regshapes]
     transformed_bboxes = [cv2.boundingRect(reg) for reg in transformed_regions]
 
 else:

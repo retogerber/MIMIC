@@ -3,38 +3,32 @@ from tifffile import imwrite
 from pandas import read_csv
 import numpy as np
 from scipy.signal import medfilt2d
+from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+import logging_utils
 
-logging.info("Start")
+if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+    snakemake = snakeMakeMock()
+    snakemake.params["IMC_channels_for_aggr"] = []
+    snakemake.input["IMC"] = ""
+    snakemake.input["IMC_summary_panel"] = ""
+    snakemake.output["IMC_aggr"] = ""
+    if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+        raise Exception("Running in interactive mode!!")
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
+setNThreads(snakemake.threads)
 
 
-#imname = sys.argv[1] 
-imname = snakemake.input["IMC"]
-#dfname = sys.argv[2]
-dfname = snakemake.input["IMC_summary_panel"]
-#imaggrname = sys.argv[3]
-imaggrname = snakemake.output["IMC_aggr"]
-
-#channels_to_use = ["aSMA","E-cadherin","ST6GAL1","Collagen-1","Seg1","Seg2","Seg3"]
-#channels_to_use = ["E-cadherin","ST6GAL1","Collagen-1","Seg1","Seg2","Seg3"]
-#channels_to_use = ["E-cadherin","ST6GAL1","Collagen-1","HepPar1","Seg1","Seg2","Seg3"]
+# params
 channels_to_use = snakemake.params["IMC_channels_for_aggr"]
+# inputs
+imname = snakemake.input["IMC"]
+dfname = snakemake.input["IMC_summary_panel"]
+# outputs
+imaggrname = snakemake.output["IMC_aggr"]
 
 logging.info("Read csv")
 df = read_csv(dfname)

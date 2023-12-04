@@ -9,19 +9,37 @@ from shapely import geometry, affinity
 from scipy.spatial.distance import cdist
 import warnings
 from wsireg.reg_shapes import RegShapes
+from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+import logging_utils
 
-logging.info("Start")
+if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+    snakemake = snakeMakeMock()
+    snakemake.params["IMS_pixelsize"] = ""
+    snakemake.params["IMC_pixelsize"] = ""
+    snakemake.params["IMS_shrink_factor"] = ""
+    snakemake.input["imsml_coords_fp"] = ""
+    snakemake.input["cell_indices"] = ""
+    snakemake.input["IMCmask_transformed"] = ""
+    snakemake.output["cell_overlaps"] = ""
+    if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+        raise Exception("Running in interactive mode!!")
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
+setNThreads(snakemake.threads)
+
+# params
+ims_spacing = snakemake.params["IMS_pixelsize"]
+micro_spacing = snakemake.params["IMC_pixelsize"]
+ims_shrink_factor = snakemake.params["IMS_shrink_factor"]
+# inputs
+imsml_coords_fp = snakemake.input["imsml_coords_fp"]
+cell_indices_fp = snakemake.input["cell_indices"]
+cell_shapes_fp = snakemake.input["IMCmask_transformed"]
+# outputs
+output_csv = snakemake.output["cell_overlaps"]
 
 
 def px_to_box(x: Union[int, float], y: Union[int, float], px_width: Union[int, float]):
@@ -42,10 +60,6 @@ def compute_intersections(
 
     logging.info("Read cells to shapes")
     rs = RegShapes(cells_fp)
-    # rs.shape_data.pop(0)
-    # rs.shape_data_gj.pop(0)
-
-    # resolution_factor = ims_spacing / micro_spacing
 
     logging.info("Read h5 coords file")
     with h5py.File(imsml_coords_fp, "r") as f:
@@ -99,36 +113,6 @@ def compute_intersections(
     cell_overlap_df.sort_values("cell_idx", inplace=True)
 
     return cell_overlap_df
-
-
-# inputs
-
-imsml_coords_fp = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_011-IMSML-coords.h5"
-# imsml_coords_fp = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/postIMS_to_IMS_test_split_pre-IMSML-coords.h5"
-# imsml_coords_fp = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/postIMS_to_IMS_test_split_pre-Cirrhosis-TMA-5_New_Detector_002-IMSML-coords.h5"
-#imsml_coords_fp = "/home/retger/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMS/cirrhosis_TMA-IMSML-coords.h5"
-imsml_coords_fp = snakemake.input["imsml_coords_fp"]
-cell_indices_fp = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_011_transformed_on_postIMS_cell_indices.pkl"
-# cell_indices_fp = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed_on_postIMS_cell_indices.pkl"
-#cell_indices_fp =  "/home/retger/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_006_transformed_cell_indices.pkl"
-cell_indices_fp = snakemake.input["cell_indices"]
-cell_shapes_fp = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_011_transformed_on_postIMS_cell_masks.geojson"
-# cell_shapes_fp = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed_on_postIMS_cell_masks.geojson"
-#cell_shapes_fp = "/home/retger/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_006_transformed_cell_masks.geojson"
-cell_shapes_fp = snakemake.input["IMCmask_transformed"]
-
-output_csv = snakemake.output["cell_overlaps"]
-
-
-# data specific settings
-# ims_spacing=30
-ims_spacing = snakemake.params["IMS_pixelsize"]
-# micro_spacing = 0.22537
-micro_spacing = snakemake.params["IMC_pixelsize"]
-# ims_shrink_factor = 0.8
-ims_shrink_factor = snakemake.params["IMS_shrink_factor"]
-
-
 
 
 logging.info("Read pickle")

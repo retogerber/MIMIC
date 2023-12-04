@@ -8,94 +8,66 @@ import re
 import numpy as np
 from sklearn.neighbors import KDTree
 import cv2
-from image_registration_IMS_to_preIMS_utils import readimage_crop, convert_and_scale_image, get_angle, saveimage_tile, subtract_postIMS_grid, extract_mask, get_image_shape, sam_core, preprocess_mask
+from image_utils import readimage_crop, convert_and_scale_image, saveimage_tile, subtract_postIMS_grid, extract_mask, get_image_shape, sam_core, preprocess_mask
+from registration_utils import get_angle
+from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+import logging_utils
 
-logging.info("Start")
+if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+    snakemake = snakeMakeMock()
+    snakemake.params["input_spacing_1"] = 1
+    snakemake.params["input_spacing_2"] = 0.22537
+    snakemake.params["input_spacing_IMC_location"] = 0.22537
+    snakemake.params["output_spacing"] = 1
+    snakemake.params["max_distance"] = 50
+    snakemake.params["min_distance"] = 10
+    snakemake.params["pixel_expansion"] = 501
+    snakemake.input["sam_weights"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/Misc/sam_vit_h_4b8939.pth"
+    snakemake.input['microscopy_image_1'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/Cirrhosis-TMA-5_New_Detector_001_transformed_on_preIMS.ome.tiff"
+    snakemake.input['microscopy_image_2'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre_preIMS.ome.tiff"
+    snakemake.input['IMC_location'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_preIMS_A1.geojson"
+    if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+        raise Exception("Running in interactive mode!!")
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
+setNThreads(snakemake.threads)
 
-logging.info("Setup segment anything")
-CHECKPOINT_PATH = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/Misc/sam_vit_h_4b8939.pth"
+# params
+input_spacing_1 = snakemake.params["input_spacing_1"]
+input_spacing_2 = snakemake.params["input_spacing_2"]
+input_spacing_IMC_location = snakemake.params["input_spacing_IMC_location"]
+output_spacing = snakemake.params["output_spacing"]
+# maximum assumed distance between corresponding points
+dmax = snakemake.params["max_distance"]
+# minimum distance between points on the same image 
+dmin = snakemake.params["min_distance"]
+pixel_expansion = snakemake.params["pixel_expansion"]
+
+# inputs
+microscopy_file_1 = snakemake.input['microscopy_image_1']
+microscopy_file_2 = snakemake.input['microscopy_image_2']
+IMC_location=snakemake.input["IMC_location"]
+if isinstance(IMC_location, list):
+    IMC_location = IMC_location[0]
 CHECKPOINT_PATH = snakemake.input["sam_weights"]
 DEVICE = 'cpu'
 MODEL_TYPE = "vit_h"
 
+# outputs
+microscopy_file_out_1 = snakemake.output['microscopy_image_out_1']
+microscopy_file_out_2 = snakemake.output['microscopy_image_out_2']
+matching_points_filename_out = snakemake.output['matching_points']
 
 
-
-# microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA-2_020_transformed_on_postIMS.ome.tiff"
-# microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA-2_004_transformed_on_postIMS.ome.tiff"
-# microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMC/NASH_HCC_TMA-2_022_transformed_on_preIMS.ome.tiff"
-microscopy_file_1 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/Cirrhosis-TMA-5_New_Detector_001_transformed_on_preIMS.ome.tiff"
-# microscopy_file_1 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/Cirrhosis-TMA-5_New_Detector_001_transformed_on_preIMC.ome.tiff"
-# microscopy_file_1 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/Cirrhosis-TMA-5_New_Detector_002_transformed_on_preIMS.ome.tiff"
-microscopy_file_1 = snakemake.input['microscopy_image_1']
-
-# microscopy_file_2 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
-# microscopy_file_2 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
-# microscopy_file_2 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA_preIMS.ome.tiff"
-# microscopy_file_2 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre_preIMS.ome.tiff"
-microscopy_file_2 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre_preIMS.ome.tiff"
-# microscopy_file_2 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/test_split_pre_preIMC.ome.tiff"
-# microscopy_file_2 = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre_preIMS.ome.tiff"
-microscopy_file_2 = snakemake.input['microscopy_image_2']
-# IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_C9.geojson"
-# IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_A2.geojson"
-# IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_preIMS_D2.geojson"
-IMC_location = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_preIMS_A1.geojson"
-# IMC_location = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_preIMC_A1.geojson"
-IMC_location=snakemake.input["IMC_location"]
-
-if isinstance(IMC_location, list):
-    IMC_location = IMC_location[0]
-logging.info(f"IMC_location: {IMC_location}")
-logging.info(f"microscopy image 1: {microscopy_file_1}")
-logging.info(f"microscopy image 2: {microscopy_file_2}")
-
-input_spacing_1 = 1
-input_spacing_1 = snakemake.params["input_spacing_1"]
-input_spacing_2 = 0.22537
-input_spacing_2 = snakemake.params["input_spacing_2"]
-input_spacing_IMC_location = 0.22537
-input_spacing_IMC_location = snakemake.params["input_spacing_IMC_location"]
-output_spacing = 1
-output_spacing = snakemake.params["output_spacing"]
-
-logging.info(f"input spacing 1: {input_spacing_1}")
-logging.info(f"input spacing 2: {input_spacing_2}")
-logging.info(f"input spacing IMC location: {input_spacing_IMC_location}")
-logging.info(f"output spacing: {output_spacing}")
-
-
-cv2.setNumThreads(snakemake.threads)
-
-# m = re.search("[a-zA-Z]*(?=_registered_reduced.ome.tiff$)",os.path.basename(microscopy_file_1))
 m = re.search("[a-zA-Z]*(?=.ome.tiff$)",os.path.basename(microscopy_file_1))
 comparison_to = m.group(0)
 comparison_from = os.path.basename(os.path.dirname(microscopy_file_1))
 assert(comparison_to in ["preIMC","preIMS","postIMS"])
 assert(comparison_from in ["postIMC","preIMC","preIMS"])
 
-
-# maximum assumed distance between corresponding points
-dmax = 50/(output_spacing)
-dmax = snakemake.params["max_distance"]
-# minimum distance between points on the same image 
-dmin = 10/(output_spacing)
-dmin = snakemake.params["min_distance"]
-
-microscopy_file_out_1 = snakemake.output['microscopy_image_out_1']
-microscopy_file_out_2 = snakemake.output['microscopy_image_out_2']
-matching_points_filename_out = snakemake.output['matching_points']
 
 logging.info("core bounding box extraction")
 IMC_geojson = json.load(open(IMC_location, "r"))
@@ -106,8 +78,6 @@ xmin=np.min(boundary_points[:,1])
 xmax=np.max(boundary_points[:,1])
 ymin=np.min(boundary_points[:,0])
 ymax=np.max(boundary_points[:,0])
-# pixel_expansion = 1001
-pixel_expansion = 501 
 
 s1f = input_spacing_1/input_spacing_IMC_location
 bb1 = [int(xmin/s1f-pixel_expansion/input_spacing_1),int(ymin/s1f-pixel_expansion/input_spacing_1),int(xmax/s1f+pixel_expansion/input_spacing_1),int(ymax/s1f+pixel_expansion/input_spacing_1)]

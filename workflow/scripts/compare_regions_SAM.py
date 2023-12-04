@@ -5,61 +5,31 @@ import numpy as np
 import json
 import cv2
 import SimpleITK as sitk
-from image_registration_IMS_to_preIMS_utils import readimage_crop, convert_and_scale_image, get_image_shape, saveimage_tile
+from image_utils import readimage_crop, convert_and_scale_image, get_image_shape
+from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger, setNThreads
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
-
-class snakeMakeMock():
-    def __init__(self):
-        self.threads = 4
-        self.params = dict()
-        self.params["input_spacing_1"] = 1
-        self.params['input_spacing_2'] = 0.22537
-        self.params["input_spacing_IMC_location"] = 0.22537
-        self.params["output_spacing"] = 1
-        self.params['max_distance'] = 50
-        self.params['min_distance'] = 10
-        self.params["pixel_expansion"] = 501
-        self.input = dict()
-        # self.input['microscopy_image_1'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/Cirrhosis-TMA-5_New_Detector_002_transformed_on_preIMC.ome.tiff"
-        self.input['microscopy_image_1'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/preIMC/Cirrhosis-TMA-5_New_Detector_001_transformed_on_preIMS.ome.tiff"
-        # self.input['contours_in_1'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/Cirrhosis-TMA-5_New_Detector_002_postIMC_on_preIMC_landmark_regions.json"
-        self.input['contours_in_1'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/preIMC/Cirrhosis-TMA-5_New_Detector_001_preIMC_on_preIMS_landmark_regions.json"
-        # self.input['microscopy_image_2'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/test_split_pre_preIMC.ome.tiff"
-        self.input['microscopy_image_2'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/preIMS/test_split_ims_preIMS.ome.tiff"
-        # self.input['contours_in_2'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/Cirrhosis-TMA-5_New_Detector_002_preIMC_landmark_regions.json"
-        self.input['contours_in_2'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/preIMS/Cirrhosis-TMA-5_New_Detector_001_preIMS_landmark_regions.json"
-        # self.input['IMC_location'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_preIMC_B1.geojson"
-        self.input['IMC_location'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMC_location/test_split_ims_IMC_mask_on_preIMS_A1.geojson"
-
-        self.output = dict()
-        self.output["error_stats"] = ""
-        self.output["overlap_image"] = ""
+import logging_utils
 
 if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake = snakeMakeMock()
+    snakemake.params["input_spacing_1"] = 1
+    snakemake.params['input_spacing_2'] = 0.22537
+    snakemake.params["input_spacing_IMC_location"] = 0.22537
+    snakemake.params["output_spacing"] = 1
+    snakemake.params['max_distance'] = 50
+    snakemake.params['min_distance'] = 10
+    snakemake.params["pixel_expansion"] = 501
+    snakemake.input['microscopy_image_1'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/preIMC/Cirrhosis-TMA-5_New_Detector_001_transformed_on_preIMS.ome.tiff"
+    snakemake.input['contours_in_1'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/preIMC/Cirrhosis-TMA-5_New_Detector_001_preIMC_on_preIMS_landmark_regions.json"
+    snakemake.input['microscopy_image_2'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/preIMS/test_split_ims_preIMS.ome.tiff"
+    snakemake.input['contours_in_2'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/preIMS/Cirrhosis-TMA-5_New_Detector_001_preIMS_landmark_regions.json"
+    snakemake.input['IMC_location'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMC_location/test_split_ims_IMC_mask_on_preIMS_A1.geojson"
     if bool(getattr(sys, 'ps1', sys.flags.interactive)):
         raise Exception("Running in interactive mode!!")
-
-logging.info("Start")
-logging.info(f"snakemake config:")
-logging.info(f"\tthreads: {snakemake.threads}")
-for key in snakemake.params.keys():
-    logging.info(f"\tparams: {key}: {snakemake.params[key]}")
-for key in snakemake.input.keys():
-    logging.info(f"\tinput: {key}: {snakemake.input[key]}")
-for key in snakemake.output.keys():
-    logging.info(f"\toutput: {key}: {snakemake.output[key]}")
-
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
 setNThreads(snakemake.threads)
 
 microscopy_file_1 = snakemake.input['microscopy_image_1']
@@ -398,129 +368,106 @@ if len(regions1)>=1 and len(regions2)>=1:
         areas1_filt = areas1_filt[to_keep]
         areas2_filt = areas2_filt[to_keep]
 
-    kpf1 = np.array([moments1[matches_filt[k].queryIdx,1:3] for k in range(len(matches_filt))])
-    kpf2 = np.array([moments2[matches_filt[k].trainIdx,1:3] for k in range(len(matches_filt))])
-    dists_real = np.sqrt(np.sum((kpf1/output_spacing-kpf2/output_spacing)**2,axis=1))
+        kpf1 = np.array([moments1[matches_filt[k].queryIdx,1:3] for k in range(len(matches_filt))])
+        kpf2 = np.array([moments2[matches_filt[k].trainIdx,1:3] for k in range(len(matches_filt))])
+        dists_real = np.sqrt(np.sum((kpf1/output_spacing-kpf2/output_spacing)**2,axis=1))
 
-    def get_dice(contourA, contourB):
-        polygonA = shapely.geometry.Polygon(contourA)
-        polygonA = shapely.make_valid(polygonA)
-        polygonB = shapely.geometry.Polygon(contourB)
-        polygonB = shapely.make_valid(polygonB)
-        po = shapely.intersection(polygonA, polygonB)
-        return (2*po.area)/(polygonA.area+polygonB.area)
+        def get_dice(contourA, contourB):
+            polygonA = shapely.geometry.Polygon(contourA)
+            polygonA = shapely.make_valid(polygonA)
+            polygonB = shapely.geometry.Polygon(contourB)
+            polygonB = shapely.make_valid(polygonB)
+            po = shapely.intersection(polygonA, polygonB)
+            return (2*po.area)/(polygonA.area+polygonB.area)
 
-    dices = [get_dice(regions1_filt[k], regions2_filt[k]) for k in range(len(regions1_filt))]
+        dices = [get_dice(regions1_filt[k], regions2_filt[k]) for k in range(len(regions1_filt))]
 
-    to_keep = np.array([i for i,d in enumerate(dices) if d>0])
-    regions1_filt = [ regions1_filt[k] for k in to_keep]
-    regions2_filt = [ regions2_filt[k] for k in to_keep]
-    dists_real = dists_real[to_keep]
-    dices = np.array(dices)[to_keep]
+        to_keep = np.array([i for i,d in enumerate(dices) if d>0])
+        matches_filt = np.array(matches_filt)[to_keep]
+        regions1_filt = [ regions1_filt[k] for k in to_keep]
+        regions2_filt = [ regions2_filt[k] for k in to_keep]
+        dists_real = dists_real[to_keep]
+        dices = np.array(dices)[to_keep]
+    
 
-    img1_stacked = np.zeros(img1.shape,dtype=np.uint8)
-    for k in range(len(regions1_filt)):
-        img1_stacked = cv2.drawContours(
-            img1_stacked, 
-            [regions1_filt[k]], 
-            -1, 
-            k+1,
-            -1)
+    logging.info(f"Number of matches: {len(matches_filt)}")
+    if len(matches_filt)>1:
 
-    img2_stacked = np.zeros(img2.shape,dtype=np.uint8)
-    for k in range(len(regions2_filt)):
-        img2_stacked = cv2.drawContours(
-            img2_stacked, 
-            [regions2_filt[k]], 
-            -1, 
-            k+1,
-            -1)
+        img1_stacked = np.zeros(img1.shape,dtype=np.uint8)
+        for k in range(len(regions1_filt)):
+            img1_stacked = cv2.drawContours(
+                img1_stacked, 
+                [regions1_filt[k]], 
+                -1, 
+                1,
+                -1)
+        img2_stacked = np.zeros(img2.shape,dtype=np.uint8)
+        for k in range(len(regions2_filt)):
+            img2_stacked = cv2.drawContours(
+                img2_stacked, 
+                [regions2_filt[k]], 
+                -1, 
+                1,
+                -1)
+        # fig, ax = plt.subplots(nrows=1, ncols=2)
+        # ax[0].imshow(img1_stacked)
+        # ax[1].imshow(img2_stacked)
+        # plt.show()
+        img2_stacked_scaled = cv2.resize(img2_stacked, (img1_stacked.shape[1], img1_stacked.shape[0]), interpolation=cv2.INTER_NEAREST)
 
-    # fig, ax = plt.subplots(nrows=2, ncols=2)
-    # ax[0,0].imshow(img1_stacked)
-    # ax[0,1].imshow(img1, cmap='gray')
-    # ax[1,0].imshow(img2_stacked)
-    # ax[1,1].imshow(img2, cmap='gray')
-    # plt.show()
+        tmpimg = img1_stacked*85+img2_stacked_scaled*170
+        cv2.imwrite(snakemake.output["overlap_image"], tmpimg)
 
+        logging.info("Run SITK registration")
+        fixed = sitk.GetImageFromArray(img1_stacked.astype(float))
+        moving = sitk.GetImageFromArray(img2_stacked.astype(float))
 
+        def command_iteration(method):
+            print(
+                f"{method.GetOptimizerIteration():3} "
+                + f"= {method.GetMetricValue():10.8f} "
+                + f": {method.GetOptimizerPosition()}"
+            )
 
-    img1_stacked = np.zeros(img1.shape,dtype=np.uint8)
-    for k in range(len(regions1_filt)):
-        img1_stacked = cv2.drawContours(
-            img1_stacked, 
-            [regions1_filt[k]], 
-            -1, 
-            1,
-            -1)
-
-    img2_stacked = np.zeros(img2.shape,dtype=np.uint8)
-    for k in range(len(regions2_filt)):
-        img2_stacked = cv2.drawContours(
-            img2_stacked, 
-            [regions2_filt[k]], 
-            -1, 
-            1,
-            -1)
-
-    # fig, ax = plt.subplots(nrows=1, ncols=2)
-    # ax[0].imshow(img1_stacked)
-    # ax[1].imshow(img2_stacked)
-    # plt.show()
-
-
-    img2_stacked_scaled = cv2.resize(img2_stacked, (img1_stacked.shape[1], img1_stacked.shape[0]), interpolation=cv2.INTER_NEAREST)
-
-    tmpimg = img1_stacked*85+img2_stacked_scaled*170
-    cv2.imwrite(snakemake.output["overlap_image"], tmpimg)
-    # saveimage_tile(tmpimg, snakemake.output["overlap_image"] ,1)
-    # plt.imshow(tmpimg,cmap='gray')
-    # plt.show()
-
-
-    logging.info("Run SITK registration")
-    fixed = sitk.GetImageFromArray(img1_stacked.astype(float))
-    moving = sitk.GetImageFromArray(img2_stacked.astype(float))
-
-    def command_iteration(method):
-        print(
-            f"{method.GetOptimizerIteration():3} "
-            + f"= {method.GetMetricValue():10.8f} "
-            + f": {method.GetOptimizerPosition()}"
+        R = sitk.ImageRegistrationMethod()
+        R.SetMetricAsMeanSquares()
+        R.SetMetricSamplingStrategy(R.REGULAR)
+        R.SetMetricSamplingPercentage(0.1)
+        R.SetInterpolator(sitk.sitkLinear)
+        R.SetOptimizerAsGradientDescentLineSearch(
+            learningRate=1, numberOfIterations=1000, 
+            convergenceMinimumValue=1e-6, convergenceWindowSize=10,
+            lineSearchEpsilon=0.001, lineSearchMaximumIterations=50,
         )
+        R.SetOptimizerScalesFromPhysicalShift()
+        R.SetInitialTransform(sitk.AffineTransform(2))
+        R.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration(R))
 
-    R = sitk.ImageRegistrationMethod()
-    R.SetMetricAsMeanSquares()
-    R.SetMetricSamplingStrategy(R.REGULAR)
-    R.SetMetricSamplingPercentage(0.1)
-    R.SetInterpolator(sitk.sitkLinear)
-    R.SetOptimizerAsGradientDescentLineSearch(
-        learningRate=1, numberOfIterations=1000, 
-        convergenceMinimumValue=1e-6, convergenceWindowSize=10,
-        lineSearchEpsilon=0.001, lineSearchMaximumIterations=50,
-    )
-    R.SetOptimizerScalesFromPhysicalShift()
-    R.SetInitialTransform(sitk.AffineTransform(2))
-    R.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration(R))
+        # run registration
+        transform = R.Execute(fixed, moving)
 
-    # run registration
-    transform = R.Execute(fixed, moving)
-
-    global_x_shift,global_y_shift = -np.array(transform.GetTranslation())
-    global_affinemat = transform.GetMatrix()
+        global_x_shift,global_y_shift = -np.array(transform.GetTranslation())
+        global_affinemat = transform.GetMatrix()
 
 
-    transformed_image = sitk.GetArrayFromImage(sitk.Resample(moving, fixed, transform, sitk.sitkNearestNeighbor, 0.0, moving.GetPixelID())).astype(np.uint8)//255
+        transformed_image = sitk.GetArrayFromImage(sitk.Resample(moving, fixed, transform, sitk.sitkNearestNeighbor, 0.0, moving.GetPixelID())).astype(np.uint8)//255
 
-    tmpimg = img1_stacked*85+transformed_image*170
-    # plt.imshow(tmpimg,cmap='gray')
-    # plt.show()
-    n_points_total = len(regions1_filt)
+        tmpimg = img1_stacked*85+transformed_image*170
+        # plt.imshow(tmpimg,cmap='gray')
+        # plt.show()
+        n_points_total = len(regions1_filt)
+    else: 
+        dists_real=[]
+        n_points_total = 0 
+        global_x_shift, global_y_shift = np.nan, np.nan
+        global_affinemat = np.nan*np.ones(4)
+        cv2.imwrite(snakemake.output["overlap_image"], np.zeros(img1.shape,dtype=np.uint8))
 else: 
     dists_real=[]
     n_points_total = 0 
     global_x_shift, global_y_shift = np.nan, np.nan
     global_affinemat = np.nan*np.ones(4)
+    cv2.imwrite(snakemake.output["overlap_image"], np.zeros(img1.shape,dtype=np.uint8))
 
 
 tc = len(dists_real)>0

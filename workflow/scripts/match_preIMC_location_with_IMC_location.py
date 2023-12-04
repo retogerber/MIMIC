@@ -3,35 +3,30 @@ from shapely.geometry import shape
 import numpy as np
 import pandas as pd
 import re
+from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+import logging_utils
 
-logging.info("Start")
+if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+    snakemake = snakeMakeMock()
+    snakemake.input['preIMC_location'] = ""
+    snakemake.input['IMC_location'] = ""
+    snakemake.output['matching'] = ""
+    if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+        raise Exception("Running in interactive mode!!")
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
+setNThreads(snakemake.threads)
 
-#preIMC_geojson_file="/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMC_location/NASH_HCC_TMA_reg_mask_on_preIMC.geojson"
+# inputs
 preIMC_geojson_file=snakemake.input['preIMC_location']
+IMC_geojson_files=snakemake.input['IMC_location']
+
 logging.info("Read preIMC geojson")
 preIMC_geojson = json.load(open(preIMC_geojson_file, "r"))
 
-#IMC_geojson_filebase="/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/"
-#cores = ["A1","A2","A3"]
-#IMC_geojson_files = [IMC_geojson_filebase+f'NASH_HCC_TMA_IMC_mask_on_preIMC_{core}.geojson' for core in cores]
-IMC_geojson_files=snakemake.input['IMC_location']
 logging.info("Read IMC geojson")
 IMC_geojson = [ json.load(open(e, "r")) for e in IMC_geojson_files ]
 

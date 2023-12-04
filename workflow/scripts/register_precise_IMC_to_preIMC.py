@@ -1,46 +1,42 @@
 from wsireg.reg_shapes import RegShapes
 from wsireg.parameter_maps import transformations
 import numpy as np
-from ome_types import from_tiff
-from tifffile import imread
+import ome_types
+import tifffile
 import json
-from math import ceil
+import math
+from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+import logging_utils
 
-logging.info("Start")
+if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+    snakemake = snakeMakeMock()
+    snakemake.params["microscopy_pixelsize"] = 0.22537
+    snakemake.input["IMC_aggr"] = ""
+    snakemake.input["IMC_location_on_preIMC"] = ""
+    snakemake.input["preIMC"] = ""
+    snakemake.output["IMC_to_preIMC_transform"] = ""
+    if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+        raise Exception("Running in interactive mode!!")
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
+setNThreads(snakemake.threads)
 
+# params
+spacing = snakemake.params["microscopy_pixelsize"]
+# inputs
 imc_file = snakemake.input["IMC_aggr"]
 mask_file = snakemake.input["IMC_location_on_preIMC"]
-#mask_file = os.path.join("/home/retger/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMC_location/cirrhosis_TMA_IMC_mask_on_preIMC_A2.geojson")
 ome_file = snakemake.input["preIMC"]
-#ome_file = os.path.join("/home/retger/imc_to_ims_workflow/results/cirrhosis_TMA/data/preIMC/cirrhosis_TMA_preIMC.ome.tiff")
 
+# outputs
 IMC_to_preIMC_transform = snakemake.output["IMC_to_preIMC_transform"]
-#IMC_to_preIMC_image = snakemake.output["IMC_to_preIMC_image"]
-#imcache_dir = snakemake.output["imcache_dir"]
-
-spacing = snakemake.params["microscopy_pixelsize"]
-#spacing=0.22537
 
 logging.info("Read image")
 # read imc
-imc = imread(imc_file)
+imc = tifffile.imread(imc_file)
 imc_size = imc.shape
 spacing_IMC = snakemake.params["IMC_pixelsize"]
 
@@ -81,7 +77,7 @@ rot_tform["TransformParameters"]=[str(total_rotation),"0.000","0.000"]
 
 logging.info("Calculate size")
 arr=rs.shape_data[0]["array"]
-new_size = [ceil((np.max(arr[:,0])-np.min(arr[:,0]))*spacing),ceil((np.max(arr[:,1])-np.min(arr[:,1]))*spacing)]
+new_size = [math.ceil((np.max(arr[:,0])-np.min(arr[:,0]))*spacing),math.ceil((np.max(arr[:,1])-np.min(arr[:,1]))*spacing)]
 new_size_str = [str(s) for s in new_size]
 # set final image size
 #rot_tform["Size"] = [str(imc_size[0]), str(imc_size[1])]
@@ -116,7 +112,7 @@ transform_params=rs.shape_data[0]["array"][ind,:].tolist()
 
 logging.info("Read image metadata")
 # read ome metadata for size
-ome=from_tiff(ome_file)
+ome=ome_types.from_tiff(ome_file)
 img_size=[ome.images[0].pixels.size_x,ome.images[0].pixels.size_y]
 
 logging.info("Create transformation")

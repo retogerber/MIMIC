@@ -8,58 +8,44 @@ import SimpleITK as sitk
 import re
 import numpy as np
 import cv2
-from image_registration_IMS_to_preIMS_utils import readimage_crop, convert_and_scale_image, get_angle, saveimage_tile, subtract_postIMS_grid, extract_mask, get_image_shape, sam_core, preprocess_mask
+from image_utils import readimage_crop, convert_and_scale_image, saveimage_tile, subtract_postIMS_grid, extract_mask, get_image_shape, sam_core, preprocess_mask
+from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+import logging_utils
 
-logging.info("Start")
+if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+    snakemake = snakeMakeMock()
+    snakemake.params["input_spacing_1"] = 1
+    snakemake.params["input_spacing_2"]
+    snakemake.params["input_spacing_IMC_location"] = 0.22537
+    snakemake.params["output_spacing"] = 1
+    snakemake.input["sam_weights"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/Misc/sam_vit_h_4b8939.pth"
+    snakemake.input["microscopy_image_1"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA-2_020_transformed_on_postIMS.ome.tiff"
+    snakemake.input["microscopy_image_2"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
+    snakemake.input["IMC_location"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_C9.geojson"
 
-logging.info("Setup segment anything")
-# CHECKPOINT_PATH = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/Misc/sam_vit_h_4b8939.pth"
+    if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+        raise Exception("Running in interactive mode!!")
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
+setNThreads(snakemake.threads)
+
+# params
+input_spacing_1 = snakemake.params["input_spacing_1"]
+input_spacing_2 = snakemake.params["input_spacing_2"]
+input_spacing_IMC_location = snakemake.params["input_spacing_IMC_location"]
+output_spacing = snakemake.params["output_spacing"]
+# inputs
+microscopy_file_1 = snakemake.input['microscopy_image_1']
+microscopy_file_2 = snakemake.input['microscopy_image_2']
+IMC_location=snakemake.input["IMC_location"]
+if isinstance(IMC_location, list):
+    IMC_location = IMC_location[0]
 CHECKPOINT_PATH = snakemake.input["sam_weights"]
 DEVICE = 'cpu'
 MODEL_TYPE = "vit_h"
-
-# microscopy_file_1 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA-2_020_transformed_on_postIMS.ome.tiff"
-microscopy_file_1 = snakemake.input['microscopy_image_1']
-
-# microscopy_file_2 = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
-microscopy_file_2 = snakemake.input['microscopy_image_2']
-# IMC_location = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_C9.geojson"
-IMC_location=snakemake.input["IMC_location"]
-
-if isinstance(IMC_location, list):
-    IMC_location = IMC_location[0]
-logging.info(f"IMC_location: {IMC_location}")
-logging.info(f"microscopy image 1: {microscopy_file_1}")
-logging.info(f"microscopy image 2: {microscopy_file_2}")
-
-# input_spacing_1 = 1
-input_spacing_1 = snakemake.params["input_spacing_1"]
-# input_spacing_2 = 0.22537
-input_spacing_2 = snakemake.params["input_spacing_2"]
-# input_spacing_IMC_location = 0.22537
-input_spacing_IMC_location = snakemake.params["input_spacing_IMC_location"]
-# output_spacing = 1
-output_spacing = snakemake.params["output_spacing"]
-
-logging.info(f"input spacing 1: {input_spacing_1}")
-logging.info(f"input spacing 2: {input_spacing_2}")
-logging.info(f"input spacing IMC location: {input_spacing_IMC_location}")
-logging.info(f"output spacing: {output_spacing}")
-
-threads = snakemake.threads
-sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(threads)
-cv2.setNumThreads(threads)
 
 m = re.search("[a-zA-Z]*(?=.ome.tiff$)",os.path.basename(microscopy_file_1))
 comparison_to = m.group(0)

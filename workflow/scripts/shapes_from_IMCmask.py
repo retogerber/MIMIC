@@ -1,50 +1,40 @@
-from wsireg.reg_shapes import RegShapes
+import SimpleITK as sitk
+import wsireg
 import numpy as np
 from tifffile import imread
-import skimage
 import cv2
 from shapely.geometry import shape
 import json
 import pickle
+from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+import logging_utils
 
-logging.info("Start")
-cv2.setNumThreads(snakemake.threads)
-# cell mask file
-# cell_image_fp = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_005_transformed_on_postIMS.ome.tiff"
-# cell_image_fp = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed_on_postIMS.ome.tiff"
-#cell_image_fp="/home/retger/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_006_transformed.ome.tiff"
+if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+    snakemake = snakeMakeMock()
+    snakemake.params['input_spacing'] = 0.22537
+    snakemake.params['input_spacing_IMC_location'] = 0.22537
+    snakemake.params['output_spacing'] = 1
+    snakemake.input["IMCmask"] = ""
+    snakemake.input["IMC_location"] = ""
+    if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+        raise Exception("Running in interactive mode!!")
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
+setNThreads(snakemake.threads)
+
+# params
+input_spacing = float(snakemake.params['input_spacing'])
+input_spacing_IMC_location = float(snakemake.params['input_spacing_IMC_location'])
+output_spacing = float(snakemake.params['output_spacing'])
+
+# inputs
 cell_image_fp=snakemake.input["IMCmask"]
-
-# IMC_geojson_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_A9.geojson"
 IMC_geojson_file=snakemake.input['IMC_location']
 if isinstance(IMC_geojson_file, list):
     IMC_geojson_file = IMC_geojson_file[0]
-
-
-# input_spacing = 0.22537
-input_spacing = float(snakemake.params['input_spacing'])
-# input_spacing_IMC_location = 0.22537
-input_spacing_IMC_location = float(snakemake.params['input_spacing_IMC_location'])
-output_spacing = 1
-output_spacing = float(snakemake.params['output_spacing'])
-
-logging.info(f"input_spacing: {input_spacing}")
-logging.info(f"input_spacing_IMC_location: {input_spacing_IMC_location}")
-logging.info(f"output_spacing: {output_spacing}")
-logging.info(f"IMC cell mask: {cell_image_fp}")
-logging.info(f"IMC geojson: {IMC_geojson_file}")
-
 
 
 logging.info("Read Mask")
@@ -116,7 +106,7 @@ for i,single_shape in enumerate(cell_shapes):
     
 logging.info("Convert cells to shapes and save")
 # cell masks to RegShapes model
-rs = RegShapes(cell_shapes_translated)
+rs = wsireg.reg_shapes.RegShapes(cell_shapes_translated)
 output_fp_shapes=snakemake.output["IMCmask_shape_transformed"]
 rs.save_shape_data(output_fp_shapes, transformed=False)
 

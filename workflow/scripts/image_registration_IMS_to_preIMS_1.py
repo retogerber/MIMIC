@@ -7,77 +7,45 @@ import pycpd
 import napari_imsmicrolink
 import skimage
 import numpy as np
-from image_registration_IMS_to_preIMS_utils import readimage_crop, saveimage_tile
+from image_utils import readimage_crop, saveimage_tile
+from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+import logging_utils
 
-logging.info("Start")
+if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+    snakemake = snakeMakeMock()
+    snakemake.params["IMS_pixelsize"] = 30
+    snakemake.params["IMS_shrink_factor"] = 0.8
+    snakemake.params["IMC_pixelsize"] = 0.22537
+    snakemake.params["IMS_rotation_angle"] = 180
+    snakemake.params["sample_core_names"] = "NASH_HCC_TMA-2_002|-_-|E9|-|-|NASH_HCC_TMA-2_004|-_-|A2|-|-|NASH_HCC_TMA-2_011|-_-|B5|-|-|NASH_HCC_TMA-2_032|-_-|B1"
+    snakemake.input["postIMSmask_downscaled"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS_reduced_mask.ome.tiff"
+    snakemake.input["imzml"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_IMS.imzML"
+    snakemake.input["IMCmask"] = ["/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_E9.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_A2.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_B5.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_B1.geojson"]
+    if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+        raise Exception("Running in interactive mode!!")
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
+setNThreads(snakemake.threads)
 
-cv2.setNumThreads(snakemake.threads)
-sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(snakemake.threads)
-
-# parameters
-# stepsize = 30
+# params
 stepsize = float(snakemake.params["IMS_pixelsize"])
-# pixelsize = 24
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
-# resolution = 0.22537
 resolution = float(snakemake.params["IMC_pixelsize"])
-# rotation_imz = 180
 rotation_imz = float(snakemake.params["IMS_rotation_angle"])
 assert(rotation_imz in [-270,-180,-90,0,90,180,270])
-
-# postIMSr_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS_reduced_mask.ome.tiff"
-# postIMSr_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/postIMS/test_split_ims_postIMS_reduced_mask.ome.tiff"
-# postIMSr_file = "/home/retger/Downloads/cirrhosis_TMA_postIMS_reduced_mask.ome.tiff"
-# postIMSr_file = "/home/retger/Downloads/Lipid_TMA_3781_postIMS_reduced_mask.ome.tiff"
+# inputs
 postIMSr_file = snakemake.input["postIMSmask_downscaled"]
-# imzmlfile = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_IMS.imzML"
-# imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/IMS_test_split_ims_1.imzML"
-# imzmlfile = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/IMS_test_split_pre.imzML"
-# imzmlfile = "/home/retger/Downloads/cirrhosis_TMA_IMS.imzML"
-# imzmlfile = "/home/retger/Downloads/pos_mode_lipids_tma_02032023_imzml.imzML"
 imzmlfile = snakemake.input["imzml"]
-
-# imc_mask_files = ["/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_E9.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_A2.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_B5.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_B1.geojson"]
-# imc_mask_files = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_022_transformed_on_postIMS.ome.tiff"
-# imc_mask_files = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_D2.geojson"
-# imc_mask_files = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMC_location/test_split_ims_IMC_mask_on_postIMS_A1.geojson"
-# imc_mask_files = ["/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed.ome.tiff","/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed.ome.tiff"]
-# imc_mask_files = [f"/home/retger/Downloads/Cirrhosis-TMA-5_New_Detector_0{i}_transformed.ome.tiff" for i in ["01","02","03","04","05","06","07","08","09","11","12","13","14","15","16"]]
-# imc_mask_files = imc_mask_files + [f"/home/retger/Downloads/Cirrhosis-TMA-5_01062022_0{i}_transformed.ome.tiff" for i in ["05","06","07","08","09"]]
-# imc_mask_files = imc_mask_files + [f""/home/retger/Downloads/Cirrhosis_TMA_5_01262022_0{i}_transformed.ome.tiff" for i in ["01","02","03","04","05"]]
-# imc_mask_files = ["/home/retger/Downloads/Lipid_TMA_37819_009_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_025_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_027_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_029_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_031_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_033_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_035_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_037_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_039_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_041_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_043_transformed.ome.tiff"]
-# imc_mask_files = ["/home/retger/Downloads/Lipid_TMA_37819_012_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_015_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_017_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_019_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_021_transformed.ome.tiff", "/home/retger/Downloads/Lipid_TMA_37819_023_transformed.ome.tiff"]
-
 imc_mask_files = snakemake.input["IMCmask"]
 if isinstance(imc_mask_files, str):
     imc_mask_files = [imc_mask_files]
-# sample_metadata = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/config/sample_metadata.csv"
-# sample_metadata = "/home/retger/Downloads/sample_metadata.csv"
-# sample_metadata = snakemake.input["sample_metadata"]
-# sample_core_names = "NASH_HCC_TMA-2_022|-_-|D2"
-# sample_core_names = "NASH_HCC_TMA-2_002|-_-|E9|-|-|NASH_HCC_TMA-2_004|-_-|A2|-|-|NASH_HCC_TMA-2_011|-_-|B5|-|-|NASH_HCC_TMA-2_032|-_-|B1"
-# sample_core_names = "Cirrhosis-TMA-5_New_Detector_001|-_-|A1"
 sample_core_names = snakemake.params["sample_core_names"]
-
-# output_table = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/IMS_to_postIMS_matches.csv"
+# outputs
 output_table = snakemake.output["IMS_to_postIMS_matches"]
 
-
-logging.info("Rotation angle: "+str(rotation_imz))
-logging.info("IMS stepsize: "+str(stepsize))
-logging.info("IMS pixelsize: "+str(pixelsize))
-logging.info("Microscopy pixelsize: "+str(resolution))
 
 logging.info("IMC location bounding boxes:")
 imcbboxls = list()

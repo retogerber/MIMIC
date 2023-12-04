@@ -5,20 +5,22 @@ from wsireg.reg_shapes import RegShapes
 from shapely import geometry
 import numpy as np
 import pandas as pd
+from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+import logging_utils
 
-logging.info("Start")
-
+if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+    snakemake = snakeMakeMock()
+    snakemake.input["IMCmask_transformed"] = ""
+    snakemake.input["cell_indices"] = ""
+    snakemake.output["cell_centroids"] = ""
+    if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+        raise Exception("Running in interactive mode!!")
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
+setNThreads(snakemake.threads)
 
 def compute_cell_centroids(
     cells_fp: Union[Path, str],
@@ -42,12 +44,11 @@ def compute_cell_centroids(
     centroids_df.sort_values("cell_idx", inplace=True)
     return centroids_df
 
-
+# inputs
 cell_shapes_fp = snakemake.input["IMCmask_transformed"]
 cell_indices_fp = snakemake.input["cell_indices"]
-#cell_indices_fp =  "/home/retger/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_006_transformed_cell_indices.pkl"
-#cell_shapes_fp = "/home/retger/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_006_transformed_cell_masks.geojson"
 
+# outputs
 output_csv = snakemake.output["cell_centroids"]
 
 logging.info("Read pickle")

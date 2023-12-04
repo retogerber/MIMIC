@@ -1,22 +1,23 @@
 import cv2
 import json
 import numpy as np
-from image_registration_IMS_to_preIMS_utils import readimage_crop,get_image_shape 
+from image_utils import readimage_crop,get_image_shape 
+from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+import logging_utils
 
-logging.info("Start")
-
-cv2.setNumThreads(snakemake.threads)
+if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+    snakemake = snakeMakeMock()
+    snakemake.params["downscale_factor"] = 1
+    snakemake.input["input_image"] = ""
+    snakemake.input["geojson"] = ""
+    if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+        raise Exception("Running in interactive mode!!")
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
+setNThreads(snakemake.threads)
 
 input_image = snakemake.input["input_image"]
 try:
@@ -24,11 +25,6 @@ try:
 except:
     geojson = None
 downscale_factor = snakemake.params["downscale_factor"]
-
-logging.info(f"input_image: {input_image}")
-logging.info(f"geojson: {geojson}")
-logging.info(f"downscale_factor: {downscale_factor}")
-
 
 def get_bbox(geojson):
     IMC_geojson = json.load(open(geojson, "r"))

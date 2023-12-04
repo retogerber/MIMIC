@@ -8,89 +8,74 @@ import skimage
 import numpy as np
 import json
 import matplotlib.pyplot as plt
-from image_registration_IMS_to_preIMS_utils import readimage_crop, composite2affine, saveimage_tile,  create_imz_coords,get_rotmat_from_angle,  concave_boundary_from_grid_holes, indices_sequence_from_ordered_points, angle_code_from_point_sequence, image_from_points, get_sigma, get_angle, get_angle_vec
 from sklearn.neighbors import KDTree
 import shapely
 import shapely.affinity
 from pathlib import Path
+from image_utils import readimage_crop, saveimage_tile
+from registration_utils import composite2affine, create_imz_coords,get_rotmat_from_angle,  concave_boundary_from_grid_holes, indices_sequence_from_ordered_points, angle_code_from_point_sequence, image_from_points, get_sigma, get_angle, get_angle_vec
+from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+import logging_utils
 
-threads = int(snakemake.threads)
-sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(threads)
-cv2.setNumThreads(threads)
+if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+    snakemake = snakeMakeMock()
+    snakemake.params["IMS_pixelsize"] = 30
+    snakemake.params["IMS_shrink_factor"] = 0.8
+    snakemake.params["IMC_pixelsize"] = 0.22537
+    snakemake.params["IMS_rotation_angle"] = 180
+    snakemake.params['within_IMC_fine_registration'] = True
+    snakemake.params["min_index_length"] = 6
+    snakemake.params["max_index_length"] = 30
+    snakemake.input["imzml"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_IMS.imzML"
+    snakemake.input["IMCmask"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_012_transformed_on_postIMS.ome.tiff"
+    snakemake.input["postIMSmask_downscaled"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
+    snakemake.input["masks_transform"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_012_masks_transform.txt"
+    snakemake.input["gridsearch_transform"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_012_gridsearch_transform.txt"
+    snakemake.input["postIMS_ablation_centroids"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_012_postIMS_ablation_centroids.csv"
+    snakemake.input["metadata"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_012_step1_metadata.json"
 
-# stepsize = 30
-# stepsize = 20
-# stepsize = 10
+
+    snakemake.input["sam_weights"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/Misc/sam_vit_h_4b8939.pth"
+    snakemake.input["microscopy_image"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/test_split_pre_postIMC.ome.tiff"
+    snakemake.input["IMC_location"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_postIMC_A1.geojson"
+    if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+        raise Exception("Running in interactive mode!!")
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
+setNThreads(snakemake.threads)
+
+# params
 stepsize = float(snakemake.params["IMS_pixelsize"])
-# pixelsize = 24
-# pixelsize = 16
-# pixelsize = 8 
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
-# resolution = 1
-# resolution = 0.22537
 resolution = float(snakemake.params["IMC_pixelsize"])
-# rotation_imz = 180
-# rotation_imz = 0
 rotation_imz = float(snakemake.params["IMS_rotation_angle"])
 assert(rotation_imz in [-270,-180,-90,0,90,180,270])
 rotmat = get_rotmat_from_angle(rotation_imz)
-
 if not isinstance(snakemake.params['within_IMC_fine_registration'], bool):
     assert(isinstance(snakemake.params['within_IMC_fine_registration'], str))
     assert(snakemake.params['within_IMC_fine_registration'].strip() in ["","True","true","False","false"])
     do_within_IMC_fine_registration = True if snakemake.params['within_IMC_fine_registration'] in ["True","true"] else False
 else:
     do_within_IMC_fine_registration = snakemake.params['within_IMC_fine_registration']
-
-# min_n=6
 min_n = snakemake.params["min_index_length"]
-# max_n=30
 max_n = snakemake.params["max_index_length"]
 
-
-logging.info("Rotation angle: "+str(rotation_imz))
-logging.info("IMS stepsize: "+str(stepsize))
-logging.info("IMS pixelsize: "+str(pixelsize))
-logging.info("Microscopy pixelsize: "+str(resolution))
-logging.info(f"within_IMC_fine_registration: {do_within_IMC_fine_registration}")
-logging.info(f"min_n: {min_n}")
-logging.info(f"max_n: {max_n}")
-
-# imzmlfile = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_IMS.imzML"
+# inputs
 imzmlfile = snakemake.input["imzml"]
-
-# imc_mask_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_012_transformed_on_postIMS.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
-
 imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed_on_postIMS","")
 imc_project = os.path.split(os.path.split(os.path.split(os.path.split(imc_mask_file)[0])[0])[0])[1]
 project_name = "postIMS_to_IMS_"+imc_project+"-"+imc_samplename
-
-# postIMS_file = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
 postIMS_file = snakemake.input["postIMS_downscaled"]
-
-# masks_transform_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_012_masks_transform.txt"
 masks_transform_filename = snakemake.input["masks_transform"]
-# gridsearch_transform_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_012_gridsearch_transform.txt"
 gridsearch_transform_filename = snakemake.input["gridsearch_transform"]
-
-# postIMS_ablation_centroids_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_012_postIMS_ablation_centroids.csv"
 postIMS_ablation_centroids_filename = snakemake.input["postIMS_ablation_centroids"]
-# metadata_to_save_filename = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_012_step1_metadata.json"
 metadata_to_save_filename = snakemake.input["metadata"]
 
-
+# outputs
 ims_to_postIMS_regerror = snakemake.output["IMS_to_postIMS_error"]
 ims_to_postIMS_regerror_image = snakemake.output["IMS_to_postIMS_error_image"]
 

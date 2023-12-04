@@ -75,58 +75,12 @@ image_types = ["postIMS", "preIMS", "postIMC", "preIMC"]
 # imzml_base = [get_column_entry_from_metadata_two_conditions(sample_names[i], project_names[i], "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"])).replace("-IMSML-coords.h5","").replace("postIMS_to_IMS_","") for i in range(len(sample_names))]
 rule all:
     input:
-        #expand("results/{project_name}/data/{image_type}/{project_name}_{image_type}.ome.tiff", project_name=project_names, image_type=image_types),
-        #expand("results/{project_name}/data/IMC/{sample}_aggr_transformed.ome.tiff",project_name=project_names,sample=sample_names),
-        expand(
-            "results/{project_name}/data/cell_overlap/{project_name}_{sample}_cell_overlap_IMS.csv",
-            zip,
-            project_name=project_names,
-            sample=sample_names,
-        ),
-        expand(
-            "results/{project_name}/data/cell_overlap/{project_name}_{sample}_cell_centroids.csv",
-            zip,
-            project_name=project_names,
-            sample=sample_names,
-        ),
-        #expand("results/{project_name}/data/IMS/{project_name}_IMS_peaks.h5",project_name=unique_project_names)
         expand(
             "results/{project_name}/data/IMS/{imzml_base}_peaks.h5",
             zip,
             project_name=unique_imzml_project[1],
             imzml_base=unique_imzml_project[0],
         ),
-        #expand("results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMS_{core}.geojson",project_name="test_combined", core=["A1","B1"])
-        #expand("results/{project_name}/data/postIMC/{sample}_transformed.ome.tiff",zip,project_name=project_names[4:], sample=sample_names[4:]),
-        #expand("results/{project_name}/data/postIMS/{project_name}_postIMS_reduced.ome.tiff", project_name=project_names[4:]),
-        #expand("results/{project_name}/data/registration_metric/{sample}_reg_metrics.csv",zip,project_name=project_names[4:], sample=sample_names[4:]),
-        expand(
-            "results/{project_name}/data/registration_metric/{project_name}_reg_metrics_combined.csv",
-            project_name=unique_project_names,
-        ),
-        expand(
-            "results/{project_name}/data/registration_metric/IMS_to_postIMS_visualization_plot.html",
-            project_name=unique_project_names,
-        ),
-        expand(
-            "results/{project_name}/data/registration_metric/postIMC_to_preIMC_visualization_plot.html",
-            project_name=unique_project_names,
-        ),
-        expand(
-            "results/{project_name}/data/registration_metric/preIMC_to_preIMS_visualization_plot.html",
-            project_name=unique_project_names,
-        ),
-        expand(
-            "results/{project_name}/data/registration_metric/preIMS_to_postIMS_visualization_plot.html",
-            project_name=unique_project_names,
-        ),
-        expand(
-            "results/{project_name}/data/registration_metric/preIMS_to_postIMS_sitk_visualization_plot.html",
-            project_name=unique_project_names,
-        ),
-        #expand("results/{project_name}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics_auto.json",zip, project_name=project_names,sample=sample_names),
-        #expand("results/{project_name}/data/IMS/{project_name}_{imzml_base}_IMS_to_postIMS_matches.csv",zip, project_name=project_names, imzml_base = imzml_base),
-        #expand("results/{project_name}/data/IMS/postIMS_to_IMS_{project_name}_{sample}-IMSML-coords.h5",zip, project_name=project_names, sample=sample_names)
         expand(
             "results/{project_name}/data/cell_overlap/{project_name}_{imzml_base}_peak_cell_overlap.csv",
             zip,
@@ -134,70 +88,10 @@ rule all:
             imzml_base=unique_imzml_project[0],
         ),
         expand(
-            "results/{project_name}/data/postIMC/{sample}_transformed_on_preIMC.ome.tiff",
-            zip,
-            project_name=project_names,
-            sample=sample_names,
-        ),
-        expand(
-            "results/{project_name}/data/preIMC/{sample}_transformed_on_preIMS.ome.tiff",
-            zip,
-            project_name=project_names,
-            sample=sample_names,
-        ),
-        expand(
-            "results/{project_name}/data/postIMC/{sample}_transformed_on_preIMC_registration_comparison.ome.tiff",
-            zip,
-            project_name=project_names,
-            sample=sample_names,
-        ),
-        #expand("results/{project_name}/data/preIMS/{sample}_transformed_on_postIMS_registration_comparison.ome.tiff",zip,project_name=project_names, sample=sample_names)
-        expand(
-            "results/{project_name}/data/preIMC/{sample}_transformed_on_preIMS_registration_comparison.ome.tiff",
-            zip,
-            project_name=project_names,
-            sample=sample_names,
-        ),
-        expand(
             "results/{project_name}/data/registration_metric/report/{project_name}_registration_evaluation.html",
             project_name=project_names,
         ),
-        expand(
-            "results/{project_name}/data/postIMC/{sample}_postIMC_landmark_regions.json",
-            zip,
-            project_name=project_names,
-            sample=sample_names,
-        ),
-        expand(
-            "results/{project_name}/data/postIMC/{sample}_postIMC_on_preIMC_landmark_regions.json",
-            zip,
-            project_name=project_names,
-            sample=sample_names,
-        ),
-        expand(
-            "results/{project_name}/data/preIMC/{sample}_preIMC_landmark_regions.json",
-            zip,
-            project_name=project_names,
-            sample=sample_names,
-        ),
-        expand(
-            "results/{project_name}/data/registration_metric/{sample}_postIMC_and_preIMC_landmark_regions.png",
-            zip,
-            project_name=project_names,
-            sample=sample_names,
-        ),
-        expand(
-            "results/{project_name}/data/registration_metric/{sample}_error_metrics_regions_postIMC_on_preIMC.json",
-            zip,
-            project_name=project_names,
-            sample=sample_names,
-        ),
-        expand(
-            "results/{project_name}/data/registration_metric/{sample}_preIMC_and_preIMS_landmark_regions.png",
-            zip,
-            project_name=project_names,
-            sample=sample_names,
-        ),
+
 
 rule prepare_register_postIMC_to_postIMS:
     params:
@@ -1775,6 +1669,44 @@ use rule image_registration_evaluation_transform_regions_SAM_postIMC_to_preIMC a
     benchmark:
         "benchmarks/image_registration_evaluation_transform_regions/{project_name}_{sample}_preIMS.txt",
 
+use rule image_registration_evaluation_transform_regions_SAM_postIMC_to_preIMC as image_registration_evaluation_transform_regions_SAM_postIMC_to_postIMS with:
+    params:
+        input_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        input_spacing_IMC_location=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        output_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMC_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        pixel_expansion=501,
+        min_area=576, # 24**2
+        max_area=262144, # 512**2
+        transform_target="postIMS",
+        transform_type="image" # inversion of nonlinear transformation is not robust, use image registration
+    input:
+        microscopy_image="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff",
+        IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"postIMC"),
+        contours_in="results/{project_name}/data/postIMC/{sample}_postIMC_landmark_regions.json",
+        transform_file=choose_postIMC_to_postIMS_transform,
+    output:
+        contours_out="results/{project_name}/data/postIMC/{sample}_postIMC_on_postIMS_landmark_regions.json",
+    log:
+        stdout="logs/image_registration_evaluation_transform_regions/{project_name}_{sample}_postIMC_to_postIMS.stdout",
+    benchmark:
+        "benchmarks/image_registration_evaluation_transform_regions/{project_name}_{sample}_postIMC_to_postIMS.txt",
+
+
 rule image_registration_evaluation_compare_regions_postIMC_to_preIMC:
     threads: 16
     resources:
@@ -1855,6 +1787,22 @@ use rule image_registration_evaluation_compare_regions_postIMC_to_preIMC as imag
         stdout="logs/image_registration_evaluation_compare_regions_preIMS_to_postIMS/{project_name}_{sample}_preIMS.stdout",
     benchmark:
         "benchmarks/image_registration_evaluation_compare_regions_preIMS_to_postIMS/{project_name}_{sample}_preIMS.txt",
+
+use rule image_registration_evaluation_compare_regions_postIMC_to_preIMC as image_registration_evaluation_compare_regions_postIMC_to_postIMS with:
+    input:
+        microscopy_image_1="results/{project_name}/data/postIMC/{sample}_transformed_on_postIMS.ome.tiff",
+        microscopy_image_2="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
+        contours_in_1="results/{project_name}/data/postIMC/{sample}_postIMC_on_postIMS_landmark_regions.json",
+        contours_in_2="results/{project_name}/data/postIMS/{sample}_postIMS_landmark_regions.json",
+        IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"postIMS"),
+    output:
+        overlap_image="results/{project_name}/data/registration_metric/{sample}_postIMC_and_postIMS_landmark_regions.png",
+        error_stats="results/{project_name}/data/registration_metric/{sample}_error_metrics_regions_postIMC_on_postIMS.json",
+    log:
+        stdout="logs/image_registration_evaluation_compare_regions_postIMC_to_postIMS/{project_name}_{sample}_preIMS.stdout",
+    benchmark:
+        "benchmarks/image_registration_evaluation_compare_regions_postIMC_to_postIMS/{project_name}_{sample}_preIMS.txt",
+
 
 
 rule image_registration_evaluation_IMS_to_postIMS:
@@ -2293,8 +2241,16 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-
-
+        regions_postIMC_transformed_on_postIMS_png = lambda wildcards: expand(
+            "results/{{project_name}}/data/registration_metric/{sample}_postIMC_and_postIMS_landmark_regions.png",
+            sample=get_column_entry_from_metadata(
+                wildcards.project_name,
+                "sample_name",
+                "project_name",
+                read_sample_metadata(config["sample_metadata"]),
+                return_all=True,
+            ),
+        ),
     output:
         html="results/{project_name}/data/registration_metric/report/{project_name}_registration_evaluation.html",
     log:

@@ -1,57 +1,46 @@
 import pandas as pd
-import cv2
 import matplotlib.pyplot as plt
 from rembg import new_session
 import skimage
 import numpy as np
 import tifffile
-from image_registration_IMS_to_preIMS_utils import get_max_dice_score, dist_centroids, extract_mask
+from image_utils import extract_mask
+from registration_utils import get_max_dice_score, dist_centroids
+from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+import logging_utils
 
-logging.info("Start")
+if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+    snakemake = snakeMakeMock()
+    snakemake.params["input_spacing_1"] = 1
+    snakemake.params["input_spacing_2"] = 0.22537
+    snakemake.params["output_spacing"] = 1 
+    snakemake.input["postIMC_on_preIMC"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/Cirrhosis-TMA-5_New_Detector_001_transformed_on_preIMC.ome.tiff"
+    snakemake.input['preIMC'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/test_split_pre_preIMC.ome.tiff"
+    snakemake.input['preIMC_on_preIMS'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/Cirrhosis-TMA-5_New_Detector_001_transformed_on_preIMS.ome.tiff"
+    snakemake.input['preIMS'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre_preIMS.ome.tiff"
+    snakemake.input['preIMS_on_postIMS'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/Cirrhosis-TMA-5_New_Detector_002_transformed_on_postIMS.ome.tiff"
+    snakemake.input['postIMS'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMS/test_split_pre_postIMS.ome.tiff"
+    if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+        raise Exception("Running in interactive mode!!")
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
+setNThreads(snakemake.threads)
 
-cv2.setNumThreads(snakemake.threads)
-
-# postIMC_on_preIMC_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/Cirrhosis-TMA-5_New_Detector_001_transformed_on_preIMC.ome.tiff"
-postIMC_on_preIMC_file = snakemake.input["postIMC_on_preIMC"]
-# preIMC_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/test_split_pre_preIMC.ome.tiff"
-preIMC_file = snakemake.input["preIMC"]
-# preIMC_on_preIMS_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/Cirrhosis-TMA-5_New_Detector_001_transformed_on_preIMS.ome.tiff"
-preIMC_on_preIMS_file = snakemake.input["preIMC_on_preIMS"]
-# preIMS_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre_preIMS.ome.tiff"
-preIMS_file = snakemake.input["preIMS"]
-# preIMS_on_postIMS_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/Cirrhosis-TMA-5_New_Detector_002_transformed_on_postIMS.ome.tiff"
-preIMS_on_postIMS_file = snakemake.input["preIMS_on_postIMS"]
-# postIMS_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMS/test_split_pre_postIMS.ome.tiff"
-postIMS_file = snakemake.input["postIMS"]
-
-
-# # postIMS_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMS/test_split_pre_postIMS_reduced.ome.tiff"
-# postIMS_file = snakemake.input["postIMS_downscaled"]
-# # postIMC_file="/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/Cirrhosis-TMA-5_New_Detector_001_transformed.ome.tiff"
-# postIMC_file = snakemake.input["postIMC_transformed"]
-# # preIMS_file =  "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre-preIMS_to_postIMS_registered_reduced.ome.tiff"
-# preIMS_file = snakemake.input["preIMS_downscaled"]
-# # resize factor to speedup computations
-# rescale = 0.22537
-# input_spacing_1 = 1
+# params
 input_spacing_1 = snakemake.params["input_spacing_1"]
-# input_spacing_2 = 0.22537
 input_spacing_2 = snakemake.params["input_spacing_2"]
-# output_spacing = 1
 output_spacing = snakemake.params["output_spacing"]
-
-
+# inputs
+postIMC_on_preIMC_file = snakemake.input["postIMC_on_preIMC"]
+preIMC_file = snakemake.input["preIMC"]
+preIMC_on_preIMS_file = snakemake.input["preIMC_on_preIMS"]
+preIMS_file = snakemake.input["preIMS"]
+preIMS_on_postIMS_file = snakemake.input["preIMS_on_postIMS"]
+postIMS_file = snakemake.input["postIMS"]
+# outputs
 output_df = snakemake.output["registration_metrics"]
 
 logging.info("Setup rembg model")

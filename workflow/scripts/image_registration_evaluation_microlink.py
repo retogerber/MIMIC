@@ -1,60 +1,52 @@
 import json
 import numpy as np
-import sys,os
 import logging, traceback
 import json
 import h5py
 from sklearn.neighbors import KDTree
-from image_registration_IMS_to_preIMS_utils import readimage_crop
 import skimage
 import cv2
 import shapely
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+from image_utils import readimage_crop
+from utils import setNThreads, snakeMakeMock
+import sys,os
+import logging, traceback
+import logging_utils
 
-logging.info("Start")
+if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+    snakemake = snakeMakeMock()
+    snakemake.params["IMS_pixelsize"] = 30
+    snakemake.params["IMS_shrink_factor"] = 0.8
+    snakemake.params["IMC_pixelsize"] = 1
+    snakemake.input["postIMS_ablation_centroids"] = ""
+    snakemake.input["metadata"] = ""
+    snakemake.input["imsml_coords_fp"] = ""
+    snakemake.input["IMCmask"] =""
+    snakemake.input["imsmicrolink_meta"] = ""
+    if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+        raise Exception("Running in interactive mode!!")
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
+setNThreads(snakemake.threads)
 
-
-logging.info("Error of all points")
-# postIMS_ablation_centroids_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_042_postIMS_ablation_centroids.csv"
-# postIMS_ablation_centroids_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_001_postIMS_ablation_centroids.csv"
+# params
+stepsize = float(snakemake.params["IMS_pixelsize"])
+resolution_factor = float(snakemake.params["IMS_shrink_factor"])
+resolution = float(snakemake.params["IMC_pixelsize"])
+# inputs
 postIMS_ablation_centroids_filename = snakemake.input["postIMS_ablation_centroids"]
-# metadata_to_save_filename = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_042_step1_metadata.json"
-# metadata_to_save_filename = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/registration_metric/Cirrhosis-TMA-5_New_Detector_001_step1_metadata.json" 
 metadata_to_save_filename = snakemake.input["metadata"]
-# imsml_coords_fp = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_3781_042-IMSML-coords.h5"
-# imsml_coords_fp = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/postIMS_to_IMS_test_split_pre-Cirrhosis-TMA-5_New_Detector_001-IMSML-coords.h5"
-# imsml_coords_fp = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/postIMS_to_IMS_test_split_pre-IMSML-coords.h5"
 imsml_coords_fp = snakemake.input["imsml_coords_fp"]
-#imc_mask_file = "/home/retger/Downloads/test_images_ims_to_imc_workflow/Lipid_TMA_37819_042_transformed.ome.tiff"
-# imc_mask_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_001_transformed_on_postIMS.ome.tiff"
 imc_mask_file = snakemake.input["IMCmask"]
 
-# stepsize=10
-# stepsize=30
-stepsize = float(snakemake.params["IMS_pixelsize"])
-# resolution_factor = 0.8
-resolution_factor = float(snakemake.params["IMS_shrink_factor"])
-# resolution = 0.22537
-resolution = float(snakemake.params["IMC_pixelsize"])
+transform_file = snakemake.input["imsmicrolink_meta"]
 
-logging.info(f"Stepsize: {str(stepsize)}")
-logging.info(f"Resolution factor: {str(resolution_factor)}")
-logging.info(f"Resolution: {str(resolution)}")
-
+logging.info("Read metadata")
 with open(metadata_to_save_filename, 'r') as fp:
     metadata = json.load(fp)
 postIMS_bbox = metadata['postIMS_bbox']
-# xmin, ymin, xmax, ymax = (np.array(postIMS_bbox)*resolution).astype(int)
 xmin, ymin, xmax, ymax = postIMS_bbox
-# postIMS_shape = (int(postIMS_bbox[2]*resolution)-int(postIMS_bbox[0]*resolution), int(postIMS_bbox[3]*resolution)-int(postIMS_bbox[1]*resolution))
 
 centsred = np.loadtxt(postIMS_ablation_centroids_filename, delimiter=',')
 centsredfilttrans = centsred*stepsize+np.array([xmin*resolution,ymin*resolution])
@@ -80,10 +72,6 @@ with h5py.File(imsml_coords_fp, "r") as f:
         micro_y = micro_y[sub]
 
 imscoords = np.vstack((micro_y,micro_x)).T
-# import matplotlib.pyplot as plt
-# plt.scatter(imscoords[:,0],imscoords[:,1],s=1)
-# plt.scatter(centsredfilttrans[:,0],centsredfilttrans[:,1],s=1)
-# plt.show()
 
 kdt = KDTree(imscoords, leaf_size=30, metric='euclidean')
 distances, all_indices = kdt.query(centsredfilttrans, k=1, return_distance=True)
@@ -165,11 +153,6 @@ reg_measure_dic = {
 
 
 logging.info("Error of landmarks only")
-# transform_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/postIMS_to_IMS_test_combined-IMSML-meta.json"
-# transform_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/postIMS_to_IMS_test_combined-IMSML-meta.json"
-# transform_file = "/home/retger/Downloads/Lipid_TMA_3781_042-IMSML-meta.json"
-# transform_file = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMS/postIMS_to_IMS_test_split_pre-Cirrhosis-TMA-5_New_Detector_002-IMSML-meta.json"
-transform_file = snakemake.input["imsmicrolink_meta"]
 logging.info("Read transform json file")
 j0 = json.load(open(transform_file, "r"))
 IMS = np.asarray(j0["IMS pixel map points (xy, microns)"])
@@ -178,8 +161,6 @@ postIMS = np.asarray(j0["PAQ microscopy points (xy, microns)"])
 t1 = np.asarray(j0["Affine transformation matrix (xy,microns)"])
 t2 = np.asarray(j0["Inverse Affine transformation matrix (xy,microns)"])
 t3 = t1.copy()
-# t3[:2,:2] = np.array([[1-(t3[0,0]-1),-t3[1,0]],[-t3[0,1],1-(t3[1,1]-1)]])
-# t3[:2,2]=-t1[:2,2]
 t3[:2,:2] = np.array([[t3[0,0],t3[1,0]],[t3[0,1],t3[1,1]]])
 t3[:2,2]=t1[:2,2]
 t4 = t2.copy()

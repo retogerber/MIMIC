@@ -1,37 +1,30 @@
 from wsireg.reg_shapes import RegShapes
 from wsireg.reg_transforms.reg_transform_seq import RegTransformSeq
+from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-import logging, traceback
-logging.basicConfig(filename=snakemake.log["stdout"],
-                    level=logging.INFO,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
-from logging_utils import handle_exception, StreamToLogger
-sys.excepthook = handle_exception
-sys.stdout = StreamToLogger(logging.getLogger(),logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
+import logging_utils
 
-logging.info("Start")
+if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+    snakemake = snakeMakeMock()
+    snakemake.params["microscopy_pixelsize"] = 1
+    snakemake.input["IMC_location_on_postIMC"] = ""
+    snakemake.input["postIMC_to_postIMS_transform"] = ""
+    snakemake.output["IMC_location_on_preIMC"] = ""
+    if bool(getattr(sys, 'ps1', sys.flags.interactive)):
+        raise Exception("Running in interactive mode!!")
+# logging setup
+logging_utils.logging_setup(snakemake.log['stdout'])
+logging_utils.log_snakemake_info(snakemake)
+setNThreads(snakemake.threads)
 
-#mask_file = sys.argv[1]
-mask_file = snakemake.input["IMC_location_on_postIMC"]
-#mask_file = "/home/retger/IMC/data/image_coregistration/IMC_geojson/cirrhosis_TMA/cirrhosis_TMA_E1_unreg.geojson"
-#transform_file = sys.argv[2]
-transform_file = snakemake.input["postIMC_to_postIMS_transform"]
-#transform_file = "/home/retger/IMC/analysis/image_coregistration/cirrhosis_TMA/post_IMC_to_post_IMS/cirrhosis_TMA-postIMC_to_postIMS_transformations.json"
-#out_mask = sys.argv[3]
-out_mask = snakemake.output["IMC_location_on_preIMC"]
-#out_mask = os.path.splitext(mask_file)[0]+"_transform"+os.path.splitext(mask_file)[1]
-
-#microscopy_pixelsize = sys.argv[4]
+# params
 microscopy_pixelsize = snakemake.params["microscopy_pixelsize"]
+# inputs
+mask_file = snakemake.input["IMC_location_on_postIMC"]
+transform_file = snakemake.input["postIMC_to_postIMS_transform"]
+# outputs
+out_mask = snakemake.output["IMC_location_on_preIMC"]
 
 logging.info("Read Mask")
 # read in mask

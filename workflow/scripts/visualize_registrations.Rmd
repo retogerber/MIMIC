@@ -57,6 +57,7 @@ landmarks_postIMS_png <- sapply(snakemake@input[["landmarks_postIMS_png"]], func
 regions_postIMC_transformed_on_preIMC_png <- sapply(snakemake@input[["regions_postIMC_transformed_on_preIMC_png"]], function(s) file.path(basedir,s))
 regions_preIMC_transformed_on_preIMS_png <- sapply(snakemake@input[["regions_preIMC_transformed_on_preIMS_png"]], function(s) file.path(basedir,s))
 regions_preIMS_transformed_on_postIMS_png <- sapply(snakemake@input[["regions_preIMS_transformed_on_postIMS_png"]], function(s) file.path(basedir,s))
+regions_postIMC_transformed_on_postIMS_png <- sapply(snakemake@input[["regions_postIMC_transformed_on_postIMS_png"]], function(s) file.path(basedir,s))
 ```
 
 ```
@@ -615,5 +616,36 @@ create_error_plot(input_csv_files, "postIMC_to_preIMC", errors="regions")
 ```{r, fig.width=8, fig.height=8}
 create_error_plot(input_csv_files, "postIMC_to_preIMC", errors="regions", error_type="dice")
 ```
+
+
+
+# postIMC to postIMS
+
+## Images of Regions {.tabset}
+
+```{r, results='asis', fig.width=8, fig.height=8}
+cat("\n\n")
+for (i in seq_along(regions_postIMC_transformed_on_postIMS_png)) {
+    filename <- regions_postIMC_transformed_on_postIMS_png[i]
+    if(file.exists(filename)){
+        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
+        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"1000\"/>",filename))
+    }
+}
+cat("\n\n")
+```
+
+## Distances between Regions
+
+```{r, fig.width=8, fig.height=8}
+create_error_plot(input_csv_files, "postIMC_to_postIMS", errors="regions")
+```
+
+## Dice between Regions
+
+```{r, fig.width=8, fig.height=8}
+create_error_plot(input_csv_files, "postIMC_to_postIMS", errors="regions", error_type="dice")
+```
+
 
 
