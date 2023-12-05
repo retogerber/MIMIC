@@ -1006,7 +1006,7 @@ rule register_IMS_to_postIMS:
         ),
         IMS_rotation_angle=lambda wildcards: get_column_entry_from_metadata_two_conditions(
             wildcards.project_name,
-            wildcards.imzml_base + ".imzML",
+            f"{wildcards.imzml_base}.imzML",
             "IMS_rotation_angle",
             "project_name",
             "imzml_filename",
@@ -1025,7 +1025,7 @@ rule register_IMS_to_postIMS:
         IMCmask=lambda wildcards: expand(
             "results/{{project_name}}/data/IMC_location/{{project_name}}_IMC_mask_on_postIMS_{core}.geojson",
             core=get_column_entry_from_metadata_two_conditions(
-                wildcards.imzml_base + ".imzML",
+                f"{wildcards.imzml_base}.imzML",
                 wildcards.project_name,
                 "core_name",
                 "imzml_filename",
@@ -1938,6 +1938,16 @@ rule combine_image_registration_evaluation_results:
                 return_all=True,
             ),
         ),
+        postIMC_to_postIMS_region_error=lambda wildcards: expand(
+            "results/{{project_name}}/data/registration_metric/{sample}_error_metrics_regions_postIMC_on_postIMS.json",
+            sample=get_column_entry_from_metadata(
+                wildcards.project_name,
+                "sample_name",
+                "project_name",
+                read_sample_metadata(config["sample_metadata"]),
+                return_all=True,
+            ),
+        ),
     output:
         registration_metrics_combined="results/{project_name}/data/registration_metric/{project_name}_reg_metrics_combined.csv",
     log:
@@ -2055,7 +2065,7 @@ use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downs
 
 use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downscale_landmarks_postIMC_on_preIMC with:
     params:
-        downscale_factor=1
+        downscale_factor=2
     input:
         input_image="results/{project_name}/data/postIMC/{sample}_transformed_on_preIMC_registration_comparison.ome.tiff",
     output:
@@ -2063,7 +2073,7 @@ use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downs
 
 use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downscale_landmarks_preIMC with:
     params:
-        downscale_factor=1
+        downscale_factor=2
     input:
         input_image="results/{project_name}/data/preIMC/{sample}_preIMC_registration_comparison.ome.tiff",
     output:
@@ -2071,7 +2081,7 @@ use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downs
 
 use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downscale_landmarks_preIMC_on_preIMS with:
     params:
-        downscale_factor=1
+        downscale_factor=2
     input:
         input_image="results/{project_name}/data/preIMC/{sample}_transformed_on_preIMS_registration_comparison.ome.tiff",
     output:
@@ -2079,7 +2089,7 @@ use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downs
 
 use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downscale_landmarks_preIMS with:
     params:
-        downscale_factor=1
+        downscale_factor=2
     input:
         input_image="results/{project_name}/data/preIMS/{sample}_preIMS_registration_comparison.ome.tiff",
     output:
@@ -2087,7 +2097,7 @@ use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downs
 
 use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downscale_landmarks_preIMS_on_postIMS with:
     params:
-        downscale_factor=1
+        downscale_factor=2
     input:
         input_image="results/{project_name}/data/preIMS/{sample}_transformed_on_postIMS_registration_comparison.ome.tiff",
     output:
@@ -2095,7 +2105,7 @@ use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downs
 
 use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downscale_landmarks_postIMS with:
     params:
-        downscale_factor=1
+        downscale_factor=2
     input:
         input_image="results/{project_name}/data/postIMS/{sample}_postIMS_registration_comparison.ome.tiff",
     output:
@@ -2109,8 +2119,35 @@ rule symlink_IMS_to_postIMS_svg:
         output_image="results/{project_name}/data/registration_metric/report/{project_name}_{sample}_IMS_to_postIMS_combined_registration_all.svg",
     log:
         stdout="logs/symlink_IMS_to_postIMS_svg/{project_name}_{sample}.stdout",
+    container:
+        config["container"]
     shell:
         "ln -sr -T {input.input_image} {output.output_image} > {log.stdout} 2> {log.stdout}"
+
+use rule symlink_IMS_to_postIMS_svg as symlink_postIMC_to_preIMC_region_mask with:
+    input:
+        input_image="results/{project_name}/data/registration_metric/{sample}_postIMC_and_preIMC_landmark_regions.png",
+    output:
+        output_image="results/{project_name}/data/registration_metric/report/{sample}_postIMC_and_preIMC_landmark_regions.png",
+    log:
+        stdout="logs/symlink_postIMC_to_preIMC_region_mask/{project_name}_{sample}.stdout",
+
+use rule symlink_IMS_to_postIMS_svg as symlink_preIMC_to_preIMS_region_mask with:
+    input:
+        input_image="results/{project_name}/data/registration_metric/{sample}_preIMC_and_preIMS_landmark_regions.png",
+    output:
+        output_image="results/{project_name}/data/registration_metric/report/{sample}_preIMC_and_preIMS_landmark_regions.png",
+    log:
+        stdout="logs/symlink_preIMC_to_preIMS_region_mask/{project_name}_{sample}.stdout",
+
+use rule symlink_IMS_to_postIMS_svg as symlink_preIMS_to_postIMS_region_mask with:
+    input:
+        input_image="results/{project_name}/data/registration_metric/{sample}_preIMS_and_postIMS_landmark_regions.png",
+    output:
+        output_image="results/{project_name}/data/registration_metric/report/{sample}_preIMS_and_postIMS_landmark_regions.png",
+    log:
+        stdout="logs/symlink_preIMS_to_postIMS_region_mask/{project_name}_{sample}.stdout",
+
 
 
 
@@ -2212,7 +2249,7 @@ rule generate_registration_report:
             ),
         ),
         regions_postIMC_transformed_on_preIMC_png = lambda wildcards: expand(
-            "results/{{project_name}}/data/registration_metric/{sample}_postIMC_and_preIMC_landmark_regions.png",
+            "results/{{project_name}}/data/registration_metric/report/{sample}_postIMC_and_preIMC_landmark_regions.png",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
                 "sample_name",
@@ -2222,7 +2259,7 @@ rule generate_registration_report:
             ),
         ),
         regions_preIMC_transformed_on_preIMS_png = lambda wildcards: expand(
-            "results/{{project_name}}/data/registration_metric/{sample}_preIMC_and_preIMS_landmark_regions.png",
+            "results/{{project_name}}/data/registration_metric/report/{sample}_preIMC_and_preIMS_landmark_regions.png",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
                 "sample_name",
@@ -2232,7 +2269,7 @@ rule generate_registration_report:
             ),
         ),
         regions_preIMS_transformed_on_postIMS_png = lambda wildcards: expand(
-            "results/{{project_name}}/data/registration_metric/{sample}_preIMS_and_postIMS_landmark_regions.png",
+            "results/{{project_name}}/data/registration_metric/report/{sample}_preIMS_and_postIMS_landmark_regions.png",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
                 "sample_name",
@@ -2242,7 +2279,7 @@ rule generate_registration_report:
             ),
         ),
         regions_postIMC_transformed_on_postIMS_png = lambda wildcards: expand(
-            "results/{{project_name}}/data/registration_metric/{sample}_postIMC_and_postIMS_landmark_regions.png",
+            "results/{{project_name}}/data/registration_metric/report/{sample}_postIMC_and_postIMS_landmark_regions.png",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
                 "sample_name",
@@ -2450,7 +2487,7 @@ rule combine_IMS_celloverlap_data:
             "results/{{project_name}}/data/cell_overlap/{{project_name}}_{sample}_cell_overlap_IMS.csv",
             sample=get_column_entry_from_metadata_two_conditions(
                 wildcards.project_name,
-                wildcards.imzml_base + ".imzML",
+                f"{wildcards.imzml_base}.imzML",
                 "sample_name",
                 "project_name",
                 "imzml_filename",
@@ -2462,7 +2499,7 @@ rule combine_IMS_celloverlap_data:
             "results/{{project_name}}/data/cell_overlap/{{project_name}}_{sample}_cell_centroids.csv",
             sample=get_column_entry_from_metadata_two_conditions(
                 wildcards.project_name,
-                wildcards.imzml_base + ".imzML",
+                f"{wildcards.imzml_base}.imzML",
                 "sample_name",
                 "project_name",
                 "imzml_filename",

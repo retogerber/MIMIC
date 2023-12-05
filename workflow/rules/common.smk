@@ -194,7 +194,7 @@ def decide_IMS_to_postIMS_reg_metrics_auto_or_not(wildcards):
 
 
 def choose_imsml_coordsfile_from_imzml(wildcards):
-        sample_names = get_column_entry_from_metadata_two_conditions(wildcards.imzml_base+".imzML", wildcards.project_name, "sample_name", "imzml_filename", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)
+        sample_names = get_column_entry_from_metadata_two_conditions(f"{wildcards.imzml_base}.imzML", wildcards.project_name, "sample_name", "imzml_filename", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)
         filenames = []
         for sample in sample_names:
             filename = get_column_entry_from_metadata_two_conditions(sample, wildcards.project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
@@ -208,8 +208,8 @@ def choose_imsml_coordsfile_from_imzml(wildcards):
 
 
 def sample_core_names(wildcards):
-    sample_names = get_column_entry_from_metadata_two_conditions(wildcards.imzml_base+".imzML", wildcards.project_name, "sample_name", "imzml_filename", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)
-    core_names = get_column_entry_from_metadata_two_conditions(wildcards.imzml_base+".imzML", wildcards.project_name, "core_name", "imzml_filename", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)
+    sample_names = get_column_entry_from_metadata_two_conditions(f"{wildcards.imzml_base}.imzML", wildcards.project_name, "sample_name", "imzml_filename", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)
+    core_names = get_column_entry_from_metadata_two_conditions(f"{wildcards.imzml_base}.imzML", wildcards.project_name, "core_name", "imzml_filename", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)
     return f'{"|-|-|".join(str(sample_names[i])+"|-_-|"+str(core_names[i]) for i in range(len(sample_names)))}'
 
 
