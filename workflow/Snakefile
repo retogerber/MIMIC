@@ -1619,7 +1619,8 @@ use rule image_registration_evaluation_transform_regions_SAM_postIMC_to_preIMC a
         min_area=576, # 24**2
         max_area=262144, # 512**2
         transform_target="preIMS",
-        transform_type="image" # inversion of nonlinear transformation is not robust, use image registration
+        transform_type="shape",
+        #transform_type="image" # inversion of nonlinear transformation is not robust, use image registration
     input:
         microscopy_image="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
         IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"preIMC"),
@@ -2148,6 +2149,13 @@ use rule symlink_IMS_to_postIMS_svg as symlink_preIMS_to_postIMS_region_mask wit
     log:
         stdout="logs/symlink_preIMS_to_postIMS_region_mask/{project_name}_{sample}.stdout",
 
+use rule symlink_IMS_to_postIMS_svg as symlink_postIMC_to_postIMS_region_mask with:
+    input:
+        input_image="results/{project_name}/data/registration_metric/{sample}_postIMC_and_postIMS_landmark_regions.png",
+    output:
+        output_image="results/{project_name}/data/registration_metric/report/{sample}_postIMC_and_postIMS_landmark_regions.png",
+    log:
+        stdout="logs/symlink_postIMC_to_postIMS_region_mask/{project_name}_{sample}.stdout",
 
 
 
