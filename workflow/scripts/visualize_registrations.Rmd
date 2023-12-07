@@ -60,108 +60,137 @@ regions_preIMS_transformed_on_postIMS_png <- sapply(snakemake@input[["regions_pr
 regions_postIMC_transformed_on_postIMS_png <- sapply(snakemake@input[["regions_postIMC_transformed_on_postIMS_png"]], function(s) file.path(basedir,s))
 ```
 
-```
-
 
 ```{r, eval=FALSE}
 basedir <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow"
 # project_name <- "test_combined"
 # sample_names <- c("Cirrhosis-TMA-5_New_Detector_001", "Cirrhosis-TMA-5_New_Detector_002")
 input_csv_files <- c("/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/registration_metric/test_combined_reg_metrics_combined.csv")
+vis_type <- "preIMS_to_postIMS"
 ```
 
+
 ```{r}
-create_error_plot <- function(input_csv_files, vis_type, errors = "landmarks", error_type = "distance"){
-    errors <- match.arg(errors, c("landmarks", "regions"))
-    error_type <- match.arg(error_type, c("distance", "dice"))
-    colname_reg <- paste0(vis_type, "_")
-    
-    dfls <- lapply(input_csv_files, function(x) {
-        df <- read.csv(x)
-        df$project <- stringr::str_replace(basename(x),"_reg_metrics_combined.csv","")
-        if(errors=="landmarks"){
-          df <- df[,stringr::str_detect(colnames(df), paste0(colname_reg,"(?!regions)")) | colnames(df) %in% c("sample", "project")]
-          colnames(df) <- stringr::str_replace(colnames(df), colname_reg, "")
-        } else{
-          df <- df[,stringr::str_detect(colnames(df), paste0(colname_reg,"(?=regions)")) | colnames(df) %in% c("sample", "project")]
-          colnames(df) <- stringr::str_replace(colnames(df), paste0(colname_reg,"regions_"), "")
-        }
-        colnames(df) <- stringr::str_replace(colnames(df),"quantile","Q" )
-        df
-    })
-    df <- Reduce(rbind, dfls)
-    
-    if (error_type=="distance"){
-      x_axis_var_names <- colnames(df)[grepl("error", colnames(df))]
-    } else{
-      x_axis_var_names <- colnames(df)[grepl("dice", colnames(df))]
-    }
-     
-    create_buttons <- function(df, x_axis_var_names) {
-      lapply(
-        x_axis_var_names,
-        FUN = function(var_name, df) {
-          button <- list(
-            method = 'restyle',
-            args = list('x', list(df[, var_name])),
-            label = stringr::str_to_title(stringr::str_replace(var_name,"_"," "))
-          )
-        },
-        df
-      )
-    }
-    
-    global_x_range <- range(unlist(lapply(x_axis_var_names, function(x) df[[x]])))
-    global_x_range[1] <- 0 
-    if (error_type=="distance"){
-      global_x_range[2] <- global_x_range[2]+0.5
-    } else{
-      global_x_range[2] <- 1
-    }
-    
-    if (vis_type == "IMS_to_postIMS") {
-      df$completeness <- df$n_points/df$n_points_total
-      y_axis_colname <- "completeness"
-      y_axis_name <- "Completeness"
-    } else {
-      y_axis_colname <- "n_points_total"
-      y_axis_name <- "Number of Landmarks"
-    }
-    
-    dfls <- split(df, df$project)
-    figls <- lapply(dfls, function(df){
-        plotly::plot_ly(
-            data = df,
-            x = dplyr::quo(!!dplyr::sym(x_axis_var_names[1])),
-            y = dplyr::quo(!!dplyr::sym(y_axis_colname)),
-            text = ~sample,
-            # hoverinfo = "text",
-            hovertemplate = paste0('<b>%{text}</b><br>',y_axis_name,': %{y:.2f}<br>Error: %{x:.2f}'),
-            type = "scatter",
-            mode = "markers",
-            color = ~project,
-            colors = "Set1",
-            marker = list(size = 10)
-        ) |>
-             plotly::layout(
-                 title = paste0(stringr::str_replace_all(vis_type,"_"," "),":   Error vs ",y_axis_name),
-                 xaxis = list(domain = c(0.1, 1), range=global_x_range, title = ""),
-                 yaxis = list(title = y_axis_name),
-                 updatemenus = list(
-                     list(
-                         y = -0.05,
-                         x = 0.5,
-                         buttons = create_buttons(df, x_axis_var_names)
-                     )
-                 )
-                 )
-    })
-    fig <- plotly::subplot(figls, nrows = 1, shareX = TRUE, shareY = TRUE) |>
-        plotly::layout(margin = list(t=50, b=150, l=50, r=50))
-    fig
+pairs_plot <- function(input_csv_files, vis_type, quantile_type="quantile50"){
+  stopifnot(quantile_type %in% c("mean","quantile05","quantile25","quantile50","quantile75","quantile95","min","max"))
+  df <- read.csv(input_csv_files)
+  colname_reg <- paste0(vis_type, "_")
+  b1 <- stringr::str_detect(colnames(df), paste0("(^",vis_type,")|(_",vis_type,")"))
+  t1 <- stringr::str_replace(vis_type,"_to_","_")
+  b2 <- stringr::str_detect(colnames(df), paste0("(^",t1,")|(_",t1,")"))
+  b3 <- colnames(df) %in% c("sample", "project")
+  df <- df[, b1 | b2 | b3]
+  colnames(df) <- stringr::str_replace(colnames(df), paste0(vis_type,"_"), "")
+  colnames(df) <- stringr::str_replace(colnames(df), paste0("_",vis_type), "")
+  colnames(df) <- stringr::str_replace(colnames(df), paste0("_",stringr::str_replace(vis_type,"_to_","_")), "")
+
+  d <- plotly::highlight_key(df, ~sample)
+  base <- plotly::plot_ly(
+      d, 
+      text = ~sample,
+      # hoverinfo = "text",
+      type = "scatter",
+      mode = "markers",
+      # color = 1,
+      # colors = "Set1",
+      marker = list(size = 10),
+      showlegend = FALSE
+  )
+  pltls <- list()
+  if("euclidean_distance_centroids" %in% colnames(df) & "dice_score" %in% colnames(df)){
+  masks_plt <- 
+    plotly::add_markers(base, 
+      x = ~euclidean_distance_centroids, 
+      y = ~dice_score, 
+      marker=list(color='rgb(0,0,0)'),
+      hovertemplate = paste0('<b>%{text}</b><br>Error: %{x:.2f}<br>Dice: %{y:.2f}')) |>
+      plotly::layout(
+      xaxis = list(range=c(0,max(df$euclidean_distance_centroids)*1.1), title = "Distance between centroids"),
+      yaxis = list(range=c(0,1.1),title = "Dice coefficient")
+      ) |>
+    plotly::add_annotations(
+      text = "Tissue masks",
+      x = 0.5,
+      y = 1,
+      yref = "paper",
+      xref = "paper",
+      xanchor = "middle",
+      yanchor = "top",
+      showarrow = FALSE,
+      font = list(size = 15)
+    )
+  pltls <- c(pltls, list(masks_plt))
+  }
+  axis_type = paste0(quantile_type,"_error")
+  if(axis_type %in% colnames(df) & "n_points_total" %in% colnames(df)){
+  landmarks_plt <- 
+    plotly::add_markers(base, 
+      x = dplyr::quo(!!dplyr::sym(axis_type)), 
+      y = ~n_points_total,
+      marker=list(color='rgb(0,0,0)'),
+      hovertemplate = paste0('<b>%{text}</b><br>Error: %{x:.2f}<br>N landmarks: %{y:.2f}')) |>
+      plotly::layout(
+      xaxis = list(range=c(0,max(df[[axis_type]])*1.1),title = "Distance between landmarks"),
+      yaxis = list(range=c(0,max(df$n_points_total)*1.1),title = "Number of landmarks")
+    ) |>
+    plotly::add_annotations(
+      text = "Landmarks",
+      x = 0.5,
+      y = 1,
+      yref = "paper",
+      xref = "paper",
+      xanchor = "middle",
+      yanchor = "top",
+      showarrow = FALSE,
+      font = list(size = 15)
+    )
+  pltls <- c(pltls, list(landmarks_plt))
+  }
+
+  xaxis_type = paste0("regions_",quantile_type,"_error")
+  yaxis_type = paste0("regions_",quantile_type,"_dice")
+  if(xaxis_type %in% colnames(df) & yaxis_type %in% colnames(df) & "regions_n_points_total" %in% colnames(df)){
+  regions_plt <- 
+    plotly::add_markers(base, 
+      x = dplyr::quo(!!dplyr::sym(xaxis_type)), 
+      y = dplyr::quo(!!dplyr::sym(yaxis_type)), 
+      color = ~regions_n_points_total,
+      text = ~regions_n_points_total,
+      hovertemplate = paste0('<b>%{text}</b><br>Error: %{x:.2f}<br>Dice: %{y:.2f}<br>N regions: %{text}')) |>
+      plotly::layout(
+      xaxis = list(range=c(0,max(df[[xaxis_type]])*1.1),title = "Distance between regions"),
+      yaxis = list(range=c(0,1.1),title = "Dice coefficient")
+    ) |>
+    plotly::add_annotations(
+      text = "Regions",
+      x = 0.5,
+      y = 1,
+      yref = "paper",
+      xref = "paper",
+      xanchor = "middle",
+      yanchor = "top",
+      showarrow = FALSE,
+      font = list(size = 15)
+    )
+  pltls <- c(pltls, list(regions_plt))
+  }
+  if(length(pltls)>0){
+    fig <- plotly::subplot(
+      pltls,
+      titleX=TRUE,
+      titleY=TRUE
+      ) |>
+      plotly::highlight(on = "plotly_hover", off = "plotly_doubleclick")
+    return(fig)
+  }else{
+    return(NULL)
+  }
 }
 
+```
 
+
+```{r}
 sitk_error_plot <- function(input_csv_files, vis_type="preIMS_to_postIMS"){
     colname_reg <- paste0(vis_type, "_")
     
@@ -257,29 +286,49 @@ sitk_error_plot <- function(input_csv_files, vis_type="preIMS_to_postIMS"){
 }
 ```
 
-
-```{r}
-dice_distance_plot <- function(input_csv_files, vis_type){
-    df <- read.csv(input_csv_files)
-    vis_type_ls <- strsplit(vis_type,"_to_")[[1]]
-
-    library(ggplot2)
-    df$dice_score <- df[[colnames(df)[grepl(sprintf("dice_score_%s_%s",vis_type_ls[1],vis_type_ls[2]),colnames(df))]]]
-    df$centroid_distances <- df[[colnames(df)[grepl(sprintf("euclidean_distance_centroids_%s",vis_type),colnames(df))]]]
-    df$text <- sprintf('<b>%s</b><br>Dice score: %.2f<br>Error centroids: %.2f',df$sample,df$dice_score, df$centroid_distances)
-
-    p <- ggplot(
-      df, 
-      aes(
-        dice_score, 
-        centroid_distances,
-        text = text
-        )
-      )  +
-     geom_point() +
-     theme_minimal()
-     plotly::ggplotly(p,tooltip=c("text"))
+```{r plot_images, results='asis', fig.width=8, fig.height=8, eval=FALSE, echo=FALSE}
+cat("\n\n")
+for (i in seq_along(filenames)) {
+    filename <- filenames[i]
+    if(file.exists(filename)){
+        cat(sprintf("\n\n#### %s\n\n",sample_names[i]))
+        cat(sprintf("<img src=\"%s\" alt=\"drawing\" height=\"%s\"/>",filename,img_height))
+    }
 }
+cat("\n\n")
+```
+
+```{r plot_2_images, results='asis', fig.width=8, fig.height=8, eval=FALSE, echo=FALSE}
+cat("\n\n")
+for (i in seq_along(filenames1)) {
+    filename1 <- filenames1[i]
+    filename2 <- filenames2[i]
+    if(file.exists(filename1) & file.exists(filename2)){
+        cat(sprintf("\n\n#### %s\n\n",sample_names[i]))
+        cat("<p float=\"left\">")
+        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"50%%\"/>",filename1))
+        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"50%%\"/>",filename2))
+        cat("</p>")
+    }
+}
+cat("\n\n")
+```
+
+
+```{r pairs_plots, results='asis', fig.width=16, fig.height=8, echo=FALSE, eval=FALSE}
+cat(sprintf("\n\n### %s\n\n","quantile50"))
+pairs_plot(input_csv_files, vis_type,"quantile50")
+cat(sprintf("\n\n### %s\n\n","mean"))
+pairs_plot(input_csv_files, vis_type,"mean")
+cat(sprintf("\n\n### %s\n\n","quantile05"))
+pairs_plot(input_csv_files, vis_type,"quantile05")
+cat(sprintf("\n\n### %s\n\n","quantile95"))
+pairs_plot(input_csv_files, vis_type,"quantile95")
+cat(sprintf("\n\n### %s\n\n","min"))
+pairs_plot(input_csv_files, vis_type,"min")
+cat(sprintf("\n\n### %s\n\n","max"))
+pairs_plot(input_csv_files, vis_type,"max")
+cat("\n\n")
 ```
 
 
@@ -296,34 +345,87 @@ Color legend for the below images:
 | Blue  | Ablation marks |
 | Green | IMS pixel    |
 
-```{r, results='asis', fig.width=8, fig.height=8}
-cat("\n\n")
-for (i in seq_along(IMS_to_postIMS_svg)) {
-    filename <- IMS_to_postIMS_svg[i]
-    if(file.exists(filename)){
-        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
-        cat(sprintf("![](%s)",filename))
-    }
-}
-cat("\n\n")
+```{r}
+filenames <- IMS_to_postIMS_svg
+img_height=1000
+```
+```{r plot_images_IMS_to_postIMS, ref.label='plot_images', results='asis'}
 ```
 
-
-## Distances ablation marks to IMS pixels
+## Distances ablation marks to IMS pixels {.tabset}
 
 The plot below shows the distances (mean, median, etc.) on the x-axis versus the completeness (number of detected ablation marks divided by the total number of IMS pixels) on the y-axis.
 
-```{r, fig.width=8, fig.height=8}
-create_error_plot(input_csv_files, "IMS_to_postIMS")
+```{r}
+vis_type <- "IMS_to_postIMS"
 ```
+```{r pairs_plots_IMS_to_postIMS, ref.label='pairs_plots', results='asis', fig.width=7, fig.height=7}
+```
+
+
+# postIMC to postIMS
+
+## Summary plots of the registration metrics {.tabset}
+
+| Position | Measure | x-axis | y-axis | color  | 
+|:---------|:--------|:-------|:-------|:-------|
+| Middle    | Regions | Summarized distance between regions | Dice coefficients | Number of regions |
+
+
+```{r}
+vis_type <- "postIMC_to_postIMS"
+imgtype1 <- stringr::str_split(vis_type,"_to_")[[1]][1]
+imgtype2 <- stringr::str_split(vis_type,"_to_")[[1]][2]
+```
+```{r pairs_plots_postIMC_to_postIMS, ref.label='pairs_plots', results='asis', fig.width=12, fig.height=7}
+```
+
+
+## Images {.tabset}
+
+### Images of Regions {.tabset}
+
+Below are shown the regions from the `r imgtype1` image (left) and the `r imgtype2` image (right) after registration. 
+
+| Color | Description |
+|-------|-------------|
+| Black | Neither     |
+| Dark gray  | `r imgtype1` only |
+| Light gray  | `r imgtype2` only |
+| White | Both        |
+
+
+```{r}
+filenames <- regions_postIMC_transformed_on_postIMS_png
+img_height=700
+```
+```{r plot_images_postIMC_to_postIMS_regions, ref.label='plot_images', results='asis'}
+```
+
 
 
 # preIMS to postIMS
 
-## preIMS image registered to postIMS images
-Global images or images per core
+## Summary plots of the registration metrics {.tabset}
 
-## Tissue masks {.tabset}
+| Position | Measure | x-axis | y-axis | color  | 
+|:---------|:--------|:-------|:-------|:-------|
+| Left     | Tissue masks | Distance between centroids | Dice coefficient | |
+| Middle   | Landmarks | Summarized distance between landmarks | Number of landmarks | |
+| Right    | Regions | Summarized distance between regions | Dice coefficients | Number of regions |
+
+
+```{r}
+vis_type <- "preIMS_to_postIMS"
+imgtype1 <- stringr::str_split(vis_type,"_to_")[[1]][1]
+imgtype2 <- stringr::str_split(vis_type,"_to_")[[1]][2]
+```
+```{r pairs_plots_preIMS_to_postIMS, ref.label='pairs_plots', results='asis', fig.width=12, fig.height=7}
+```
+
+## Images {.tabset}
+
+### Tissue masks {.tabset}
 
 Shown below are the masks of the tissue masks, overlayed on top of each other. Extraction of the tissue masks is not always exact (especially for the postIMS images), so the results might be unreliable.
 Color legend for the below images:
@@ -331,59 +433,52 @@ Color legend for the below images:
 | Color | Description |
 |-------|-------------|
 | Black | Neither     |
-| Dark gray  | preIMS only |
-| Light gray  | postIMS only |
+| Dark gray  | `r imgtype1` only |
+| Light gray  | `r imgtype2` only |
+| White | Both        |
+
+```{r}
+filenames <- preIMSmask_to_postIMSmask_png
+img_height=700
+```
+```{r plot_images_preIMS_to_postIMS_mask, ref.label='plot_images', results='asis'}
+```
+
+### Images of Landmarks {.tabset}
+
+Below are shown the landmarks from the `r imgtype1` image (left) and the `r imgtype2` image (right) after registration. The landmarks are shown as errors where the start of the arrow is on the respective image and the end is the corresponding landmark in the other image. The length of the arrows are therefore the distance between individual landmarks. 
+
+|left | right|
+|:----|:-----|
+|`r imgtype1` | `r imgtype2` |
+
+
+```{r}
+filenames1 <- landmarks_preIMS_transformed_on_postIMS_png
+filenames2 <- landmarks_postIMS_png
+```
+```{r plot_2_images_preIMS_to_postIMS_landmarks, ref.label='plot_2_images', results='asis', fig.width=8, fig.height=8}
+```
+
+### Images of Regions {.tabset}
+
+Below are shown the regions from the `r imgtype1` image (left) and the `r imgtype2` image (right) after registration. 
+
+| Color | Description |
+|-------|-------------|
+| Black | Neither     |
+| Dark gray  | `r imgtype1` only |
+| Light gray  | `r imgtype2` only |
 | White | Both        |
 
 
-```{r, results='asis', fig.width=8, fig.height=8}
-cat("\n\n")
-for (i in seq_along(preIMSmask_to_postIMSmask_png)) {
-    filename <- preIMSmask_to_postIMSmask_png[i]
-    if(file.exists(filename)){
-        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
-        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"1000\"/>",filename))
-        # cat(sprintf("![](%s)",filename))
-    }
-}
-cat("\n\n")
+```{r}
+filenames <- regions_preIMS_transformed_on_postIMS_png
+img_height=700
+```
+```{r plot_images_preIMS_to_postIMS_regions, ref.label='plot_images', results='asis'}
 ```
 
-
-## Distances between centroids of masks
-
-The distances between the centroids of the two tissue masks from the above images are shown below.
-
-```{r, fig.width=8, fig.height=8}
-plotly::ggplotly(dice_distance_plot(input_csv_files, "preIMS_to_postIMS"))
-```
-
-## Images of Landmarks {.tabset}
-
-```{r, results='asis', fig.width=8, fig.height=8}
-cat("\n\n")
-for (i in seq_along(landmarks_preIMS_transformed_on_postIMS_png)) {
-    filename1 <- landmarks_preIMS_transformed_on_postIMS_png[i]
-    filename2 <- landmarks_postIMS_png[i]
-    if(file.exists(filename1) & file.exists(filename2)){
-        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
-        cat("<p float=\"left\">")
-        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"50%%\"/>",filename1))
-        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"50%%\"/>",filename2))
-        cat("</p>")
-    }
-}
-cat("\n\n")
-```
-
-
-## Distances between Landmarks
-
-The plot below shows the distances (mean, median, etc.) on the x-axis versus the completeness (number of detected ablation marks divided by the total number of IMS pixels) on the y-axis.
-
-```{r, fig.width=8, fig.height=8}
-create_error_plot(input_csv_files, "preIMS_to_postIMS")
-```
 
 
 ## Translations based on grid subtracted postIMS to preIMS registration
@@ -397,255 +492,156 @@ fig
 ```
 
 
-## Images of Regions {.tabset}
-
-```{r, results='asis', fig.width=8, fig.height=8}
-cat("\n\n")
-for (i in seq_along(regions_preIMS_transformed_on_postIMS_png)) {
-    filename <- regions_preIMS_transformed_on_postIMS_png[i]
-    if(file.exists(filename)){
-        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
-        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"1000\"/>",filename))
-    }
-}
-cat("\n\n")
-```
-
-## Distances between Regions
-
-```{r, fig.width=8, fig.height=8}
-create_error_plot(input_csv_files, "preIMS_to_postIMS", errors="regions")
-```
-
-## Dice between Regions
-
-```{r, fig.width=8, fig.height=8}
-create_error_plot(input_csv_files, "preIMS_to_postIMS", errors="regions", error_type="dice")
-```
-
-
-
 # preIMC to preIMS
 
-## preIMC images registered to preIMS images
-Global or per region
+## Summary plots of the registration metrics {.tabset}
 
-## Tissue masks {.tabset}
+| Position | Measure | x-axis | y-axis | color  | 
+|:---------|:--------|:-------|:-------|:-------|
+| Left     | Tissue masks | Distance between centroids | Dice coefficient | |
+| Middle   | Landmarks | Summarized distance between landmarks | Number of landmarks | |
+| Right    | Regions | Summarized distance between regions | Dice coefficients | Number of regions |
 
-Shown below are the masks of the tissue masks, overlayed on top of each other. Extraction of the tissue masks is not always exact, so the results might be unreliable.
+
+```{r}
+vis_type <- "preIMC_to_preIMS"
+imgtype1 <- stringr::str_split(vis_type,"_to_")[[1]][1]
+imgtype2 <- stringr::str_split(vis_type,"_to_")[[1]][2]
+```
+```{r pairs_plots_preIMC_to_preIMS, ref.label='pairs_plots', results='asis', fig.width=12, fig.height=7}
+```
+
+
+## Images {.tabset}
+
+### Tissue masks {.tabset}
+
+Shown below are the masks of the tissue masks, overlayed on top of each other. Extraction of the tissue masks is not always exact (especially for the postIMS images), so the results might be unreliable.
 Color legend for the below images:
 
 | Color | Description |
 |-------|-------------|
 | Black | Neither     |
-| Dark gray  | preIMC only |
-| Light gray  | preIMS only |
+| Dark gray  | `r imgtype1` only |
+| Light gray  | `r imgtype2` only |
+| White | Both        |
+
+```{r}
+filenames <- preIMCmask_to_preIMSmask_png
+img_height=700
+```
+```{r plot_images_preIMC_to_preIMS_mask, ref.label='plot_images', results='asis'}
+```
+
+### Images of Landmarks {.tabset}
+
+Below are shown the landmarks from the `r imgtype1` image (left) and the `r imgtype2` image (right) after registration. The landmarks are shown as errors where the start of the arrow is on the respective image and the end is the corresponding landmark in the other image. The length of the arrows are therefore the distance between individual landmarks. 
+
+|left | right|
+|:----|:-----|
+|`r imgtype1` | `r imgtype2` |
+
+
+```{r}
+filenames1 <- landmarks_preIMC_transformed_on_preIMS_png
+filenames2 <- landmarks_preIMS_png
+```
+```{r plot_2_images_preIMC_to_preIMS_landmarks, ref.label='plot_2_images', results='asis', fig.width=8, fig.height=8}
+```
+
+### Images of Regions {.tabset}
+
+Below are shown the regions from the `r imgtype1` image (left) and the `r imgtype2` image (right) after registration. 
+
+| Color | Description |
+|-------|-------------|
+| Black | Neither     |
+| Dark gray  | `r imgtype1` only |
+| Light gray  | `r imgtype2` only |
 | White | Both        |
 
 
-```{r, results='asis', fig.width=8, fig.height=8}
-cat("\n\n")
-for (i in seq_along(preIMCmask_to_preIMSmask_png)) {
-    filename <- preIMCmask_to_preIMSmask_png[i]
-    if(file.exists(filename)){
-        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
-        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"1000\"/>",filename))
-        # cat(sprintf("![](%s)",filename))
-    }
-}
-cat("\n\n")
+```{r}
+filenames <- regions_preIMC_transformed_on_preIMS_png
+img_height=700
 ```
-
-
-## Distances between centroids of masks
-
-The distances between the centroids of the two tissue masks from the above images are shown below.
-
-```{r, fig.width=8, fig.height=8}
-dice_distance_plot(input_csv_files, "preIMC_to_preIMS")
+```{r plot_images_preIMC_to_preIMS_regions, ref.label='plot_images', results='asis'}
 ```
-
-
-## Images of Landmarks {.tabset}
-
-```{r, results='asis', fig.width=8, fig.height=8}
-cat("\n\n")
-for (i in seq_along(landmarks_preIMC_transformed_on_preIMS_png)) {
-    filename1 <- landmarks_preIMC_transformed_on_preIMS_png[i]
-    filename2 <- landmarks_preIMS_png[i]
-    if(file.exists(filename1) & file.exists(filename2)){
-        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
-        cat("<p float=\"left\">")
-        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"50%%\"/>",filename1))
-        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"50%%\"/>",filename2))
-        cat("</p>")
-    }
-}
-cat("\n\n")
-```
-
-
-## Distances between Landmarks
-
-The plot below shows the distances (mean, median, etc.) on the x-axis versus the completeness (number of detected ablation marks divided by the total number of IMS pixels) on the y-axis.
-
-```{r, fig.width=8, fig.height=8}
-create_error_plot(input_csv_files, "preIMC_to_preIMS")
-```
-
-
-## Images of Regions {.tabset}
-
-```{r, results='asis', fig.width=8, fig.height=8}
-cat("\n\n")
-for (i in seq_along(regions_preIMC_transformed_on_preIMS_png)) {
-    filename <- regions_preIMC_transformed_on_preIMS_png[i]
-    if(file.exists(filename)){
-        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
-        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"1000\"/>",filename))
-    }
-}
-cat("\n\n")
-```
-
-## Distances between Regions
-
-```{r, fig.width=8, fig.height=8}
-create_error_plot(input_csv_files, "preIMC_to_preIMS", errors="regions")
-```
-
-## Dice between Regions
-
-```{r, fig.width=8, fig.height=8}
-create_error_plot(input_csv_files, "preIMC_to_preIMS", errors="regions", error_type="dice")
-```
-
-
-
 
 
 # postIMC to preIMC
 
-## postIMC images registered to preIMC images
-Global
+## Summary plots of the registration metrics {.tabset}
 
-## Tissue masks {.tabset}
+| Position | Measure | x-axis | y-axis | color  | 
+|:---------|:--------|:-------|:-------|:-------|
+| Left     | Tissue masks | Distance between centroids | Dice coefficient | |
+| Middle   | Landmarks | Summarized distance between landmarks | Number of landmarks | |
+| Right    | Regions | Summarized distance between regions | Dice coefficients | Number of regions |
 
-Shown below are the masks of the tissue masks, overlayed on top of each other. Extraction of the tissue masks is not always exact, so the results might be unreliable.
+
+```{r}
+vis_type <- "postIMC_to_preIMC"
+imgtype1 <- stringr::str_split(vis_type,"_to_")[[1]][1]
+imgtype2 <- stringr::str_split(vis_type,"_to_")[[1]][2]
+```
+```{r pairs_plots_postIMC_to_preIMC, ref.label='pairs_plots', results='asis', fig.width=12, fig.height=7}
+```
+
+
+## Images {.tabset}
+
+### Tissue masks {.tabset}
+
+Shown below are the masks of the tissue masks, overlayed on top of each other. Extraction of the tissue masks is not always exact (especially for the postIMS images), so the results might be unreliable.
 Color legend for the below images:
 
 | Color | Description |
 |-------|-------------|
 | Black | Neither     |
-| Dark gray  | postIMC only |
-| Light gray  | preIMC only |
+| Dark gray  | `r imgtype1` only |
+| Light gray  | `r imgtype2` only |
+| White | Both        |
+
+```{r}
+filenames <- postIMCmask_to_preIMCmask_png
+img_height=700
+```
+```{r plot_images_postIMC_to_preIMC_mask, ref.label='plot_images', results='asis'}
+```
+
+### Images of Landmarks {.tabset}
+
+Below are shown the landmarks from the `r imgtype1` image (left) and the `r imgtype2` image (right) after registration. The landmarks are shown as errors where the start of the arrow is on the respective image and the end is the corresponding landmark in the other image. The length of the arrows are therefore the distance between individual landmarks. 
+
+|left | right|
+|:----|:-----|
+|`r imgtype1` | `r imgtype2` |
+
+
+```{r}
+filenames1 <- landmarks_postIMC_transformed_on_preIMC_png
+filenames2 <- landmarks_preIMC_png
+```
+```{r plot_2_images_postIMC_to_preIMC_landmarks, ref.label='plot_2_images', results='asis', fig.width=8, fig.height=8}
+```
+
+### Images of Regions {.tabset}
+
+Below are shown the regions from the `r imgtype1` image (left) and the `r imgtype2` image (right) after registration. 
+
+| Color | Description |
+|-------|-------------|
+| Black | Neither     |
+| Dark gray  | `r imgtype1` only |
+| Light gray  | `r imgtype2` only |
 | White | Both        |
 
 
-```{r, results='asis', fig.width=8, fig.height=8}
-cat("\n\n")
-for (i in seq_along(postIMCmask_to_preIMCmask_png)) {
-    filename <- postIMCmask_to_preIMCmask_png[i]
-    if(file.exists(filename)){
-        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
-        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"1000\"/>",filename))
-        # cat(sprintf("![](%s)",filename))
-    }
-}
-cat("\n\n")
+```{r}
+filenames <- regions_postIMC_transformed_on_preIMC_png
+img_height=700
 ```
-
-
-## Distances between centroids of masks
-
-The distances between the centroids of the two tissue masks from the above images are shown below.
-
-```{r, fig.width=8, fig.height=8}
-dice_distance_plot(input_csv_files, "postIMC_to_preIMC")
+```{r plot_images_postIMC_to_preIMC_regions, ref.label='plot_images', results='asis'}
 ```
-
-## Images of Landmarks {.tabset}
-
-```{r, results='asis', fig.width=8, fig.height=8}
-cat("\n\n")
-for (i in seq_along(landmarks_postIMC_transformed_on_preIMC_png)) {
-    filename1 <- landmarks_postIMC_transformed_on_preIMC_png[i]
-    filename2 <- landmarks_preIMC_png[i]
-    if(file.exists(filename1) & file.exists(filename2)){
-        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
-        cat("<p float=\"left\">")
-        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"50%%\"/>",filename1))
-        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"50%%\"/>",filename2))
-        cat("</p>")
-    }
-}
-cat("\n\n")
-```
-
-
-
-## Distances between Landmarks
-
-```{r, fig.width=8, fig.height=8}
-create_error_plot(input_csv_files, "postIMC_to_preIMC")
-```
-
-
-## Images of Regions {.tabset}
-
-```{r, results='asis', fig.width=8, fig.height=8}
-cat("\n\n")
-for (i in seq_along(regions_postIMC_transformed_on_preIMC_png)) {
-    filename <- regions_postIMC_transformed_on_preIMC_png[i]
-    if(file.exists(filename)){
-        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
-        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"1000\"/>",filename))
-    }
-}
-cat("\n\n")
-```
-
-## Distances between Regions
-
-```{r, fig.width=8, fig.height=8}
-create_error_plot(input_csv_files, "postIMC_to_preIMC", errors="regions")
-```
-
-## Dice between Regions
-
-```{r, fig.width=8, fig.height=8}
-create_error_plot(input_csv_files, "postIMC_to_preIMC", errors="regions", error_type="dice")
-```
-
-
-
-# postIMC to postIMS
-
-## Images of Regions {.tabset}
-
-```{r, results='asis', fig.width=8, fig.height=8}
-cat("\n\n")
-for (i in seq_along(regions_postIMC_transformed_on_postIMS_png)) {
-    filename <- regions_postIMC_transformed_on_postIMS_png[i]
-    if(file.exists(filename)){
-        cat(sprintf("\n\n### %s\n\n",sample_names[i]))
-        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"1000\"/>",filename))
-    }
-}
-cat("\n\n")
-```
-
-## Distances between Regions
-
-```{r, fig.width=8, fig.height=8}
-create_error_plot(input_csv_files, "postIMC_to_postIMS", errors="regions")
-```
-
-## Dice between Regions
-
-```{r, fig.width=8, fig.height=8}
-create_error_plot(input_csv_files, "postIMC_to_postIMS", errors="regions", error_type="dice")
-```
-
-
 
