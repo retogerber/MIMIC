@@ -310,13 +310,16 @@ if len(regions1)>=1 and len(regions2)>=1:
 
         to_remove = np.unique(np.append(to_remove_1,to_remove_2))
         to_keep = np.array([k for k in range(len(matches_filt)) if k not in to_remove])
-        matches_filt = np.array(matches_filt)[to_keep]
-        src_pts = src_pts[to_keep,:,:]  
-        dst_pts = dst_pts[to_keep,:,:]  
-        regions1_filt = [ regions1_filt[k] for k in to_keep]
-        regions2_filt = [ regions2_filt[k] for k in to_keep]
-        areas1_filt = areas1_filt[to_keep]
-        areas2_filt = areas2_filt[to_keep]
+        if len(to_keep)>0:
+            matches_filt = np.array(matches_filt)[to_keep]
+            src_pts = src_pts[to_keep,:,:]  
+            dst_pts = dst_pts[to_keep,:,:]  
+            regions1_filt = [ regions1_filt[k] for k in to_keep]
+            regions2_filt = [ regions2_filt[k] for k in to_keep]
+            areas1_filt = areas1_filt[to_keep]
+            areas2_filt = areas2_filt[to_keep]
+        else:
+            matches_filt = []
 
     logging.info(f"Number of matches: {len(matches_filt)}")
     if len(matches_filt)>1:
@@ -360,14 +363,19 @@ if len(regions1)>=1 and len(regions2)>=1:
         # apply filter
         to_keep = np.array([k for k in range(len(matches_filt)) if k not in to_remove])
 
-        matches_filt = np.array(matches_filt)[to_keep]
-        src_pts = src_pts[to_keep,:,:]  
-        dst_pts = dst_pts[to_keep,:,:]  
-        regions1_filt = [ regions1_filt[k] for k in to_keep]
-        regions2_filt = [ regions2_filt[k] for k in to_keep]
-        areas1_filt = areas1_filt[to_keep]
-        areas2_filt = areas2_filt[to_keep]
+        if len(to_keep)>0:
+            matches_filt = np.array(matches_filt)[to_keep]
+            src_pts = src_pts[to_keep,:,:]  
+            dst_pts = dst_pts[to_keep,:,:]  
+            regions1_filt = [ regions1_filt[k] for k in to_keep]
+            regions2_filt = [ regions2_filt[k] for k in to_keep]
+            areas1_filt = areas1_filt[to_keep]
+            areas2_filt = areas2_filt[to_keep]
+        else:
+            matches_filt = []
 
+    logging.info(f"Number of matches: {len(matches_filt)}")
+    if len(matches_filt)>1:
         kpf1 = np.array([moments1[matches_filt[k].queryIdx,1:3] for k in range(len(matches_filt))])
         kpf2 = np.array([moments2[matches_filt[k].trainIdx,1:3] for k in range(len(matches_filt))])
         dists_real = np.sqrt(np.sum((kpf1/output_spacing-kpf2/output_spacing)**2,axis=1))
@@ -383,11 +391,14 @@ if len(regions1)>=1 and len(regions2)>=1:
         dices = [get_dice(regions1_filt[k], regions2_filt[k]) for k in range(len(regions1_filt))]
 
         to_keep = np.array([i for i,d in enumerate(dices) if d>0])
-        matches_filt = np.array(matches_filt)[to_keep]
-        regions1_filt = [ regions1_filt[k] for k in to_keep]
-        regions2_filt = [ regions2_filt[k] for k in to_keep]
-        dists_real = dists_real[to_keep]
-        dices = np.array(dices)[to_keep]
+        if len(to_keep)>0:
+            matches_filt = np.array(matches_filt)[to_keep]
+            regions1_filt = [ regions1_filt[k] for k in to_keep]
+            regions2_filt = [ regions2_filt[k] for k in to_keep]
+            dists_real = dists_real[to_keep]
+            dices = np.array(dices)[to_keep]
+        else:
+            matches_filt = []
     
 
     logging.info(f"Number of matches: {len(matches_filt)}")

@@ -115,7 +115,7 @@ IMC_mask_proportion = ((bb0[2]-bb0[0])*(bb0[3]-bb0[1]))/((bb3[2]-bb3[0])*(bb3[3]
 if mask_2_proportion < 1.5*IMC_mask_proportion:
     sam = sam_model_registry[MODEL_TYPE](checkpoint=CHECKPOINT_PATH)
     sam.to(device=DEVICE)
-    saminp = readimage_crop(microscopy_file, bb1)
+    saminp = readimage_crop(microscopy_file, bb3)
     # to gray scale, rescale
     saminp = convert_and_scale_image(saminp, input_spacing/output_spacing)
     saminp = np.stack([saminp, saminp, saminp], axis=2)
