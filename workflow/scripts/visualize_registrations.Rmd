@@ -65,13 +65,14 @@ regions_postIMC_transformed_on_postIMS_png <- sapply(snakemake@input[["regions_p
 basedir <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow"
 # project_name <- "test_combined"
 # sample_names <- c("Cirrhosis-TMA-5_New_Detector_001", "Cirrhosis-TMA-5_New_Detector_002")
+input_csv_files <- "/home/retger/Downloads/cirrhosis_TMA_reg_metrics_combined.csv"
 input_csv_files <- c("/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/registration_metric/test_combined_reg_metrics_combined.csv")
-vis_type <- "preIMS_to_postIMS"
+vis_type <- "IMS_to_postIMS"
 ```
 
 
 ```{r}
-pairs_plot <- function(input_csv_files, vis_type, quantile_type="quantile50"){
+pairs_plot <- function(input_csv_files, vis_type, quantile_type="quantile50", return_missing=FALSE){
   stopifnot(quantile_type %in% c("mean","quantile05","quantile25","quantile50","quantile75","quantile95","min","max"))
   df <- read.csv(input_csv_files)
   colname_reg <- paste0(vis_type, "_")
@@ -84,6 +85,9 @@ pairs_plot <- function(input_csv_files, vis_type, quantile_type="quantile50"){
   colnames(df) <- stringr::str_replace(colnames(df), paste0("_",vis_type), "")
   colnames(df) <- stringr::str_replace(colnames(df), paste0("_",stringr::str_replace(vis_type,"_to_","_")), "")
 
+  if(vis_type == "IMS_to_postIMS"){
+    df$Completeness <- df$n_points/df$n_points_total
+  }
   d <- plotly::highlight_key(df, ~sample)
   base <- plotly::plot_ly(
       d, 
@@ -97,7 +101,9 @@ pairs_plot <- function(input_csv_files, vis_type, quantile_type="quantile50"){
       showlegend = FALSE
   )
   pltls <- list()
+  ismissing <- rep(FALSE, dim(df)[1])
   if("euclidean_distance_centroids" %in% colnames(df) & "dice_score" %in% colnames(df)){
+  ismissing <- ismissing | is.na(df$euclidean_distance_centroids) | is.na(df$dice_score)
   masks_plt <- 
     plotly::add_markers(base, 
       x = ~euclidean_distance_centroids, 
@@ -123,15 +129,25 @@ pairs_plot <- function(input_csv_files, vis_type, quantile_type="quantile50"){
   }
   axis_type = paste0(quantile_type,"_error")
   if(axis_type %in% colnames(df) & "n_points_total" %in% colnames(df)){
+  if(vis_type == "IMS_to_postIMS"){
+    yaxis_type <- "Completeness"
+    yaxis_title <- "Proportion of detected ablation marks"
+    y_legend <- "Proportion"
+  } else{
+    yaxis_type <- "n_points_total"
+    yaxis_title <- "Number of landmarks"
+    y_legend <- "N landmarks"
+  }
+  ismissing <- ismissing | is.na(df[[axis_type]]) | is.na(df[[yaxis_type]])
   landmarks_plt <- 
     plotly::add_markers(base, 
       x = dplyr::quo(!!dplyr::sym(axis_type)), 
-      y = ~n_points_total,
+      y = dplyr::quo(!!dplyr::sym(yaxis_type)),
       marker=list(color='rgb(0,0,0)'),
-      hovertemplate = paste0('<b>%{text}</b><br>Error: %{x:.2f}<br>N landmarks: %{y:.2f}')) |>
+      hovertemplate = sprintf('<b>%%{text}</b><br>Error: %%{x:.2f}<br>%s: %%{y:.2f}',y_legend)) |>
       plotly::layout(
       xaxis = list(range=c(0,max(df[[axis_type]])*1.1),title = "Distance between landmarks"),
-      yaxis = list(range=c(0,max(df$n_points_total)*1.1),title = "Number of landmarks")
+      yaxis = list(range=c(0,max(df[[yaxis_type]])*1.1),title = yaxis_title)
     ) |>
     plotly::add_annotations(
       text = "Landmarks",
@@ -148,8 +164,18 @@ pairs_plot <- function(input_csv_files, vis_type, quantile_type="quantile50"){
   }
 
   xaxis_type = paste0("regions_",quantile_type,"_error")
-  yaxis_type = paste0("regions_",quantile_type,"_dice")
+  yaxis_type = switch(quantile_type,
+    "mean" = "regions_mean_dice",
+    "quantile05" = "regions_quantile95_dice",
+    "quantile25" = "regions_quantile75_dice",
+    "quantile50" = "regions_quantile50_dice",
+    "quantile75" = "regions_quantile25_dice",
+    "quantile95" = "regions_quantile05_dice",
+    "min" = "regions_max_dice",
+    "max" = "regions_min_dice"
+  )
   if(xaxis_type %in% colnames(df) & yaxis_type %in% colnames(df) & "regions_n_points_total" %in% colnames(df)){
+  ismissing <- ismissing | is.na(df[[xaxis_type]]) | is.na(df[[yaxis_type]])
   regions_plt <- 
     plotly::add_markers(base, 
       x = dplyr::quo(!!dplyr::sym(xaxis_type)), 
@@ -181,7 +207,11 @@ pairs_plot <- function(input_csv_files, vis_type, quantile_type="quantile50"){
       titleY=TRUE
       ) |>
       plotly::highlight(on = "plotly_hover", off = "plotly_doubleclick")
+    if (return_missing) {
+       return(list(fig, df$sample[ismissing]))
+    } else{
     return(fig)
+    }
   }else{
     return(NULL)
   }
@@ -317,17 +347,47 @@ cat("\n\n")
 
 ```{r pairs_plots, results='asis', fig.width=16, fig.height=8, echo=FALSE, eval=FALSE}
 cat(sprintf("\n\n### %s\n\n","quantile50"))
-pairs_plot(input_csv_files, vis_type,"quantile50")
+tmp <- pairs_plot(input_csv_files, vis_type,"quantile50", return_missing=TRUE)
+tmp[[1]]
+if(length(tmp[[2]])>0){
+    cat("\n\n")
+    knitr::kable(data.frame(missing=tmp[[2]]))
+}
 cat(sprintf("\n\n### %s\n\n","mean"))
-pairs_plot(input_csv_files, vis_type,"mean")
+tmp <- pairs_plot(input_csv_files, vis_type,"mean", return_missing=TRUE)
+tmp[[1]]
+if(length(tmp[[2]])>0){
+    cat("\n\n")
+    knitr::kable(data.frame(missing=tmp[[2]]))
+}
 cat(sprintf("\n\n### %s\n\n","quantile05"))
-pairs_plot(input_csv_files, vis_type,"quantile05")
+tmp <- pairs_plot(input_csv_files, vis_type,"quantile05", return_missing=TRUE)
+tmp[[1]]
+if(length(tmp[[2]])>0){
+    cat("\n\n")
+    knitr::kable(data.frame(missing=tmp[[2]]))
+}
 cat(sprintf("\n\n### %s\n\n","quantile95"))
-pairs_plot(input_csv_files, vis_type,"quantile95")
+tmp <- pairs_plot(input_csv_files, vis_type,"quantile95", return_missing=TRUE)
+tmp[[1]]
+if(length(tmp[[2]])>0){
+    cat("\n\n")
+    knitr::kable(data.frame(missing=tmp[[2]]))
+}
 cat(sprintf("\n\n### %s\n\n","min"))
-pairs_plot(input_csv_files, vis_type,"min")
+tmp <- pairs_plot(input_csv_files, vis_type,"min", return_missing=TRUE)
+tmp[[1]]
+if(length(tmp[[2]])>0){
+    cat("\n\n")
+    knitr::kable(data.frame(missing=tmp[[2]]))
+}
 cat(sprintf("\n\n### %s\n\n","max"))
-pairs_plot(input_csv_files, vis_type,"max")
+tmp <- pairs_plot(input_csv_files, vis_type,"max", return_missing=TRUE)
+tmp[[1]]
+if(length(tmp[[2]])>0){
+    cat("\n\n")
+    knitr::kable(data.frame(missing=tmp[[2]]))
+}
 cat("\n\n")
 ```
 
@@ -335,7 +395,9 @@ cat("\n\n")
 
 # IMS to postIMS
 
-## Ablation marks & registered IMS pixels {.tabset}
+## Images
+
+### Ablation marks & registered IMS pixels {.tabset}
 
 The images shown below are the ablation marks (from the postIMS microscopy image) and the IMS pixels (from the IMS image) after registration. 
 Color legend for the below images:
@@ -420,7 +482,7 @@ vis_type <- "preIMS_to_postIMS"
 imgtype1 <- stringr::str_split(vis_type,"_to_")[[1]][1]
 imgtype2 <- stringr::str_split(vis_type,"_to_")[[1]][2]
 ```
-```{r pairs_plots_preIMS_to_postIMS, ref.label='pairs_plots', results='asis', fig.width=12, fig.height=7}
+```{r pairs_plots_preIMS_to_postIMS, ref.label='pairs_plots', results='asis', fig.width=15, fig.height=7}
 ```
 
 ## Images {.tabset}
@@ -508,7 +570,7 @@ vis_type <- "preIMC_to_preIMS"
 imgtype1 <- stringr::str_split(vis_type,"_to_")[[1]][1]
 imgtype2 <- stringr::str_split(vis_type,"_to_")[[1]][2]
 ```
-```{r pairs_plots_preIMC_to_preIMS, ref.label='pairs_plots', results='asis', fig.width=12, fig.height=7}
+```{r pairs_plots_preIMC_to_preIMS, ref.label='pairs_plots', results='asis', fig.width=15, fig.height=7}
 ```
 
 
@@ -585,7 +647,7 @@ vis_type <- "postIMC_to_preIMC"
 imgtype1 <- stringr::str_split(vis_type,"_to_")[[1]][1]
 imgtype2 <- stringr::str_split(vis_type,"_to_")[[1]][2]
 ```
-```{r pairs_plots_postIMC_to_preIMC, ref.label='pairs_plots', results='asis', fig.width=12, fig.height=7}
+```{r pairs_plots_postIMC_to_preIMC, ref.label='pairs_plots', results='asis', fig.width=15, fig.height=7}
 ```
 
 
