@@ -184,7 +184,7 @@ def subtract_postIMS_grid(img: np.ndarray) -> np.ndarray:
     return img_notch
 
 
-def extract_mask(file: str, bb: list, session = None, rescale: int = 1, is_postIMS: bool = False) -> np.ndarray:
+def extract_mask(file: str, bb: list, session = None, rescale: int = 1, is_postIMS: bool = False, sam=None) -> np.ndarray:
     '''
     Extract a tissue mask from an image file.
 
@@ -205,7 +205,7 @@ def extract_mask(file: str, bb: list, session = None, rescale: int = 1, is_postI
     Returns:
     masks (np.ndarray): The extracted mask. It's a 3D binary array.
     '''
-    if session == None:
+    if session == None and sam == None:
         session = rembg.new_session("isnet-general-use")
     w = readimage_crop(file, bb)
     w = convert_and_scale_image(w, rescale)
@@ -213,12 +213,17 @@ def extract_mask(file: str, bb: list, session = None, rescale: int = 1, is_postI
         w = subtract_postIMS_grid(w)
         w = cv2.blur(w, (9,9))
     w = np.stack([w, w, w], axis=2)
-    wr = rembg.remove(w, only_mask=True, session=session)
-    try:
-        th = skimage.filters.threshold_minimum(wr, nbins=256)
-    except:
-        th = skimage.filters.threshold_otsu(wr, nbins=256)
-    masks = wr>th
+    if sam == None:
+        wr = rembg.remove(w, only_mask=True, session=session)
+        try:
+            th = skimage.filters.threshold_minimum(wr, nbins=256)
+        except:
+            th = skimage.filters.threshold_otsu(wr, nbins=256)
+        masks = wr>th
+    else:
+        masks, scores = sam_core(w, sam)
+        masks = np.stack([preprocess_mask(msk,1) for msk in masks ])
+        masks = masks[np.argmax(scores),:,:][0,:,:]>0
     masks = skimage.morphology.remove_small_holes(masks,100**2*np.pi)
     masks = cv2.morphologyEx(masks.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((5,5),np.uint8)).astype(bool)
     masks = np.stack([masks])

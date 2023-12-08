@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 from rembg import new_session
+from segment_anything import sam_model_registry
 import skimage
 import numpy as np
 import tifffile
@@ -40,6 +41,8 @@ preIMC_on_preIMS_file = snakemake.input["preIMC_on_preIMS"]
 preIMS_file = snakemake.input["preIMS"]
 preIMS_on_postIMS_file = snakemake.input["preIMS_on_postIMS"]
 postIMS_file = snakemake.input["postIMS"]
+postIMC_on_postIMS_file = snakemake.input["postIMC_on_postIMS"]
+CHECKPOINT_PATH = snakemake.input["sam_weights"]
 # outputs
 output_df = snakemake.output["registration_metrics"]
 
@@ -49,12 +52,20 @@ model_name = "isnet-general-use"
 os.environ["OMP_NUM_THREADS"] = str(snakemake.threads)
 rembg_session = new_session(model_name)
 
+logging.info("Setup segment anything model")
+DEVICE = 'cpu'
+MODEL_TYPE = "vit_h"
+sam = sam_model_registry[MODEL_TYPE](checkpoint=CHECKPOINT_PATH)
+sam.to(device=DEVICE)
+
 
 logging.info("postIMC on preIMC bounding box extraction")
 postIMC_on_preIMC = skimage.io.imread(postIMC_on_preIMC_file)
 rp = skimage.measure.regionprops((postIMC_on_preIMC[:,:,0]>0).astype(np.uint8))
 bb1 = rp[0].bbox
 bb2 = [int(bb1[0]/input_spacing_2),int(bb1[1]/input_spacing_2),int(bb1[2]/input_spacing_2),int(bb1[3]/input_spacing_2)] 
+logging.info(f"\tBB1: {bb1}")
+logging.info(f"\tBB2: {bb2}")
 
 logging.info("mask extraction")
 postIMC_on_preIMCmasks = extract_mask(postIMC_on_preIMC_file, bb1, rembg_session, input_spacing_1/output_spacing)
@@ -67,6 +78,23 @@ preIMCmasks = preIMCmasks[:,:s1,:s2]
 
 logging.info("score calculation")
 postIMC_on_preIMC_to_preIMC, preIMC_to_postIMC_on_preIMC, dice_score_postIMC_on_preIMC_to_preIMC = get_max_dice_score(postIMC_on_preIMCmasks, preIMCmasks)
+
+logging.info(f"Dice score: {dice_score_postIMC_on_preIMC_to_preIMC}")
+if dice_score_postIMC_on_preIMC_to_preIMC < 0.975:
+    logging.info("use SAM for mask extraction")
+    logging.info("mask extraction")
+    postIMC_on_preIMCmasks = extract_mask(postIMC_on_preIMC_file, bb1, rembg_session, input_spacing_1/output_spacing, sam=sam)
+    preIMCmasks = extract_mask(preIMC_file, bb2, rembg_session, input_spacing_2/output_spacing, sam=sam)
+    s1 = postIMC_on_preIMCmasks.shape[1] if postIMC_on_preIMCmasks.shape[1] <= preIMCmasks.shape[1] else preIMCmasks.shape[1]
+    s2 = postIMC_on_preIMCmasks.shape[2] if postIMC_on_preIMCmasks.shape[2] <= preIMCmasks.shape[2] else preIMCmasks.shape[2]
+    logging.info(f"\tMask crop: {(s1,s2)}")
+    postIMC_on_preIMCmasks = postIMC_on_preIMCmasks[:,:s1,:s2]
+    preIMCmasks = preIMCmasks[:,:s1,:s2]
+
+    logging.info("score calculation")
+    postIMC_on_preIMC_to_preIMC, preIMC_to_postIMC_on_preIMC, dice_score_postIMC_on_preIMC_to_preIMC = get_max_dice_score(postIMC_on_preIMCmasks, preIMCmasks)
+    logging.info(f"Dice score: {dice_score_postIMC_on_preIMC_to_preIMC}")
+
 
 postIMC_on_preIMC_area = np.sum(postIMC_on_preIMC_to_preIMC)/(output_spacing**2)
 preIMC_area = np.sum(preIMC_to_postIMC_on_preIMC)/(output_spacing**2)
@@ -84,6 +112,8 @@ preIMC_on_preIMS = skimage.io.imread(preIMC_on_preIMS_file)
 rp = skimage.measure.regionprops((preIMC_on_preIMS[:,:,0]>0).astype(np.uint8))
 bb1 = rp[0].bbox
 bb2 = [int(bb1[0]/input_spacing_2),int(bb1[1]/input_spacing_2),int(bb1[2]/input_spacing_2),int(bb1[3]/input_spacing_2)] 
+logging.info(f"\tBB1: {bb1}")
+logging.info(f"\tBB2: {bb2}")
 
 logging.info("mask extraction")
 preIMC_on_preIMSmasks = extract_mask(preIMC_on_preIMS_file, bb1, rembg_session, input_spacing_1/output_spacing)
@@ -94,9 +124,24 @@ logging.info(f"\tMask crop: {(s1,s2)}")
 preIMC_on_preIMSmasks = preIMC_on_preIMSmasks[:,:s1,:s2]
 preIMSmasks = preIMSmasks[:,:s1,:s2]
 
-
 logging.info("score calculation")
 preIMC_on_preIMS_to_preIMS, preIMS_to_preIMC_on_preIMS, dice_score_preIMC_on_preIMS_to_preIMS = get_max_dice_score(preIMC_on_preIMSmasks, preIMSmasks)
+
+logging.info(f"Dice score: {dice_score_preIMC_on_preIMS_to_preIMS}")
+if dice_score_preIMC_on_preIMS_to_preIMS < 0.975:
+    logging.info("use SAM for mask extraction")
+    logging.info("mask extraction")
+    preIMC_on_preIMSmasks = extract_mask(preIMC_on_preIMS_file, bb1, rembg_session, input_spacing_1/output_spacing, sam=sam)
+    preIMSmasks = extract_mask(preIMS_file, bb2, rembg_session, input_spacing_2/output_spacing, sam=sam)
+    s1 = preIMC_on_preIMSmasks.shape[1] if preIMC_on_preIMSmasks.shape[1] <= preIMSmasks.shape[1] else preIMSmasks.shape[1]
+    s2 = preIMC_on_preIMSmasks.shape[2] if preIMC_on_preIMSmasks.shape[2] <= preIMSmasks.shape[2] else preIMSmasks.shape[2]
+    logging.info(f"\tMask crop: {(s1,s2)}")
+    preIMC_on_preIMSmasks = preIMC_on_preIMSmasks[:,:s1,:s2]
+    preIMSmasks = preIMSmasks[:,:s1,:s2]
+
+    logging.info("score calculation")
+    preIMC_on_preIMS_to_preIMS, preIMS_to_preIMC_on_preIMS, dice_score_preIMC_on_preIMS_to_preIMS = get_max_dice_score(preIMC_on_preIMSmasks, preIMSmasks)
+    logging.info(f"Dice score: {dice_score_preIMC_on_preIMS_to_preIMS}")
 
 preIMC_on_preIMS_area = np.sum(preIMC_on_preIMS_to_preIMS)/(output_spacing**2)
 preIMS_area = np.sum(preIMS_to_preIMC_on_preIMS)/(output_spacing**2)
@@ -114,6 +159,8 @@ preIMS_on_postIMS = skimage.io.imread(preIMS_on_postIMS_file)
 rp = skimage.measure.regionprops((preIMS_on_postIMS[:,:,0]>0).astype(np.uint8))
 bb1 = rp[0].bbox
 bb2 = [int(bb1[0]/input_spacing_2),int(bb1[1]/input_spacing_2),int(bb1[2]/input_spacing_2),int(bb1[3]/input_spacing_2)] 
+logging.info(f"\tBB1: {bb1}")
+logging.info(f"\tBB2: {bb2}")
 
 logging.info("mask extraction")
 preIMS_on_postIMSmasks = extract_mask(preIMS_on_postIMS_file, bb1, rembg_session, input_spacing_1/output_spacing)
@@ -127,6 +174,22 @@ postIMSmasks = postIMSmasks[:,:s1,:s2]
 logging.info("score calculation")
 preIMS_on_postIMS_to_postIMS, postIMS_to_preIMS_on_postIMS, dice_score_preIMS_on_postIMS_to_postIMS = get_max_dice_score(preIMS_on_postIMSmasks, postIMSmasks)
 
+logging.info(f"Dice score: {dice_score_preIMS_on_postIMS_to_postIMS}")
+if dice_score_preIMS_on_postIMS_to_postIMS < 0.975:
+    logging.info("use SAM for mask extraction")
+    logging.info("mask extraction")
+    preIMS_on_postIMSmasks = extract_mask(preIMS_on_postIMS_file, bb1, rembg_session, input_spacing_1/output_spacing, sam=sam)
+    postIMSmasks = extract_mask(postIMS_file, bb2, rembg_session, input_spacing_2/output_spacing, is_postIMS=True, sam=sam)
+    s1 = preIMS_on_postIMSmasks.shape[1] if preIMS_on_postIMSmasks.shape[1] <= postIMSmasks.shape[1] else postIMSmasks.shape[1]
+    s2 = preIMS_on_postIMSmasks.shape[2] if preIMS_on_postIMSmasks.shape[2] <= postIMSmasks.shape[2] else postIMSmasks.shape[2]
+    logging.info(f"\tMask crop: {(s1,s2)}")
+    preIMS_on_postIMSmasks = preIMS_on_postIMSmasks[:,:s1,:s2]
+    postIMSmasks = postIMSmasks[:,:s1,:s2]
+
+    logging.info("score calculation")
+    preIMS_on_postIMS_to_postIMS, postIMS_to_preIMS_on_postIMS, dice_score_preIMS_on_postIMS_to_postIMS = get_max_dice_score(preIMS_on_postIMSmasks, postIMSmasks)
+    logging.info(f"Dice score: {dice_score_preIMS_on_postIMS_to_postIMS}")
+
 preIMS_on_postIMS_area = np.sum(preIMS_on_postIMS_to_postIMS)/(output_spacing**2)
 postIMS_area = np.sum(postIMS_to_preIMS_on_postIMS)/(output_spacing**2)
 
@@ -137,6 +200,53 @@ postIMS_centroid = reg2[0].centroid
 
 preIMS_on_postIMS_to_postIMS_dist = dist_centroids(preIMS_on_postIMS_centroid, postIMS_centroid, 1/output_spacing)
 
+logging.info("postIMC on postIMS bounding box extraction")
+postIMC_on_postIMS = skimage.io.imread(postIMC_on_postIMS_file)
+rp = skimage.measure.regionprops((postIMC_on_postIMS[:,:,0]>0).astype(np.uint8))
+bb1 = rp[0].bbox
+bb2 = bb1
+logging.info(f"\tBB1: {bb1}")
+logging.info(f"\tBB2: {bb2}")
+
+logging.info("mask extraction")
+postIMC_on_postIMSmasks = extract_mask(postIMC_on_postIMS_file, bb1, rembg_session, input_spacing_2/output_spacing)
+postIMS_to_postIMCmasks = extract_mask(postIMS_file, bb2, rembg_session, input_spacing_2/output_spacing, is_postIMS=True)
+s1 = postIMC_on_postIMSmasks.shape[1] if postIMC_on_postIMSmasks.shape[1] <= postIMS_to_postIMCmasks.shape[1] else postIMS_to_postIMCmasks.shape[1]
+s2 = postIMC_on_postIMSmasks.shape[2] if postIMC_on_postIMSmasks.shape[2] <= postIMS_to_postIMCmasks.shape[2] else postIMS_to_postIMCmasks.shape[2]
+logging.info(f"\tMask crop: {(s1,s2)}")
+postIMC_on_postIMSmasks = postIMC_on_postIMSmasks[:,:s1,:s2]
+postIMS_to_postIMCmasks = postIMS_to_postIMCmasks[:,:s1,:s2]
+
+logging.info("score calculation")
+postIMC_on_postIMS_to_postIMS, postIMS_to_postIMC_on_postIMS, dice_score_postIMC_on_postIMS_to_postIMS = get_max_dice_score(postIMC_on_postIMSmasks, postIMS_to_postIMCmasks)
+
+logging.info(f"Dice score: {dice_score_postIMC_on_postIMS_to_postIMS}")
+if dice_score_postIMC_on_postIMS_to_postIMS < 0.975:
+    logging.info("use SAM for mask extraction")
+    logging.info("mask extraction")
+    postIMC_on_postIMSmasks = extract_mask(postIMC_on_postIMS_file, bb1, rembg_session, input_spacing_2/output_spacing, sam=sam)
+    postIMS_to_postIMCmasks = extract_mask(postIMS_file, bb2, rembg_session, input_spacing_2/output_spacing, is_postIMS=True, sam=sam)
+    s1 = postIMC_on_postIMSmasks.shape[1] if postIMC_on_postIMSmasks.shape[1] <= postIMS_to_postIMCmasks.shape[1] else postIMS_to_postIMCmasks.shape[1]
+    s2 = postIMC_on_postIMSmasks.shape[2] if postIMC_on_postIMSmasks.shape[2] <= postIMS_to_postIMCmasks.shape[2] else postIMS_to_postIMCmasks.shape[2]
+    logging.info(f"\tMask crop: {(s1,s2)}")
+    postIMC_on_postIMSmasks = postIMC_on_postIMSmasks[:,:s1,:s2]
+    postIMS_to_postIMCmasks = postIMS_to_postIMCmasks[:,:s1,:s2]
+
+    logging.info("score calculation")
+    postIMC_on_postIMS_to_postIMS, postIMS_to_postIMC_on_postIMS, dice_score_postIMC_on_postIMS_to_postIMS = get_max_dice_score(postIMC_on_postIMSmasks, postIMS_to_postIMCmasks)
+    logging.info(f"Dice score: {dice_score_postIMC_on_postIMS_to_postIMS}")
+
+postIMC_on_postIMS_area = np.sum(postIMC_on_postIMS_to_postIMS)/(output_spacing**2)
+postIMS_to_postIMC_area = np.sum(postIMS_to_postIMC_on_postIMS)/(output_spacing**2)
+
+reg1 = skimage.measure.regionprops(postIMC_on_postIMS_to_postIMS.astype(np.uint8)[:,:,0])
+postIMC_on_postIMS_centroid = reg1[0].centroid
+reg2 = skimage.measure.regionprops(postIMS_to_postIMC_on_postIMS.astype(np.uint8)[:,:,0])
+postIMS_to_postIMC_centroid = reg2[0].centroid
+
+postIMC_on_postIMS_to_postIMS_dist = dist_centroids(postIMC_on_postIMS_centroid, postIMS_to_postIMC_centroid, 1/output_spacing)
+
+
 
 logging.info("Create and save csv")
 samplename = os.path.basename(postIMC_on_preIMC_file).replace("_transformed_on_preIMC.ome.tiff","")
@@ -145,15 +255,19 @@ df = pd.DataFrame(data = {
     'dice_score_postIMC_preIMC': dice_score_postIMC_on_preIMC_to_preIMC,
     'dice_score_preIMC_preIMS': dice_score_preIMC_on_preIMS_to_preIMS,
     'dice_score_preIMS_postIMS': dice_score_preIMS_on_postIMS_to_postIMS,
+    'dice_score_postIMC_postIMS': dice_score_postIMC_on_postIMS_to_postIMS,
     'postIMC_on_preIMC_mask_area': postIMC_on_preIMC_area, 
     'preIMC_mask_area': preIMC_area, 
     'preIMC_on_preIMS_mask_area': preIMC_on_preIMS_area, 
     'preIMS_mask_area': preIMS_area, 
     'preIMS_on_postIMS_mask_area': preIMS_on_postIMS_area, 
     'postIMS_mask_area': postIMS_area, 
+    'postIMC_on_postIMS_mask_area': postIMC_on_postIMS_area, 
+    'postIMS_to_postIMC_mask_area': postIMS_to_postIMC_area, 
     'euclidean_distance_centroids_postIMC_to_preIMC': postIMC_on_preIMC_to_preIMC_dist,
     'euclidean_distance_centroids_preIMC_to_preIMS': preIMC_on_preIMS_to_preIMS_dist,
-    'euclidean_distance_centroids_preIMS_to_postIMS': preIMS_on_postIMS_to_postIMS_dist
+    'euclidean_distance_centroids_preIMS_to_postIMS': preIMS_on_postIMS_to_postIMS_dist,
+    'euclidean_distance_centroids_postIMC_to_postIMS': postIMC_on_postIMS_to_postIMS_dist
     }, index = [0])
 df.to_csv(output_df, index=False)
 
@@ -168,5 +282,9 @@ tifffile.imwrite(snakemake.output['preIMCmask_preIMSmask'],tmpimg)
 
 tmpimg = preIMS_on_postIMSmasks[0,:,:].astype(np.uint8)*85+postIMSmasks[0,:,:].astype(np.uint8)*170
 tifffile.imwrite(snakemake.output['preIMSmask_postIMSmask'],tmpimg)
+
+tmpimg = postIMC_on_postIMSmasks[0,:,:].astype(np.uint8)*85+postIMS_to_postIMCmasks[0,:,:].astype(np.uint8)*170
+tifffile.imwrite(snakemake.output['postIMCmask_postIMSmask'],tmpimg)
+
 
 logging.info("Finished")

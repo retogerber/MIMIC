@@ -44,6 +44,8 @@ preIMCmask_to_preIMSmask_png <- sapply(snakemake@input[["preIMCmask_to_preIMSmas
 
 postIMCmask_to_preIMCmask_png <- sapply(snakemake@input[["postIMCmask_to_preIMCmask_png"]], function(s) file.path(basedir,s))
 
+postIMCmask_to_postIMSmask_png <- sapply(snakemake@input[["postIMCmask_to_preIMCmask_png"]], function(s) file.path(basedir,s))
+
 landmarks_postIMC_transformed_on_preIMC_png <- sapply(snakemake@input[["landmarks_postIMC_transformed_on_preIMC_png"]], function(s) file.path(basedir,s))
 landmarks_preIMC_png <- sapply(snakemake@input[["landmarks_preIMC_png"]], function(s) file.path(basedir,s))
 
@@ -53,6 +55,8 @@ landmarks_preIMS_png <- sapply(snakemake@input[["landmarks_preIMS_png"]], functi
 landmarks_preIMS_transformed_on_postIMS_png <- sapply(snakemake@input[["landmarks_preIMS_transformed_on_postIMS_png"]], function(s) file.path(basedir,s))
 landmarks_postIMS_png <- sapply(snakemake@input[["landmarks_postIMS_png"]], function(s) file.path(basedir,s))
 
+landmarks_postIMC_transformed_on_postIMS_png <- sapply(snakemake@input[["landmarks_postIMC_transformed_on_postIMS_png"]], function(s) file.path(basedir,s))
+landmarks_postIMS_to_postIMC_png <- sapply(snakemake@input[["landmarks_postIMS_to_postIMC_png"]], function(s) file.path(basedir,s))
 
 regions_postIMC_transformed_on_preIMC_png <- sapply(snakemake@input[["regions_postIMC_transformed_on_preIMC_png"]], function(s) file.path(basedir,s))
 regions_preIMC_transformed_on_preIMS_png <- sapply(snakemake@input[["regions_preIMC_transformed_on_preIMS_png"]], function(s) file.path(basedir,s))
@@ -101,9 +105,13 @@ pairs_plot <- function(input_csv_files, vis_type, quantile_type="quantile50", re
       showlegend = FALSE
   )
   pltls <- list()
-  ismissing <- rep(FALSE, dim(df)[1])
+  ismissing <- list(
+    tissue_masks = rep(FALSE, nrow(df)),
+    landmarks = rep(FALSE, nrow(df)),
+    regions = rep(FALSE, nrow(df))
+  )
   if("euclidean_distance_centroids" %in% colnames(df) & "dice_score" %in% colnames(df)){
-  ismissing <- ismissing | is.na(df$euclidean_distance_centroids) | is.na(df$dice_score)
+  ismissing[["tissue_masks"]] <- is.na(df$euclidean_distance_centroids) | is.na(df$dice_score)
   masks_plt <- 
     plotly::add_markers(base, 
       x = ~euclidean_distance_centroids, 
@@ -138,7 +146,7 @@ pairs_plot <- function(input_csv_files, vis_type, quantile_type="quantile50", re
     yaxis_title <- "Number of landmarks"
     y_legend <- "N landmarks"
   }
-  ismissing <- ismissing | is.na(df[[axis_type]]) | is.na(df[[yaxis_type]])
+  ismissing[["landmarks"]] <- is.na(df[[axis_type]]) | is.na(df[[yaxis_type]])
   landmarks_plt <- 
     plotly::add_markers(base, 
       x = dplyr::quo(!!dplyr::sym(axis_type)), 
@@ -175,7 +183,7 @@ pairs_plot <- function(input_csv_files, vis_type, quantile_type="quantile50", re
     "max" = "regions_min_dice"
   )
   if(xaxis_type %in% colnames(df) & yaxis_type %in% colnames(df) & "regions_n_points_total" %in% colnames(df)){
-  ismissing <- ismissing | is.na(df[[xaxis_type]]) | is.na(df[[yaxis_type]])
+  ismissing[["regions"]] <- is.na(df[[xaxis_type]]) | is.na(df[[yaxis_type]])
   regions_plt <- 
     plotly::add_markers(base, 
       x = dplyr::quo(!!dplyr::sym(xaxis_type)), 
@@ -208,7 +216,13 @@ pairs_plot <- function(input_csv_files, vis_type, quantile_type="quantile50", re
       ) |>
       plotly::highlight(on = "plotly_hover", off = "plotly_doubleclick")
     if (return_missing) {
-       return(list(fig, df$sample[ismissing]))
+      missing_df <- data.frame(
+        sample = df$sample,
+        tissue_masks = ismissing[["tissue_masks"]],
+        landmarks = ismissing[["landmarks"]],
+        regions = ismissing[["regions"]]
+      )
+       return(list(fig, missing_df))
     } else{
     return(fig)
     }
@@ -349,44 +363,50 @@ cat("\n\n")
 cat(sprintf("\n\n### %s\n\n","quantile50"))
 tmp <- pairs_plot(input_csv_files, vis_type,"quantile50", return_missing=TRUE)
 tmp[[1]]
-if(length(tmp[[2]])>0){
+is_missing <- tmp[[2]]$tissue_masks | tmp[[2]]$landmarks | tmp[[2]]$regions
+if(sum(is_missing)>0){
     cat("\n\n")
-    knitr::kable(data.frame(missing=tmp[[2]]))
+    knitr::kable(tmp[[2]][is_missing,])
 }
 cat(sprintf("\n\n### %s\n\n","mean"))
 tmp <- pairs_plot(input_csv_files, vis_type,"mean", return_missing=TRUE)
 tmp[[1]]
-if(length(tmp[[2]])>0){
+is_missing <- tmp[[2]]$tissue_masks | tmp[[2]]$landmarks | tmp[[2]]$regions
+if(sum(is_missing)>0){
     cat("\n\n")
-    knitr::kable(data.frame(missing=tmp[[2]]))
+    knitr::kable(tmp[[2]][is_missing,])
 }
 cat(sprintf("\n\n### %s\n\n","quantile05"))
 tmp <- pairs_plot(input_csv_files, vis_type,"quantile05", return_missing=TRUE)
 tmp[[1]]
-if(length(tmp[[2]])>0){
+is_missing <- tmp[[2]]$tissue_masks | tmp[[2]]$landmarks | tmp[[2]]$regions
+if(sum(is_missing)>0){
     cat("\n\n")
-    knitr::kable(data.frame(missing=tmp[[2]]))
+    knitr::kable(tmp[[2]][is_missing,])
 }
 cat(sprintf("\n\n### %s\n\n","quantile95"))
 tmp <- pairs_plot(input_csv_files, vis_type,"quantile95", return_missing=TRUE)
 tmp[[1]]
-if(length(tmp[[2]])>0){
+is_missing <- tmp[[2]]$tissue_masks | tmp[[2]]$landmarks | tmp[[2]]$regions
+if(sum(is_missing)>0){
     cat("\n\n")
-    knitr::kable(data.frame(missing=tmp[[2]]))
+    knitr::kable(tmp[[2]][is_missing,])
 }
 cat(sprintf("\n\n### %s\n\n","min"))
 tmp <- pairs_plot(input_csv_files, vis_type,"min", return_missing=TRUE)
 tmp[[1]]
-if(length(tmp[[2]])>0){
+is_missing <- tmp[[2]]$tissue_masks | tmp[[2]]$landmarks | tmp[[2]]$regions
+if(sum(is_missing)>0){
     cat("\n\n")
-    knitr::kable(data.frame(missing=tmp[[2]]))
+    knitr::kable(tmp[[2]][is_missing,])
 }
 cat(sprintf("\n\n### %s\n\n","max"))
 tmp <- pairs_plot(input_csv_files, vis_type,"max", return_missing=TRUE)
 tmp[[1]]
-if(length(tmp[[2]])>0){
+is_missing <- tmp[[2]]$tissue_masks | tmp[[2]]$landmarks | tmp[[2]]$regions
+if(sum(is_missing)>0){
     cat("\n\n")
-    knitr::kable(data.frame(missing=tmp[[2]]))
+    knitr::kable(tmp[[2]][is_missing,])
 }
 cat("\n\n")
 ```
@@ -431,7 +451,9 @@ vis_type <- "IMS_to_postIMS"
 
 | Position | Measure | x-axis | y-axis | color  | 
 |:---------|:--------|:-------|:-------|:-------|
-| Middle    | Regions | Summarized distance between regions | Dice coefficients | Number of regions |
+| Left     | Tissue masks | Distance between centroids | Dice coefficient | |
+| Middle   | Landmarks | Summarized distance between landmarks | Number of landmarks | |
+| Right    | Regions | Summarized distance between regions | Dice coefficients | Number of regions |
 
 
 ```{r}
@@ -444,6 +466,43 @@ imgtype2 <- stringr::str_split(vis_type,"_to_")[[1]][2]
 
 
 ## Images {.tabset}
+
+### Tissue masks {.tabset}
+
+Shown below are the masks of the tissue masks, overlayed on top of each other. Extraction of the tissue masks is not always exact (especially for the postIMS images), so the results might be unreliable.
+Color legend for the below images:
+
+| Color | Description |
+|-------|-------------|
+| Black | Neither     |
+| Dark gray  | `r imgtype1` only |
+| Light gray  | `r imgtype2` only |
+| White | Both        |
+
+```{r}
+filenames <- postIMCmask_to_postIMSmask_png
+img_height=700
+```
+```{r plot_images_postIMC_to_postIMS_mask, ref.label='plot_images', results='asis'}
+```
+
+### Images of Landmarks {.tabset}
+
+Below are shown the landmarks from the `r imgtype1` image (left) and the `r imgtype2` image (right) after registration. The landmarks are shown as errors where the start of the arrow is on the respective image and the end is the corresponding landmark in the other image. The length of the arrows are therefore the distance between individual landmarks. 
+
+|left | right|
+|:----|:-----|
+|`r imgtype1` | `r imgtype2` |
+
+
+```{r}
+filenames1 <- landmarks_postIMC_transformed_on_postIMS_png
+filenames2 <- landmarks_postIMS_to_postIMC_png
+```
+```{r plot_2_images_preIMS_to_postIMS_landmarks, ref.label='plot_2_images', results='asis', fig.width=8, fig.height=8}
+```
+
+
 
 ### Images of Regions {.tabset}
 
