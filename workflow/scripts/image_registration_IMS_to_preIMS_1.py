@@ -201,7 +201,7 @@ hn = int(postIMSregincut.shape[1]/100)
 tmp = cv2.resize(postIMSregincut, (hn,wn), interpolation=cv2.INTER_NEAREST)
 tmpuq = np.unique(tmp)
 logging.info(f"Unique regions: {tmpuq}")
-assert(np.all(np.array([tt in postIMSregions for tt in tmpuq[1:]])))
+assert(np.all(np.array([tt in tmpuq[1:] for tt in postIMSregions])))
 del tmp,tmpuq
 
 logging.info("Remove cores in postIMS that are missing in imz")

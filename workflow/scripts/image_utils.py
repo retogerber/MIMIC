@@ -184,7 +184,7 @@ def subtract_postIMS_grid(img: np.ndarray) -> np.ndarray:
     return img_notch
 
 
-def extract_mask(file: str, bb: list, session = None, rescale: int = 1, is_postIMS: bool = False, sam=None) -> np.ndarray:
+def extract_mask(file: str, bb: list, session = None, rescale: int = 1, is_postIMS: bool = False, sam=None, pts: np.ndarray = None, multiple_rembgth: bool = False) -> np.ndarray:
     '''
     Extract a tissue mask from an image file.
 
@@ -212,6 +212,7 @@ def extract_mask(file: str, bb: list, session = None, rescale: int = 1, is_postI
     if is_postIMS:
         w = subtract_postIMS_grid(w)
         w = cv2.blur(w, (9,9))
+    w = cv2.fastNlMeansDenoising(w, None, 10, 7, 21)
     w = np.stack([w, w, w], axis=2)
     if sam == None:
         wr = rembg.remove(w, only_mask=True, session=session)
@@ -219,18 +220,27 @@ def extract_mask(file: str, bb: list, session = None, rescale: int = 1, is_postI
             th = skimage.filters.threshold_minimum(wr, nbins=256)
         except:
             th = skimage.filters.threshold_otsu(wr, nbins=256)
-        masks = wr>th
+        if multiple_rembgth:
+            ths = [np.quantile(wr[wr>0].flatten(),q) for q in [0.01,0.05,0.1,0.25,0.5,0.75,0.9,0.95,0.99]]
+            ths = [th] + ths
+        else:
+            ths = [th]
+
+        masks = []
+        for th in ths:
+            tmasks = wr>th
+            tmasks = skimage.morphology.remove_small_holes(tmasks,100**2*np.pi)
+            tmasks = cv2.morphologyEx(tmasks.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((5,5),np.uint8)).astype(bool)
+            tmasks = np.stack([tmasks])
+            masks.extend(tmasks)
+        masks = np.array(masks)
     else:
-        masks, scores = sam_core(w, sam)
-        masks = np.stack([preprocess_mask(msk,1) for msk in masks ])
-        masks = masks[np.argmax(scores),:,:][0,:,:]>0
-    masks = skimage.morphology.remove_small_holes(masks,100**2*np.pi)
-    masks = cv2.morphologyEx(masks.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((5,5),np.uint8)).astype(bool)
-    masks = np.stack([masks])
+        masks, scores = sam_core(w, sam, pts=pts)
+        masks = np.stack([preprocess_mask(msk,1) for msk in masks ])>0
     return masks
 
 
-def sam_core(img: np.ndarray, sam) -> (np.ndarray, np.ndarray):
+def sam_core(img: np.ndarray, sam, pts: np.ndarray = None) -> (np.ndarray, np.ndarray):
     '''
     Run the Segment Anything Model (SAM) on an image.
 
@@ -247,17 +257,21 @@ def sam_core(img: np.ndarray, sam) -> (np.ndarray, np.ndarray):
     predictor = segment_anything.SamPredictor(sam)
     predictor.set_image(img)
 
-    input_points = np.array([
-        [img.shape[0]//2,img.shape[1]//2]
-        ])
-    input_labels = np.array([1])
-
+    if pts is None:
+        input_points = np.array([
+            [img.shape[0]//2,img.shape[1]//2]
+            ])
+        input_labels = np.array([1])
+    else:
+        input_points = pts
+        input_labels = np.ones(pts.shape[0])
     masks, scores, logits = predictor.predict(
         point_coords=input_points,
         point_labels=input_labels,
         multimask_output=True,
     )
-    return masks, scores
+
+    return masks, scores 
 
 
 def preprocess_mask(mask: np.ndarray, image_resolution: float = 1.0) -> np.ndarray:
@@ -276,7 +290,8 @@ def preprocess_mask(mask: np.ndarray, image_resolution: float = 1.0) -> np.ndarr
     mask1tmp = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_OPEN, kernel)
     _, labels = cv2.connectedComponents(mask1tmp)
     counts = np.bincount(labels.flatten())
-    maxind = np.argmax(counts[1:]) + 1  # Ignore background
-    mask1tmp = (labels == maxind).astype(np.uint8)
+    if len(counts)>1:
+        maxind = np.argmax(counts[1:]) + 1  # Ignore background
+        mask1tmp = (labels == maxind).astype(np.uint8)
     return mask1tmp
 

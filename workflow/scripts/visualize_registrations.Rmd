@@ -44,7 +44,7 @@ preIMCmask_to_preIMSmask_png <- sapply(snakemake@input[["preIMCmask_to_preIMSmas
 
 postIMCmask_to_preIMCmask_png <- sapply(snakemake@input[["postIMCmask_to_preIMCmask_png"]], function(s) file.path(basedir,s))
 
-postIMCmask_to_postIMSmask_png <- sapply(snakemake@input[["postIMCmask_to_preIMCmask_png"]], function(s) file.path(basedir,s))
+postIMCmask_to_postIMSmask_png <- sapply(snakemake@input[["postIMCmask_to_postIMSmask_png"]], function(s) file.path(basedir,s))
 
 landmarks_postIMC_transformed_on_preIMC_png <- sapply(snakemake@input[["landmarks_postIMC_transformed_on_preIMC_png"]], function(s) file.path(basedir,s))
 landmarks_preIMC_png <- sapply(snakemake@input[["landmarks_preIMC_png"]], function(s) file.path(basedir,s))

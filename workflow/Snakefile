@@ -1472,10 +1472,13 @@ rule image_registration_evaluation:
     input:
         postIMC_on_preIMC="results/{project_name}/data/postIMC/{sample}_transformed_on_preIMC.ome.tiff",
         preIMC="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
+        IMC_on_preIMC=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"preIMC"),
         preIMC_on_preIMS="results/{project_name}/data/preIMC/{sample}_transformed_on_preIMS.ome.tiff",
         preIMS="results/{project_name}/data/preIMS/{project_name}_preIMS.ome.tiff",
+        IMC_on_preIMS=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"preIMS"),
         preIMS_on_postIMS="results/{project_name}/data/preIMS/{sample}_transformed_on_postIMS.ome.tiff",
         postIMS="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
+        IMC_on_postIMS=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"postIMS"),
         postIMC_on_postIMS="results/{project_name}/data/postIMC/{sample}_transformed_on_postIMS.ome.tiff",
         sam_weights="results/Misc/sam_vit_h_4b8939.pth",
     output:
