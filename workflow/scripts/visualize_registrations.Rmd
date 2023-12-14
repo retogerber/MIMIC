@@ -62,6 +62,11 @@ regions_postIMC_transformed_on_preIMC_png <- sapply(snakemake@input[["regions_po
 regions_preIMC_transformed_on_preIMS_png <- sapply(snakemake@input[["regions_preIMC_transformed_on_preIMS_png"]], function(s) file.path(basedir,s))
 regions_preIMS_transformed_on_postIMS_png <- sapply(snakemake@input[["regions_preIMS_transformed_on_postIMS_png"]], function(s) file.path(basedir,s))
 regions_postIMC_transformed_on_postIMS_png <- sapply(snakemake@input[["regions_postIMC_transformed_on_postIMS_png"]], function(s) file.path(basedir,s))
+
+gif_postIMC_preIMC <- sapply(snakemake@input[["gif_postIMC_preIMC"]], function(s) file.path(basedir,s))
+gif_postIMC_postIMS <- sapply(snakemake@input[["gif_postIMC_postIMS"]], function(s) file.path(basedir,s))
+gif_preIMC_preIMS <- sapply(snakemake@input[["gif_preIMC_preIMS"]], function(s) file.path(basedir,s))
+gif_preIMS_postIMS <- sapply(snakemake@input[["gif_preIMS_postIMS"]], function(s) file.path(basedir,s))
 ```
 
 
@@ -71,6 +76,7 @@ basedir <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_
 # sample_names <- c("Cirrhosis-TMA-5_New_Detector_001", "Cirrhosis-TMA-5_New_Detector_002")
 input_csv_files <- "/home/retger/Downloads/cirrhosis_TMA_reg_metrics_combined.csv"
 input_csv_files <- c("/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/registration_metric/test_combined_reg_metrics_combined.csv")
+input_csv_files <- "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA_reg_metrics_combined.csv"
 vis_type <- "IMS_to_postIMS"
 ```
 
@@ -411,7 +417,137 @@ if(sum(is_missing)>0){
 cat("\n\n")
 ```
 
+# Overview
+```{r}
+min_completenes <- 0.1
+min_landmarks <- 50
+min_regions <- 2
+min_q50_error <- 5
+min_q50_dice <- 0.7
+```
+```{r}
+df <- read.csv(input_csv_files)
 
+df$IMS_Completeness <- df$IMS_to_postIMS_n_points/df$IMS_to_postIMS_n_points_total
+
+IMS_error_thr <- median(df$IMS_to_postIMS_quantile50_error)+3*mad(df$IMS_to_postIMS_quantile50_error)
+keep_IMS_to_postIMS <- df$IMS_Completeness > min_completenes & df$IMS_to_postIMS_quantile50_error < IMS_error_thr
+
+## postIMC to postIMS
+### landmarks
+postIMCpostIMS_lm <- rep(NA, length(df$sample))
+postIMCpostIMS_lm[df$postIMC_to_postIMS_n_points_total > min_landmarks] <- df$postIMC_to_postIMS_quantile50_error[df$postIMC_to_postIMS_n_points_total > min_landmarks] < min_q50_error
+
+### regions
+postIMCpostIMS_reg <- rep(NA, length(df$sample))
+postIMCpostIMS_reg[df$postIMC_to_postIMS_regions_n_points_total > min_regions] <- 
+df$postIMC_to_postIMS_regions_quantile50_error[df$postIMC_to_postIMS_regions_n_points_total > min_regions] < min_q50_error &
+df$postIMC_to_postIMS_regions_quantile50_dice[df$postIMC_to_postIMS_regions_n_points_total > min_regions] > min_q50_dice
+
+## preIMS to postIMS
+### landmarks
+preIMSpostIMS_lm <- rep(NA, length(df$sample))
+preIMSpostIMS_lm[df$preIMS_to_postIMS_n_points_total > min_landmarks] <- df$preIMS_to_postIMS_quantile50_error[df$preIMS_to_postIMS_n_points_total > min_landmarks] < min_q50_error
+
+### regions
+preIMSpostIMS_reg <- rep(NA, length(df$sample))
+preIMSpostIMS_reg[df$preIMS_to_postIMS_regions_n_points_total > min_regions] <- 
+df$preIMS_to_postIMS_regions_quantile50_error[df$preIMS_to_postIMS_regions_n_points_total > min_regions] < min_q50_error |
+df$preIMS_to_postIMS_regions_quantile50_dice[df$preIMS_to_postIMS_regions_n_points_total > min_regions] > min_q50_dice
+
+### sitk
+preIMSpostIMS_sitk <- sqrt(df$preIMS_to_postIMS_sitk_global_x_shift**2 + df$preIMS_to_postIMS_sitk_global_y_shift**2) < min_q50_error
+
+## preIMC to preIMS
+### landmarks
+preIMCpreIMS_lm <- rep(NA, length(df$sample))
+preIMCpreIMS_lm[df$preIMC_to_preIMS_n_points_total > min_landmarks] <- df$preIMC_to_preIMS_quantile50_error[df$preIMC_to_preIMS_n_points_total > min_landmarks] < min_q50_error
+
+### regions
+preIMCpreIMS_reg <- rep(NA, length(df$sample))
+preIMCpreIMS_reg[df$preIMC_to_preIMS_regions_n_points_total > min_regions] <- 
+df$preIMC_to_preIMS_regions_quantile50_error[df$preIMC_to_preIMS_regions_n_points_total > min_regions] < min_q50_error |
+df$preIMC_to_preIMS_regions_quantile50_dice[df$preIMC_to_preIMS_regions_n_points_total > min_regions] > min_q50_dice
+
+## postIMC to preIMC
+### landmarks
+postIMCpreIMC_lm <- rep(NA, length(df$sample))
+postIMCpreIMC_lm[df$postIMC_to_preIMC_n_points_total > min_landmarks] <- df$postIMC_to_preIMC_quantile50_error[df$postIMC_to_preIMC_n_points_total > min_landmarks] < min_q50_error
+
+### regions
+postIMCpreIMC_reg <- rep(NA, length(df$sample))
+postIMCpreIMC_reg[df$postIMC_to_preIMC_regions_n_points_total > min_regions] <- 
+df$postIMC_to_preIMC_regions_quantile50_error[df$postIMC_to_preIMC_regions_n_points_total > min_regions] < min_q50_error |
+df$postIMC_to_preIMC_regions_quantile50_dice[df$postIMC_to_preIMC_regions_n_points_total > min_regions] > min_q50_dice
+
+```
+```{r}
+to_keep_df <- data.frame(
+    sample = df$sample,
+    IMS_to_postIMS = keep_IMS_to_postIMS,
+    postIMCpostIMS_lm = postIMCpostIMS_lm,
+    postIMCpostIMS_reg = postIMCpostIMS_reg,
+    preIMSpostIMS_lm = preIMSpostIMS_lm,
+    preIMSpostIMS_reg = preIMSpostIMS_reg,
+    preIMSpostIMS_sitk = preIMSpostIMS_sitk,
+    preIMCpreIMS_lm = preIMCpreIMS_lm,
+    preIMCpreIMS_reg = preIMCpreIMS_reg,
+    postIMCpreIMC_lm = postIMCpreIMC_lm,
+    postIMCpreIMC_reg = postIMCpreIMC_reg
+)
+```
+
+```{r}
+postIMC_to_postIMS = ifelse(is.na(postIMCpostIMS_lm),FALSE,postIMCpostIMS_lm) | ifelse(is.na(postIMCpostIMS_reg),FALSE,postIMCpostIMS_reg)
+postIMC_to_postIMS[!postIMC_to_postIMS][is.na(postIMCpostIMS_lm[!postIMC_to_postIMS]) & is.na(postIMCpostIMS_reg[!postIMC_to_postIMS])] <- NA
+
+preIMS_to_postIMS = ifelse(is.na(preIMSpostIMS_lm),FALSE,preIMSpostIMS_lm) | ifelse(is.na(preIMSpostIMS_reg),FALSE,preIMSpostIMS_reg) | ifelse(is.na(preIMSpostIMS_sitk),FALSE,preIMSpostIMS_sitk)
+preIMS_to_postIMS[!preIMS_to_postIMS][is.na(preIMSpostIMS_lm[!preIMS_to_postIMS]) & is.na(preIMSpostIMS_reg[!preIMS_to_postIMS])] <- NA
+
+preIMC_to_preIMS = ifelse(is.na(preIMCpreIMS_lm),FALSE,preIMCpreIMS_lm) | ifelse(is.na(preIMCpreIMS_reg),FALSE,preIMCpreIMS_reg)
+preIMC_to_preIMS[!preIMC_to_preIMS][is.na(preIMCpreIMS_lm[!preIMC_to_preIMS]) & is.na(preIMCpreIMS_reg[!preIMC_to_preIMS])] <- NA
+
+postIMC_to_preIMC = ifelse(is.na(postIMCpreIMC_lm),FALSE,postIMCpreIMC_lm) | ifelse(is.na(postIMCpreIMC_reg),FALSE,postIMCpreIMC_reg)
+postIMC_to_preIMC[!postIMC_to_preIMC][is.na(postIMCpreIMC_lm[!postIMC_to_preIMC]) & is.na(postIMCpreIMC_reg[!postIMC_to_preIMC])] <- NA
+
+t1 <- (keep_IMS_to_postIMS & preIMS_to_postIMS & preIMC_to_preIMS & postIMC_to_preIMC)
+to_keep_overall <- ifelse(is.na(t1),FALSE,t1) | ifelse(is.na(postIMC_to_postIMS),FALSE,postIMC_to_postIMS)
+to_keep_overall[!to_keep_overall][is.na(t1[!to_keep_overall]) | is.na(postIMC_to_postIMS[!to_keep_overall])] <- NA
+
+to_keep_df_aggr <- data.frame(
+  sample = df$sample,
+  IMS_to_postIMS = keep_IMS_to_postIMS,
+  postIMC_to_postIMS = postIMC_to_postIMS,
+  preIMS_to_postIMS = preIMS_to_postIMS,
+  preIMC_to_preIMS = preIMC_to_preIMS,
+  postIMC_to_preIMC = postIMC_to_preIMC,
+  overall = to_keep_overall
+)
+```
+
+## Summarized results
+
+The following heatmap is a summary of the results. The columns are the different registration steps and the rows are the samples. The color of the cells indicate whether the registration step was successful or not. The used thresholds are: 
+
+| Threshold                                  | Value         |
+|:-------------------------------------------|:--------------|
+| Minimum completeness IMS ablation marks    | `r min_completenes` |
+| Minimum number of landmarks                | `r min_landmarks`    |
+| Minimum number of regions                  | `r min_regions`      |
+| Maximum error (quantile 50)                | `r min_q50_error`    |
+| Minimum Dice coefficient (quantile 50)     | `r min_q50_dice`     |
+
+This evaluation is rather strict meaning that if the 'overall' column is TRUE, the sample is likely to be registered well. However, if the 'overall' column is FALSE or NA, it does not necessarily mean that the sample is not registered well. Therefore it is adviced to check the FALSE and NA entries in the additional plots and images below. 
+
+```{r, fig.width=12, fig.height=8}
+data_long <- tidyr::pivot_longer(to_keep_df_aggr, c("IMS_to_postIMS","postIMC_to_postIMS","preIMS_to_postIMS","preIMC_to_preIMS","postIMC_to_preIMC","overall"))
+data_long$name <- factor(data_long$name,c("IMS_to_postIMS","preIMS_to_postIMS","preIMC_to_preIMS","postIMC_to_preIMC","postIMC_to_postIMS","overall"))
+
+ggplot2::ggplot(data_long,ggplot2::aes(name, sample, fill = value)) +
+  ggplot2::geom_tile() +
+  ggplot2::labs(x = NULL, y = NULL, fill="keep") +
+  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) 
+```
 
 # IMS to postIMS
 
@@ -428,12 +564,25 @@ Color legend for the below images:
 | Green | IMS pixel    |
 
 ```{r}
-filenames <- IMS_to_postIMS_svg
+tthr <- median(df$IMS_to_postIMS_quantile50_error)+mad(df$IMS_to_postIMS_quantile50_error)
+df$IMS_to_postIMS_show_image <- df$IMS_to_postIMS_quantile50_error > tthr
+
+bn <- basename(IMS_to_postIMS_svg)
+bn <- stringr::str_replace(bn,"_IMS_to_postIMS_combined_registration_all.svg","")
+project_name <- basename(dirname(dirname(dirname(dirname(IMS_to_postIMS_svg[1])))))
+bn <- stringr::str_replace(bn,paste0(project_name,"_"),"")
+tdf <- dplyr::right_join(df, data.frame(sample=bn, filename=IMS_to_postIMS_svg), by="sample")
+
+filenames <- dplyr::filter(tdf, IMS_to_postIMS_show_image)$filename
+sample_names_cp <- sample_names
+sample_names <- dplyr::filter(tdf, IMS_to_postIMS_show_image)$sample
 img_height=1000
 ```
 ```{r plot_images_IMS_to_postIMS, ref.label='plot_images', results='asis'}
 ```
-
+```{r}
+sample_names <- sample_names_cp
+```
 ## Distances ablation marks to IMS pixels {.tabset}
 
 The plot below shows the distances (mean, median, etc.) on the x-axis versus the completeness (number of detected ablation marks divided by the total number of IMS pixels) on the y-axis.
@@ -523,6 +672,15 @@ img_height=700
 ```{r plot_images_postIMC_to_postIMS_regions, ref.label='plot_images', results='asis'}
 ```
 
+### Overlayed {.tabset}
+
+```{r}
+filenames <- gif_postIMC_postIMS
+img_height=100
+```
+```{r plot_images_postIMC_to_postIMS_gif, ref.label='plot_images', results='asis'}
+```
+
 
 
 # preIMS to postIMS
@@ -600,6 +758,14 @@ img_height=700
 ```{r plot_images_preIMS_to_postIMS_regions, ref.label='plot_images', results='asis'}
 ```
 
+### Overlayed {.tabset}
+
+```{r}
+filenames <- gif_preIMS_postIMS
+img_height=100
+```
+```{r plot_images_preIMS_to_postIMS_gif, ref.label='plot_images', results='asis'}
+```
 
 
 ## Translations based on grid subtracted postIMS to preIMS registration
@@ -689,6 +855,16 @@ img_height=700
 ```{r plot_images_preIMC_to_preIMS_regions, ref.label='plot_images', results='asis'}
 ```
 
+### Overlayed {.tabset}
+
+```{r}
+filenames <- gif_preIMC_preIMS
+img_height=100
+```
+```{r plot_images_preIMC_to_preIMS_gif, ref.label='plot_images', results='asis'}
+```
+
+
 
 # postIMC to preIMC
 
@@ -764,5 +940,15 @@ filenames <- regions_postIMC_transformed_on_preIMC_png
 img_height=700
 ```
 ```{r plot_images_postIMC_to_preIMC_regions, ref.label='plot_images', results='asis'}
+```
+
+
+### Overlayed {.tabset}
+
+```{r}
+filenames <- gif_postIMC_preIMC
+img_height=100
+```
+```{r plot_images_postIMC_to_preIMC_gif, ref.label='plot_images', results='asis'}
 ```
 

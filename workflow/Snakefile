@@ -92,7 +92,6 @@ rule all:
             project_name=project_names,
         ),
 
-
 rule prepare_register_postIMC_to_postIMS:
     params:
         microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(
@@ -1855,6 +1854,89 @@ use rule image_registration_evaluation_compare_regions_postIMC_to_preIMC as imag
         "benchmarks/image_registration_evaluation_compare_regions_postIMC_to_postIMS/{project_name}_{sample}_preIMS.txt",
 
 
+rule image_registration_evaluation_create_blending_gif_postIMC_to_preIMC:
+    threads: 1
+    resources:
+        mem_mb=2000,
+    params:
+        input_spacing_1=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMC_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        input_spacing_2=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        input_spacing_IMC_location=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        output_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMC_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        pixel_expansion=101,
+    input:
+        microscopy_image_1="results/{project_name}/data/postIMC/{sample}_transformed_on_preIMC.ome.tiff",
+        microscopy_image_2="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
+        IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"preIMC"),
+    output:
+        gif_file="results/{project_name}/data/registration_metric/{sample}_postIMC_preIMC.gif",
+    log:
+        stdout="logs/image_registration_evaluation_create_blending_gif_postIMC_to_preIMC/{project_name}_{sample}_postIMC_preIMC.stdout",
+    benchmark:
+        "benchmarks/image_registration_evaluation_create_blending_gif_postIMC_to_preIMC/{project_name}_{sample}_postIMC_preIMC.txt",
+    container:
+        config["container"]
+    script:
+        "scripts/image_registration_evaluation_create_blending_gif.py"
+
+use rule image_registration_evaluation_create_blending_gif_postIMC_to_preIMC as image_registration_evaluation_create_blending_gif_preIMC_to_preIMS with:
+    input:
+        microscopy_image_1="results/{project_name}/data/preIMC/{sample}_transformed_on_preIMS.ome.tiff",
+        microscopy_image_2="results/{project_name}/data/preIMS/{project_name}_preIMS.ome.tiff",
+        IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"preIMS"),
+    output:
+        gif_file="results/{project_name}/data/registration_metric/{sample}_preIMC_preIMS.gif",
+    log:
+        stdout="logs/image_registration_evaluation_create_blending_gif_preIMC_to_preIMS/{project_name}_{sample}_preIMC_preIMS.stdout",
+    benchmark:
+        "benchmarks/image_registration_evaluation_create_blending_gif_preIMC_to_preIMS/{project_name}_{sample}_preIMC_preIMS.txt",
+
+use rule image_registration_evaluation_create_blending_gif_postIMC_to_preIMC as image_registration_evaluation_create_blending_gif_preIMS_to_postIMS with:
+    input:
+        microscopy_image_1="results/{project_name}/data/preIMS/{sample}_transformed_on_postIMS.ome.tiff",
+        microscopy_image_2="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
+        IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"postIMS"),
+    output:
+        gif_file="results/{project_name}/data/registration_metric/{sample}_preIMS_postIMS.gif",
+    log:
+        stdout="logs/image_registration_evaluation_create_blending_gif_preIMS_to_postIMS/{project_name}_{sample}_preIMS_postIMS.stdout",
+    benchmark:
+        "benchmarks/image_registration_evaluation_create_blending_gif_preIMS_to_postIMS/{project_name}_{sample}_preIMS_postIMS.txt",
+
+use rule image_registration_evaluation_create_blending_gif_postIMC_to_preIMC as image_registration_evaluation_create_blending_gif_postIMC_to_postIMS with:
+    input:
+        microscopy_image_1="results/{project_name}/data/postIMC/{sample}_transformed_on_postIMS.ome.tiff",
+        microscopy_image_2="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
+        IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"postIMS"),
+    output:
+        gif_file="results/{project_name}/data/registration_metric/{sample}_postIMC_postIMS.gif",
+    log:
+        stdout="logs/image_registration_evaluation_create_blending_gif_postIMC_to_postIMS/{project_name}_{sample}_postIMC_postIMS.stdout",
+    benchmark:
+        "benchmarks/image_registration_evaluation_create_blending_gif_postIMC_to_postIMS/{project_name}_{sample}_postIMC_postIMS.txt",
+
+
+
 
 rule image_registration_evaluation_IMS_to_postIMS:
     threads: 1
@@ -2143,7 +2225,7 @@ use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downs
 
 use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downscale_landmarks_preIMC with:
     params:
-        downscale_factor=2
+        downscale_factor=1
     input:
         input_image="results/{project_name}/data/preIMC/{sample}_preIMC_registration_comparison.ome.tiff",
     output:
@@ -2151,7 +2233,7 @@ use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downs
 
 use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downscale_landmarks_preIMC_on_preIMS with:
     params:
-        downscale_factor=2
+        downscale_factor=1
     input:
         input_image="results/{project_name}/data/preIMC/{sample}_transformed_on_preIMS_registration_comparison.ome.tiff",
     output:
@@ -2159,7 +2241,7 @@ use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downs
 
 use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downscale_landmarks_preIMS with:
     params:
-        downscale_factor=2
+        downscale_factor=1
     input:
         input_image="results/{project_name}/data/preIMS/{sample}_preIMS_registration_comparison.ome.tiff",
     output:
@@ -2167,7 +2249,7 @@ use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downs
 
 use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downscale_landmarks_preIMS_on_postIMS with:
     params:
-        downscale_factor=2
+        downscale_factor=1
     input:
         input_image="results/{project_name}/data/preIMS/{sample}_transformed_on_postIMS_registration_comparison.ome.tiff",
     output:
@@ -2175,7 +2257,7 @@ use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downs
 
 use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downscale_landmarks_postIMS with:
     params:
-        downscale_factor=2
+        downscale_factor=1
     input:
         input_image="results/{project_name}/data/postIMS/{sample}_postIMS_registration_comparison.ome.tiff",
     output:
@@ -2183,7 +2265,7 @@ use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downs
 
 use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downscale_landmarks_postIMC_on_postIMS with:
     params:
-        downscale_factor=2
+        downscale_factor=1
     input:
         input_image="results/{project_name}/data/postIMC/{sample}_transformed_on_postIMS_registration_comparison.ome.tiff",
     output:
@@ -2191,7 +2273,7 @@ use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downs
 
 use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downscale_landmarks_postIMS_to_postIMC with:
     params:
-        downscale_factor=2
+        downscale_factor=1
     input:
         input_image="results/{project_name}/data/postIMS/{sample}_postIMS_to_postIMC_registration_comparison.ome.tiff",
     output:
@@ -2402,6 +2484,46 @@ rule generate_registration_report:
         ),
         regions_postIMC_transformed_on_postIMS_png = lambda wildcards: expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_postIMC_and_postIMS_landmark_regions.png",
+            sample=get_column_entry_from_metadata(
+                wildcards.project_name,
+                "sample_name",
+                "project_name",
+                read_sample_metadata(config["sample_metadata"]),
+                return_all=True,
+            ),
+        ),
+        gif_postIMC_preIMC = lambda wildcards: expand(
+            "results/{{project_name}}/data/registration_metric/{sample}_postIMC_preIMC.gif",
+            sample=get_column_entry_from_metadata(
+                wildcards.project_name,
+                "sample_name",
+                "project_name",
+                read_sample_metadata(config["sample_metadata"]),
+                return_all=True,
+            ),
+        ),
+        gif_preIMC_preIMS = lambda wildcards: expand(
+            "results/{{project_name}}/data/registration_metric/{sample}_preIMC_preIMS.gif",
+            sample=get_column_entry_from_metadata(
+                wildcards.project_name,
+                "sample_name",
+                "project_name",
+                read_sample_metadata(config["sample_metadata"]),
+                return_all=True,
+            ),
+        ),
+        gif_preIMS_postIMS = lambda wildcards: expand(
+            "results/{{project_name}}/data/registration_metric/{sample}_preIMS_postIMS.gif",
+            sample=get_column_entry_from_metadata(
+                wildcards.project_name,
+                "sample_name",
+                "project_name",
+                read_sample_metadata(config["sample_metadata"]),
+                return_all=True,
+            ),
+        ),
+        gif_postIMC_postIMS = lambda wildcards: expand(
+            "results/{{project_name}}/data/registration_metric/{sample}_postIMC_postIMS.gif",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
                 "sample_name",

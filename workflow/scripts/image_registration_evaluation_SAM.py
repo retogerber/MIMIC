@@ -547,18 +547,44 @@ df.to_csv(output_df, index=False)
 
 
 logging.info("Create and save images")
-
-tmpimg = postIMC_on_preIMC_to_preIMC[:,:,0].astype(np.uint8)*85+preIMC_to_postIMC_on_preIMC[:,:,0].astype(np.uint8)*170
+s1 = postIMC_on_preIMC_to_preIMC.shape[0] if postIMC_on_preIMC_to_preIMC.shape[0] <= preIMC_to_postIMC_on_preIMC.shape[0] else preIMC_to_postIMC_on_preIMC.shape[0]
+s2 = postIMC_on_preIMC_to_preIMC.shape[1] if postIMC_on_preIMC_to_preIMC.shape[1] <= preIMC_to_postIMC_on_preIMC.shape[1] else preIMC_to_postIMC_on_preIMC.shape[1]
+logging.info(f"\timage 1: {postIMC_on_preIMC_to_preIMC.shape}")
+logging.info(f"\timage 2: {preIMC_to_postIMC_on_preIMC.shape}")
+logging.info(f"\tMask crop: {(s1,s2)}")
+t1 = postIMC_on_preIMC_to_preIMC[:s1,:s2,0]
+t2 = preIMC_to_postIMC_on_preIMC[:s1,:s2,0]
+tmpimg = t1.astype(np.uint8)*85+t2.astype(np.uint8)*170
 tifffile.imwrite(snakemake.output['postIMCmask_preIMCmask'],tmpimg)
 
-tmpimg = preIMC_on_preIMS_to_preIMS[:,:,0].astype(np.uint8)*85+preIMS_to_preIMC_on_preIMS[:,:,0].astype(np.uint8)*170
+s1 = preIMC_on_preIMS_to_preIMS.shape[0] if preIMC_on_preIMS_to_preIMS.shape[0] <= preIMS_to_preIMC_on_preIMS.shape[0] else preIMS_to_preIMC_on_preIMS.shape[0]
+s2 = preIMC_on_preIMS_to_preIMS.shape[1] if preIMC_on_preIMS_to_preIMS.shape[1] <= preIMS_to_preIMC_on_preIMS.shape[1] else preIMS_to_preIMC_on_preIMS.shape[1]
+logging.info(f"\timage 1: {preIMC_on_preIMS_to_preIMS.shape}")
+logging.info(f"\timage 2: {preIMS_to_preIMC_on_preIMS.shape}")
+logging.info(f"\tMask crop: {(s1,s2)}")
+t1 = preIMC_on_preIMS_to_preIMS[:s1,:s2,0]
+t2 = preIMS_to_preIMC_on_preIMS[:s1,:s2,0]
+tmpimg = t1.astype(np.uint8)*85+t2.astype(np.uint8)*170
 tifffile.imwrite(snakemake.output['preIMCmask_preIMSmask'],tmpimg)
 
-tmpimg = preIMS_on_postIMS_to_postIMS[:,:,0].astype(np.uint8)*85+postIMS_to_preIMS_on_postIMS[:,:,0].astype(np.uint8)*170
+s1 = preIMS_on_postIMS_to_postIMS.shape[0] if preIMS_on_postIMS_to_postIMS.shape[0] <= postIMS_to_preIMS_on_postIMS.shape[0] else postIMS_to_preIMS_on_postIMS.shape[0]
+s2 = preIMS_on_postIMS_to_postIMS.shape[1] if preIMS_on_postIMS_to_postIMS.shape[1] <= postIMS_to_preIMS_on_postIMS.shape[1] else postIMS_to_preIMS_on_postIMS.shape[1]
+logging.info(f"\timage 1: {preIMS_on_postIMS_to_postIMS.shape}")
+logging.info(f"\timage 2: {postIMS_to_preIMS_on_postIMS.shape}")
+logging.info(f"\tMask crop: {(s1,s2)}")
+t1 = preIMS_on_postIMS_to_postIMS[:s1,:s2,0]
+t2 = postIMS_to_preIMS_on_postIMS[:s1,:s2,0]
+tmpimg = t1.astype(np.uint8)*85+t2.astype(np.uint8)*170
 tifffile.imwrite(snakemake.output['preIMSmask_postIMSmask'],tmpimg)
 
-tmpimg = postIMC_on_postIMS_to_postIMS[:,:,0].astype(np.uint8)*85+postIMS_to_postIMC_on_postIMS[:,:,0].astype(np.uint8)*170
+s1 = postIMC_on_postIMS_to_postIMS.shape[0] if postIMC_on_postIMS_to_postIMS.shape[0] <= postIMS_to_postIMC_on_postIMS.shape[0] else postIMS_to_postIMC_on_postIMS.shape[0]
+s2 = postIMC_on_postIMS_to_postIMS.shape[1] if postIMC_on_postIMS_to_postIMS.shape[1] <= postIMS_to_postIMC_on_postIMS.shape[1] else postIMS_to_postIMC_on_postIMS.shape[1]
+logging.info(f"\timage 1: {postIMC_on_postIMS_to_postIMS.shape}")
+logging.info(f"\timage 2: {postIMS_to_postIMC_on_postIMS.shape}")
+logging.info(f"\tMask crop: {(s1,s2)}")
+t1 = postIMC_on_postIMS_to_postIMS[:s1,:s2,0]
+t2 = postIMS_to_postIMC_on_postIMS[:s1,:s2,0]
+tmpimg = t1.astype(np.uint8)*85+t2.astype(np.uint8)*170
 tifffile.imwrite(snakemake.output['postIMCmask_postIMSmask'],tmpimg)
-
 
 logging.info("Finished")
