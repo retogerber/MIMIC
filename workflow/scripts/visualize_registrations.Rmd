@@ -342,7 +342,7 @@ for (i in seq_along(filenames)) {
     filename <- filenames[i]
     if(file.exists(filename)){
         cat(sprintf("\n\n#### %s\n\n",sample_names[i]))
-        cat(sprintf("<img src=\"%s\" alt=\"drawing\" height=\"%s\"/>",filename,img_height))
+        cat(sprintf("<img src=\"%s\" alt=\"%s\" height=\"%s\"/>",filename,filename,img_height))
     }
 }
 cat("\n\n")
@@ -356,8 +356,8 @@ for (i in seq_along(filenames1)) {
     if(file.exists(filename1) & file.exists(filename2)){
         cat(sprintf("\n\n#### %s\n\n",sample_names[i]))
         cat("<p float=\"left\">")
-        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"50%%\"/>",filename1))
-        cat(sprintf("<img src=\"%s\" alt=\"drawing\" width=\"50%%\"/>",filename2))
+        cat(sprintf("<img src=\"%s\" alt=\"%s\" width=\"50%%\"/>",filename1,filename1))
+        cat(sprintf("<img src=\"%s\" alt=\"%s\" width=\"50%%\"/>",filename2,filename2))
         cat("</p>")
     }
 }
@@ -676,7 +676,7 @@ img_height=700
 
 ```{r}
 filenames <- gif_postIMC_postIMS
-img_height=100
+img_height=500
 ```
 ```{r plot_images_postIMC_to_postIMS_gif, ref.label='plot_images', results='asis'}
 ```
@@ -762,7 +762,7 @@ img_height=700
 
 ```{r}
 filenames <- gif_preIMS_postIMS
-img_height=100
+img_height=500
 ```
 ```{r plot_images_preIMS_to_postIMS_gif, ref.label='plot_images', results='asis'}
 ```
@@ -859,7 +859,7 @@ img_height=700
 
 ```{r}
 filenames <- gif_preIMC_preIMS
-img_height=100
+img_height=500
 ```
 ```{r plot_images_preIMC_to_preIMS_gif, ref.label='plot_images', results='asis'}
 ```
@@ -947,7 +947,7 @@ img_height=700
 
 ```{r}
 filenames <- gif_postIMC_preIMC
-img_height=100
+img_height=500
 ```
 ```{r plot_images_postIMC_to_preIMC_gif, ref.label='plot_images', results='asis'}
 ```

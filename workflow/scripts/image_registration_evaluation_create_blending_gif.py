@@ -4,7 +4,7 @@ import json
 import re
 import numpy as np
 import cv2
-from image_utils import readimage_crop, convert_and_scale_image, get_image_shape
+from image_utils import readimage_crop, convert_and_scale_image, get_image_shape,subtract_postIMS_grid
 from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
@@ -17,12 +17,13 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake.params["input_spacing_IMC_location"] = 0.22537
     snakemake.params["output_spacing"] = 1
     snakemake.params["pixel_expansion"] = 101
+    snakemake.params["remove_postIMS_grid"] = False
     # snakemake.input['microscopy_image_1'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMC/Cirrhosis-TMA-5_New_Detector_001_transformed_on_preIMS.ome.tiff"
     # snakemake.input['microscopy_image_1'] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMC/NASH_HCC_TMA-2_030_transformed_on_preIMC.ome.tiff"
-    snakemake.input['microscopy_image_1'] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMC/NASH_HCC_TMA-2_030_transformed_on_preIMS.ome.tiff"
+    snakemake.input['microscopy_image_1'] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA-2_030_transformed_on_postIMS.ome.tiff"
     # snakemake.input['microscopy_image_2'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/preIMS/test_split_pre_preIMS.ome.tiff"
     # snakemake.input['microscopy_image_2'] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMC/NASH_HCC_TMA_preIMC.ome.tiff"
-    snakemake.input['microscopy_image_2'] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA_preIMS.ome.tiff"
+    snakemake.input['microscopy_image_2'] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
     # snakemake.input['IMC_location'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_preIMS_A1.geojson"
     # snakemake.input['IMC_location'] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_preIMC_E6.geojson"
     snakemake.input['IMC_location'] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_preIMS_E6.geojson"
@@ -113,6 +114,12 @@ imcbbox_outer = [0,0,xmax,ymax]
 microscopy_image_1 = microscopy_image_1[imcbbox_outer[0]:imcbbox_outer[2],imcbbox_outer[1]:imcbbox_outer[3]].copy()
 microscopy_image_2 = microscopy_image_2[imcbbox_outer[0]:imcbbox_outer[2],imcbbox_outer[1]:imcbbox_outer[3]].copy()
 
+logging.info(f"snakemake params remove_postIMS_grid: {snakemake.params['remove_postIMS_grid']}")
+if snakemake.params["remove_postIMS_grid"]:
+    logging.info("remove postIMS grid")
+    microscopy_image_2 = subtract_postIMS_grid(microscopy_image_2)
+
+
 def label_image(image,label):
     # Add the label "IMS" to the top right corner
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -134,10 +141,6 @@ logging.info("add label to images")
 image1 = label_image(microscopy_image_1, comparison_from)
 image2 = label_image(microscopy_image_2, comparison_to)
 
-logging.info("images to 4 bit")
-image1 = cv2.convertScaleAbs(cv2.convertScaleAbs(image1, alpha=(15/255)),alpha=(255/15))
-image2 = cv2.convertScaleAbs(cv2.convertScaleAbs(image2, alpha=(15/255)),alpha=(255/15))
-
 logging.info("Create frames for gif")
 num_frames = 8
 blend_factor = np.linspace(0, 1, num_frames)
@@ -145,6 +148,7 @@ frames = []
 # Blend microscopy_image_1 into microscopy_image_2 and back again
 for factor in blend_factor:
     blended_image = factor * image1 + (1 - factor) * image2
+    blended_image = cv2.convertScaleAbs(cv2.convertScaleAbs(blended_image, alpha=(15/255)),alpha=(255/15))
     frames.append(blended_image.astype(np.uint8))
 # Append the frames in reverse order to create the back transition
 frames += frames[1:-1][::-1]
