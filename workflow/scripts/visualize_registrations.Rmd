@@ -15,6 +15,7 @@ theme: lumen
 editor_options:
   chunk_output_type: inline
 ---
+<!-- 
 <style type="text/css">
 .main-container {
   max-width: 1800px;
@@ -22,8 +23,14 @@ editor_options:
   margin-right: auto;
 }
 </style>
+ -->
 
-
+```{r}
+suppressPackageStartupMessages({
+library(ggplot2)
+library(ggnewscale)
+})
+```
 ```{r}
 basedir <- getwd()
 # basedir <- "."
@@ -34,39 +41,39 @@ input_csv_files <- snakemake@input[["registration_metrics_combined"]]
 project_name <- basename(dirname(dirname(dirname(input_csv_files))))
 sample_names <- read.csv(input_csv_files[1])$sample
 
-IMS_to_postIMS_svg <- sapply(snakemake@input[["IMS_to_postIMS_svg"]], function(s) file.path(basedir,s))
+IMS_to_postIMS_svg <- sapply(snakemake@input[["IMS_to_postIMS_svg"]], function(s) file.path(basedir, s))
 
-IMS_to_postIMS_png <- sapply(snakemake@input[["IMS_to_postIMS_png"]], function(s) file.path(basedir,s))
+IMS_to_postIMS_png <- sapply(snakemake@input[["IMS_to_postIMS_png"]], function(s) file.path(basedir, s))
 
-preIMSmask_to_postIMSmask_png <- sapply(snakemake@input[["preIMSmask_to_postIMSmask_png"]], function(s) file.path(basedir,s))
+preIMSmask_to_postIMSmask_png <- sapply(snakemake@input[["preIMSmask_to_postIMSmask_png"]], function(s) file.path(basedir, s))
 
-preIMCmask_to_preIMSmask_png <- sapply(snakemake@input[["preIMCmask_to_preIMSmask_png"]], function(s) file.path(basedir,s))
+preIMCmask_to_preIMSmask_png <- sapply(snakemake@input[["preIMCmask_to_preIMSmask_png"]], function(s) file.path(basedir, s))
 
-postIMCmask_to_preIMCmask_png <- sapply(snakemake@input[["postIMCmask_to_preIMCmask_png"]], function(s) file.path(basedir,s))
+postIMCmask_to_preIMCmask_png <- sapply(snakemake@input[["postIMCmask_to_preIMCmask_png"]], function(s) file.path(basedir, s))
 
-postIMCmask_to_postIMSmask_png <- sapply(snakemake@input[["postIMCmask_to_postIMSmask_png"]], function(s) file.path(basedir,s))
+postIMCmask_to_postIMSmask_png <- sapply(snakemake@input[["postIMCmask_to_postIMSmask_png"]], function(s) file.path(basedir, s))
 
-landmarks_postIMC_transformed_on_preIMC_png <- sapply(snakemake@input[["landmarks_postIMC_transformed_on_preIMC_png"]], function(s) file.path(basedir,s))
-landmarks_preIMC_png <- sapply(snakemake@input[["landmarks_preIMC_png"]], function(s) file.path(basedir,s))
+landmarks_postIMC_transformed_on_preIMC_png <- sapply(snakemake@input[["landmarks_postIMC_transformed_on_preIMC_png"]], function(s) file.path(basedir, s))
+landmarks_preIMC_png <- sapply(snakemake@input[["landmarks_preIMC_png"]], function(s) file.path(basedir, s))
 
-landmarks_preIMC_transformed_on_preIMS_png <- sapply(snakemake@input[["landmarks_preIMC_transformed_on_preIMS_png"]], function(s) file.path(basedir,s))
-landmarks_preIMS_png <- sapply(snakemake@input[["landmarks_preIMS_png"]], function(s) file.path(basedir,s))
+landmarks_preIMC_transformed_on_preIMS_png <- sapply(snakemake@input[["landmarks_preIMC_transformed_on_preIMS_png"]], function(s) file.path(basedir, s))
+landmarks_preIMS_png <- sapply(snakemake@input[["landmarks_preIMS_png"]], function(s) file.path(basedir, s))
 
-landmarks_preIMS_transformed_on_postIMS_png <- sapply(snakemake@input[["landmarks_preIMS_transformed_on_postIMS_png"]], function(s) file.path(basedir,s))
-landmarks_postIMS_png <- sapply(snakemake@input[["landmarks_postIMS_png"]], function(s) file.path(basedir,s))
+landmarks_preIMS_transformed_on_postIMS_png <- sapply(snakemake@input[["landmarks_preIMS_transformed_on_postIMS_png"]], function(s) file.path(basedir, s))
+landmarks_postIMS_png <- sapply(snakemake@input[["landmarks_postIMS_png"]], function(s) file.path(basedir, s))
 
-landmarks_postIMC_transformed_on_postIMS_png <- sapply(snakemake@input[["landmarks_postIMC_transformed_on_postIMS_png"]], function(s) file.path(basedir,s))
-landmarks_postIMS_to_postIMC_png <- sapply(snakemake@input[["landmarks_postIMS_to_postIMC_png"]], function(s) file.path(basedir,s))
+landmarks_postIMC_transformed_on_postIMS_png <- sapply(snakemake@input[["landmarks_postIMC_transformed_on_postIMS_png"]], function(s) file.path(basedir, s))
+landmarks_postIMS_to_postIMC_png <- sapply(snakemake@input[["landmarks_postIMS_to_postIMC_png"]], function(s) file.path(basedir, s))
 
-regions_postIMC_transformed_on_preIMC_png <- sapply(snakemake@input[["regions_postIMC_transformed_on_preIMC_png"]], function(s) file.path(basedir,s))
-regions_preIMC_transformed_on_preIMS_png <- sapply(snakemake@input[["regions_preIMC_transformed_on_preIMS_png"]], function(s) file.path(basedir,s))
-regions_preIMS_transformed_on_postIMS_png <- sapply(snakemake@input[["regions_preIMS_transformed_on_postIMS_png"]], function(s) file.path(basedir,s))
-regions_postIMC_transformed_on_postIMS_png <- sapply(snakemake@input[["regions_postIMC_transformed_on_postIMS_png"]], function(s) file.path(basedir,s))
+regions_postIMC_transformed_on_preIMC_png <- sapply(snakemake@input[["regions_postIMC_transformed_on_preIMC_png"]], function(s) file.path(basedir, s))
+regions_preIMC_transformed_on_preIMS_png <- sapply(snakemake@input[["regions_preIMC_transformed_on_preIMS_png"]], function(s) file.path(basedir, s))
+regions_preIMS_transformed_on_postIMS_png <- sapply(snakemake@input[["regions_preIMS_transformed_on_postIMS_png"]], function(s) file.path(basedir, s))
+regions_postIMC_transformed_on_postIMS_png <- sapply(snakemake@input[["regions_postIMC_transformed_on_postIMS_png"]], function(s) file.path(basedir, s))
 
-gif_postIMC_preIMC <- sapply(snakemake@input[["gif_postIMC_preIMC"]], function(s) file.path(basedir,s))
-gif_postIMC_postIMS <- sapply(snakemake@input[["gif_postIMC_postIMS"]], function(s) file.path(basedir,s))
-gif_preIMC_preIMS <- sapply(snakemake@input[["gif_preIMC_preIMS"]], function(s) file.path(basedir,s))
-gif_preIMS_postIMS <- sapply(snakemake@input[["gif_preIMS_postIMS"]], function(s) file.path(basedir,s))
+gif_postIMC_preIMC <- sapply(snakemake@input[["gif_postIMC_preIMC"]], function(s) file.path(basedir, s))
+gif_postIMC_postIMS <- sapply(snakemake@input[["gif_postIMC_postIMS"]], function(s) file.path(basedir, s))
+gif_preIMC_preIMS <- sapply(snakemake@input[["gif_preIMC_preIMS"]], function(s) file.path(basedir, s))
+gif_preIMS_postIMS <- sapply(snakemake@input[["gif_preIMS_postIMS"]], function(s) file.path(basedir, s))
 ```
 
 
@@ -82,33 +89,33 @@ vis_type <- "IMS_to_postIMS"
 
 
 ```{r}
-pairs_plot <- function(input_csv_files, vis_type, quantile_type="quantile50", return_missing=FALSE){
-  stopifnot(quantile_type %in% c("mean","quantile05","quantile25","quantile50","quantile75","quantile95","min","max"))
+pairs_plot <- function(input_csv_files, vis_type, quantile_type = "quantile50", return_missing = FALSE) {
+  stopifnot(quantile_type %in% c("mean", "quantile05", "quantile25", "quantile50", "quantile75", "quantile95", "min", "max"))
   df <- read.csv(input_csv_files)
   colname_reg <- paste0(vis_type, "_")
-  b1 <- stringr::str_detect(colnames(df), paste0("(^",vis_type,")|(_",vis_type,")"))
-  t1 <- stringr::str_replace(vis_type,"_to_","_")
-  b2 <- stringr::str_detect(colnames(df), paste0("(^",t1,")|(_",t1,")"))
+  b1 <- stringr::str_detect(colnames(df), paste0("(^", vis_type, ")|(_", vis_type, ")"))
+  t1 <- stringr::str_replace(vis_type, "_to_", "_")
+  b2 <- stringr::str_detect(colnames(df), paste0("(^", t1, ")|(_", t1, ")"))
   b3 <- colnames(df) %in% c("sample", "project")
   df <- df[, b1 | b2 | b3]
-  colnames(df) <- stringr::str_replace(colnames(df), paste0(vis_type,"_"), "")
-  colnames(df) <- stringr::str_replace(colnames(df), paste0("_",vis_type), "")
-  colnames(df) <- stringr::str_replace(colnames(df), paste0("_",stringr::str_replace(vis_type,"_to_","_")), "")
+  colnames(df) <- stringr::str_replace(colnames(df), paste0(vis_type, "_"), "")
+  colnames(df) <- stringr::str_replace(colnames(df), paste0("_", vis_type), "")
+  colnames(df) <- stringr::str_replace(colnames(df), paste0("_", stringr::str_replace(vis_type, "_to_", "_")), "")
 
-  if(vis_type == "IMS_to_postIMS"){
-    df$Completeness <- df$n_points/df$n_points_total
+  if (vis_type == "IMS_to_postIMS") {
+    df$Completeness <- df$n_points / df$n_points_total
   }
   d <- plotly::highlight_key(df, ~sample)
   base <- plotly::plot_ly(
-      d, 
-      text = ~sample,
-      # hoverinfo = "text",
-      type = "scatter",
-      mode = "markers",
-      # color = 1,
-      # colors = "Set1",
-      marker = list(size = 10),
-      showlegend = FALSE
+    d,
+    text = ~sample,
+    # hoverinfo = "text",
+    type = "scatter",
+    mode = "markers",
+    # color = 1,
+    # colors = "Set1",
+    marker = list(size = 10),
+    showlegend = FALSE
   )
   pltls <- list()
   ismissing <- list(
@@ -116,69 +123,71 @@ pairs_plot <- function(input_csv_files, vis_type, quantile_type="quantile50", re
     landmarks = rep(FALSE, nrow(df)),
     regions = rep(FALSE, nrow(df))
   )
-  if("euclidean_distance_centroids" %in% colnames(df) & "dice_score" %in% colnames(df)){
-  ismissing[["tissue_masks"]] <- is.na(df$euclidean_distance_centroids) | is.na(df$dice_score)
-  masks_plt <- 
-    plotly::add_markers(base, 
-      x = ~euclidean_distance_centroids, 
-      y = ~dice_score, 
-      marker=list(color='rgb(0,0,0)'),
-      hovertemplate = paste0('<b>%{text}</b><br>Error: %{x:.2f}<br>Dice: %{y:.2f}')) |>
-      plotly::layout(
-      xaxis = list(range=c(0,max(df$euclidean_distance_centroids)*1.1), title = "Distance between centroids"),
-      yaxis = list(range=c(0,1.1),title = "Dice coefficient")
+  if ("euclidean_distance_centroids" %in% colnames(df) & "dice_score" %in% colnames(df)) {
+    ismissing[["tissue_masks"]] <- is.na(df$euclidean_distance_centroids) | is.na(df$dice_score)
+    masks_plt <-
+      plotly::add_markers(base,
+        x = ~euclidean_distance_centroids,
+        y = ~dice_score,
+        marker = list(color = "rgb(0,0,0)"),
+        hovertemplate = paste0("<b>%{text}</b><br>Error: %{x:.2f}<br>Dice: %{y:.2f}")
       ) |>
-    plotly::add_annotations(
-      text = "Tissue masks",
-      x = 0.5,
-      y = 1,
-      yref = "paper",
-      xref = "paper",
-      xanchor = "middle",
-      yanchor = "top",
-      showarrow = FALSE,
-      font = list(size = 15)
-    )
-  pltls <- c(pltls, list(masks_plt))
-  }
-  axis_type = paste0(quantile_type,"_error")
-  if(axis_type %in% colnames(df) & "n_points_total" %in% colnames(df)){
-  if(vis_type == "IMS_to_postIMS"){
-    yaxis_type <- "Completeness"
-    yaxis_title <- "Proportion of detected ablation marks"
-    y_legend <- "Proportion"
-  } else{
-    yaxis_type <- "n_points_total"
-    yaxis_title <- "Number of landmarks"
-    y_legend <- "N landmarks"
-  }
-  ismissing[["landmarks"]] <- is.na(df[[axis_type]]) | is.na(df[[yaxis_type]])
-  landmarks_plt <- 
-    plotly::add_markers(base, 
-      x = dplyr::quo(!!dplyr::sym(axis_type)), 
-      y = dplyr::quo(!!dplyr::sym(yaxis_type)),
-      marker=list(color='rgb(0,0,0)'),
-      hovertemplate = sprintf('<b>%%{text}</b><br>Error: %%{x:.2f}<br>%s: %%{y:.2f}',y_legend)) |>
       plotly::layout(
-      xaxis = list(range=c(0,max(df[[axis_type]])*1.1),title = "Distance between landmarks"),
-      yaxis = list(range=c(0,max(df[[yaxis_type]])*1.1),title = yaxis_title)
-    ) |>
-    plotly::add_annotations(
-      text = "Landmarks",
-      x = 0.5,
-      y = 1,
-      yref = "paper",
-      xref = "paper",
-      xanchor = "middle",
-      yanchor = "top",
-      showarrow = FALSE,
-      font = list(size = 15)
-    )
-  pltls <- c(pltls, list(landmarks_plt))
+        xaxis = list(range = c(0, max(df$euclidean_distance_centroids) * 1.1), title = "Distance between centroids"),
+        yaxis = list(range = c(0, 1.1), title = "Dice coefficient")
+      ) |>
+      plotly::add_annotations(
+        text = "Tissue masks",
+        x = 0.5,
+        y = 1,
+        yref = "paper",
+        xref = "paper",
+        xanchor = "middle",
+        yanchor = "top",
+        showarrow = FALSE,
+        font = list(size = 15)
+      )
+    pltls <- c(pltls, list(masks_plt))
+  }
+  axis_type <- paste0(quantile_type, "_error")
+  if (axis_type %in% colnames(df) & "n_points_total" %in% colnames(df)) {
+    if (vis_type == "IMS_to_postIMS") {
+      yaxis_type <- "Completeness"
+      yaxis_title <- "Proportion of detected ablation marks"
+      y_legend <- "Proportion"
+    } else {
+      yaxis_type <- "n_points_total"
+      yaxis_title <- "Number of landmarks"
+      y_legend <- "N landmarks"
+    }
+    ismissing[["landmarks"]] <- is.na(df[[axis_type]]) | is.na(df[[yaxis_type]])
+    landmarks_plt <-
+      plotly::add_markers(base,
+        x = dplyr::quo(!!dplyr::sym(axis_type)),
+        y = dplyr::quo(!!dplyr::sym(yaxis_type)),
+        marker = list(color = "rgb(0,0,0)"),
+        hovertemplate = sprintf("<b>%%{text}</b><br>Error: %%{x:.2f}<br>%s: %%{y:.2f}", y_legend)
+      ) |>
+      plotly::layout(
+        xaxis = list(range = c(0, max(df[[axis_type]]) * 1.1), title = "Distance between landmarks"),
+        yaxis = list(range = c(0, max(df[[yaxis_type]]) * 1.1), title = yaxis_title)
+      ) |>
+      plotly::add_annotations(
+        text = "Landmarks",
+        x = 0.5,
+        y = 1,
+        yref = "paper",
+        xref = "paper",
+        xanchor = "middle",
+        yanchor = "top",
+        showarrow = FALSE,
+        font = list(size = 15)
+      )
+    pltls <- c(pltls, list(landmarks_plt))
   }
 
-  xaxis_type = paste0("regions_",quantile_type,"_error")
-  yaxis_type = switch(quantile_type,
+  xaxis_type <- paste0("regions_", quantile_type, "_error")
+  yaxis_type <- switch(quantile_type,
     "mean" = "regions_mean_dice",
     "quantile05" = "regions_quantile95_dice",
     "quantile25" = "regions_quantile75_dice",
@@ -188,38 +197,39 @@ pairs_plot <- function(input_csv_files, vis_type, quantile_type="quantile50", re
     "min" = "regions_max_dice",
     "max" = "regions_min_dice"
   )
-  if(xaxis_type %in% colnames(df) & yaxis_type %in% colnames(df) & "regions_n_points_total" %in% colnames(df)){
-  ismissing[["regions"]] <- is.na(df[[xaxis_type]]) | is.na(df[[yaxis_type]])
-  regions_plt <- 
-    plotly::add_markers(base, 
-      x = dplyr::quo(!!dplyr::sym(xaxis_type)), 
-      y = dplyr::quo(!!dplyr::sym(yaxis_type)), 
-      color = ~regions_n_points_total,
-      text = ~regions_n_points_total,
-      hovertemplate = paste0('<b>%{text}</b><br>Error: %{x:.2f}<br>Dice: %{y:.2f}<br>N regions: %{text}')) |>
+  if (xaxis_type %in% colnames(df) & yaxis_type %in% colnames(df) & "regions_n_points_total" %in% colnames(df)) {
+    ismissing[["regions"]] <- is.na(df[[xaxis_type]]) | is.na(df[[yaxis_type]])
+    regions_plt <-
+      plotly::add_markers(base,
+        x = dplyr::quo(!!dplyr::sym(xaxis_type)),
+        y = dplyr::quo(!!dplyr::sym(yaxis_type)),
+        color = ~regions_n_points_total,
+        text = ~regions_n_points_total,
+        hovertemplate = paste0("<b>%{text}</b><br>Error: %{x:.2f}<br>Dice: %{y:.2f}<br>N regions: %{text}")
+      ) |>
       plotly::layout(
-      xaxis = list(range=c(0,max(df[[xaxis_type]])*1.1),title = "Distance between regions"),
-      yaxis = list(range=c(0,1.1),title = "Dice coefficient")
-    ) |>
-    plotly::add_annotations(
-      text = "Regions",
-      x = 0.5,
-      y = 1,
-      yref = "paper",
-      xref = "paper",
-      xanchor = "middle",
-      yanchor = "top",
-      showarrow = FALSE,
-      font = list(size = 15)
-    )
-  pltls <- c(pltls, list(regions_plt))
+        xaxis = list(range = c(0, max(df[[xaxis_type]]) * 1.1), title = "Distance between regions"),
+        yaxis = list(range = c(0, 1.1), title = "Dice coefficient")
+      ) |>
+      plotly::add_annotations(
+        text = "Regions",
+        x = 0.5,
+        y = 1,
+        yref = "paper",
+        xref = "paper",
+        xanchor = "middle",
+        yanchor = "top",
+        showarrow = FALSE,
+        font = list(size = 15)
+      )
+    pltls <- c(pltls, list(regions_plt))
   }
-  if(length(pltls)>0){
+  if (length(pltls) > 0) {
     fig <- plotly::subplot(
       pltls,
-      titleX=TRUE,
-      titleY=TRUE
-      ) |>
+      titleX = TRUE,
+      titleY = TRUE
+    ) |>
       plotly::highlight(on = "plotly_hover", off = "plotly_doubleclick")
     if (return_missing) {
       missing_df <- data.frame(
@@ -228,122 +238,127 @@ pairs_plot <- function(input_csv_files, vis_type, quantile_type="quantile50", re
         landmarks = ismissing[["landmarks"]],
         regions = ismissing[["regions"]]
       )
-       return(list(fig, missing_df))
-    } else{
-    return(fig)
+      return(list(fig, missing_df))
+    } else {
+      return(fig)
     }
-  }else{
+  } else {
     return(NULL)
   }
 }
-
 ```
 
 
 ```{r}
-sitk_error_plot <- function(input_csv_files, vis_type="preIMS_to_postIMS"){
-    colname_reg <- paste0(vis_type, "_")
-    
-    dfls <- lapply(input_csv_files, function(x) {
-        df <- read.csv(x)
-        df$project <- stringr::str_replace(basename(x),"_reg_metrics_combined.csv","")
-        df <- df[,grepl(colname_reg, colnames(df)) | colnames(df) %in% c("sample", "project")]
+sitk_error_plot <- function(input_csv_files, vis_type = "preIMS_to_postIMS") {
+  colname_reg <- paste0(vis_type, "_")
 
-        colnames(df) <- stringr::str_replace(colnames(df), colname_reg, "")
-        colnames(df) <- stringr::str_replace(colnames(df),"quantile","Q" )
-        df
-    })
-    df <- Reduce(rbind, dfls)
+  dfls <- lapply(input_csv_files, function(x) {
+    df <- read.csv(x)
+    df$project <- stringr::str_replace(basename(x), "_reg_metrics_combined.csv", "")
+    df <- df[, grepl(colname_reg, colnames(df)) | colnames(df) %in% c("sample", "project")]
 
-    # df$global_shift <- sqrt(colSums(rbind(df$global_x_shift**2, df$global_y_shift**2)))
-    df$global_shift <- df$mean_error
-    df$sitk_global_shift <- sqrt(colSums(rbind(df$sitk_global_x_shift**2, df$sitk_global_y_shift**2)))
+    colnames(df) <- stringr::str_replace(colnames(df), colname_reg, "")
+    colnames(df) <- stringr::str_replace(colnames(df), "quantile", "Q")
+    df
+  })
+  df <- Reduce(rbind, dfls)
+
+  # df$global_shift <- sqrt(colSums(rbind(df$global_x_shift**2, df$global_y_shift**2)))
+  df$global_shift <- df$mean_error
+  df$sitk_global_shift <- sqrt(colSums(rbind(df$sitk_global_x_shift**2, df$sitk_global_y_shift**2)))
 
 
-    global_range <- range(unlist(lapply(colnames(df)[grepl("_shift",colnames(df))], function(x) df[[x]])))
-    global_range[1] <- global_range[1]-1 
-    global_range[2] <- global_range[2]+1
+  global_range <- range(unlist(lapply(colnames(df)[grepl("_shift", colnames(df))], function(x) df[[x]])))
+  global_range[1] <- global_range[1] - 1
+  global_range[2] <- global_range[2] + 1
 
-    d <- plotly::highlight_key(df, ~sample)
-    base <- plotly::plot_ly(
-        d, 
-        text = ~sample,
-        # hoverinfo = "text",
-        type = "scatter",
-        mode = "markers",
-        color = ~project,
-        colors = "Set1",
-        marker = list(size = 10),
-        showlegend = FALSE
-    )
-    fig <- plotly::subplot(
-      plotly::add_markers(base, x = ~global_x_shift, y = ~sitk_global_x_shift,
-        hovertemplate = paste0('<b>%{text}</b><br>X error Landmarks: %{y:.2f}<br>X error sitk: %{x:.2f}')) |>
-        plotly::layout(
-        xaxis = list(range=global_range, title = "X translation"),
-        yaxis = list(range=global_range, title = "X translation sitk")
+  d <- plotly::highlight_key(df, ~sample)
+  base <- plotly::plot_ly(
+    d,
+    text = ~sample,
+    # hoverinfo = "text",
+    type = "scatter",
+    mode = "markers",
+    color = ~project,
+    colors = "Set1",
+    marker = list(size = 10),
+    showlegend = FALSE
+  )
+  fig <- plotly::subplot(
+    plotly::add_markers(base,
+      x = ~global_x_shift, y = ~sitk_global_x_shift,
+      hovertemplate = paste0("<b>%{text}</b><br>X error Landmarks: %{y:.2f}<br>X error sitk: %{x:.2f}")
+    ) |>
+      plotly::layout(
+        xaxis = list(range = global_range, title = "X translation"),
+        yaxis = list(range = global_range, title = "X translation sitk")
       ),
-      plotly::add_markers(base, x = ~global_y_shift, y = ~sitk_global_y_shift,
-        hovertemplate = paste0('<b>%{text}</b><br>Y error Landmarks: %{y:.2f}<br>Y error sitk: %{x:.2f}')) |>
-        plotly::layout(
-        xaxis = list(range=global_range, title = "Y translation"),
-        yaxis = list(range=global_range, title = "Y translation sitk")
+    plotly::add_markers(base,
+      x = ~global_y_shift, y = ~sitk_global_y_shift,
+      hovertemplate = paste0("<b>%{text}</b><br>Y error Landmarks: %{y:.2f}<br>Y error sitk: %{x:.2f}")
+    ) |>
+      plotly::layout(
+        xaxis = list(range = global_range, title = "Y translation"),
+        yaxis = list(range = global_range, title = "Y translation sitk")
       ),
-      plotly::add_markers(base, x = ~global_shift, y = ~sitk_global_shift,
-        hovertemplate = paste0('<b>%{text}</b><br>Error Landmarks: %{y:.2f}<br>Error sitk: %{x:.2f}')) |>
-        plotly::layout(
+    plotly::add_markers(base,
+      x = ~global_shift, y = ~sitk_global_shift,
+      hovertemplate = paste0("<b>%{text}</b><br>Error Landmarks: %{y:.2f}<br>Error sitk: %{x:.2f}")
+    ) |>
+      plotly::layout(
         xaxis = list(title = "translation"),
         yaxis = list(title = "translation sitk")
       )
-    ) |> 
-      plotly::add_annotations(
-        text = "X translation",
-        x = 0.15,
-        y = 1,
-        yref = "paper",
-        xref = "paper",
-        yanchor = "bottom",
-        showarrow = FALSE,
-        font = list(size = 15)
-      ) |> 
-      plotly::add_annotations(
-        text = "Y translation",
-        x = 0.5,
-        y = 1,
-        yref = "paper",
-        xref = "paper",
-        yanchor = "bottom",
-        showarrow = FALSE,
-        font = list(size = 15)
-      ) |> 
-      plotly::add_annotations(
-        text = "Error",
-        x = 0.85,
-        y = 1,
-        yref = "paper",
-        xref = "paper",
-        yanchor = "bottom",
-        showarrow = FALSE,
-        font = list(size = 15)
-      ) |>
-        plotly::layout(
-        xaxis = list(title = "Landmarks"),
-        yaxis = list(title = "sitk"),
-        margin = list(t=50, b=150, l=50, r=50)
-      ) |>
-      plotly::highlight(on = "plotly_hover", off = "plotly_doubleclick")
-    fig
+  ) |>
+    plotly::add_annotations(
+      text = "X translation",
+      x = 0.15,
+      y = 1,
+      yref = "paper",
+      xref = "paper",
+      yanchor = "bottom",
+      showarrow = FALSE,
+      font = list(size = 15)
+    ) |>
+    plotly::add_annotations(
+      text = "Y translation",
+      x = 0.5,
+      y = 1,
+      yref = "paper",
+      xref = "paper",
+      yanchor = "bottom",
+      showarrow = FALSE,
+      font = list(size = 15)
+    ) |>
+    plotly::add_annotations(
+      text = "Error",
+      x = 0.85,
+      y = 1,
+      yref = "paper",
+      xref = "paper",
+      yanchor = "bottom",
+      showarrow = FALSE,
+      font = list(size = 15)
+    ) |>
+    plotly::layout(
+      xaxis = list(title = "Landmarks"),
+      yaxis = list(title = "sitk"),
+      margin = list(t = 50, b = 150, l = 50, r = 50)
+    ) |>
+    plotly::highlight(on = "plotly_hover", off = "plotly_doubleclick")
+  fig
 }
 ```
 
 ```{r plot_images, results='asis', fig.width=8, fig.height=8, eval=FALSE, echo=FALSE}
 cat("\n\n")
 for (i in seq_along(filenames)) {
-    filename <- filenames[i]
-    if(file.exists(filename)){
-        cat(sprintf("\n\n#### %s\n\n",sample_names[i]))
-        cat(sprintf("<img src=\"%s\" alt=\"%s\" height=\"%s\"/>",filename,filename,img_height))
-    }
+  filename <- filenames[i]
+  if (file.exists(filename)) {
+    cat(sprintf("\n\n#### %s\n\n", sample_names[i]))
+    cat(sprintf("<img src=\"%s\" alt=\"%s\" height=\"%s\"/>", filename, filename, img_height))
+  }
 }
 cat("\n\n")
 ```
@@ -351,68 +366,68 @@ cat("\n\n")
 ```{r plot_2_images, results='asis', fig.width=8, fig.height=8, eval=FALSE, echo=FALSE}
 cat("\n\n")
 for (i in seq_along(filenames1)) {
-    filename1 <- filenames1[i]
-    filename2 <- filenames2[i]
-    if(file.exists(filename1) & file.exists(filename2)){
-        cat(sprintf("\n\n#### %s\n\n",sample_names[i]))
-        cat("<p float=\"left\">")
-        cat(sprintf("<img src=\"%s\" alt=\"%s\" width=\"50%%\"/>",filename1,filename1))
-        cat(sprintf("<img src=\"%s\" alt=\"%s\" width=\"50%%\"/>",filename2,filename2))
-        cat("</p>")
-    }
+  filename1 <- filenames1[i]
+  filename2 <- filenames2[i]
+  if (file.exists(filename1) & file.exists(filename2)) {
+    cat(sprintf("\n\n#### %s\n\n", sample_names[i]))
+    cat("<p float=\"left\">")
+    cat(sprintf("<img src=\"%s\" alt=\"%s\" width=\"50%%\"/>", filename1, filename1))
+    cat(sprintf("<img src=\"%s\" alt=\"%s\" width=\"50%%\"/>", filename2, filename2))
+    cat("</p>")
+  }
 }
 cat("\n\n")
 ```
 
 
 ```{r pairs_plots, results='asis', fig.width=16, fig.height=8, echo=FALSE, eval=FALSE}
-cat(sprintf("\n\n### %s\n\n","quantile50"))
-tmp <- pairs_plot(input_csv_files, vis_type,"quantile50", return_missing=TRUE)
+cat(sprintf("\n\n### %s\n\n", "quantile50"))
+tmp <- pairs_plot(input_csv_files, vis_type, "quantile50", return_missing = TRUE)
 tmp[[1]]
 is_missing <- tmp[[2]]$tissue_masks | tmp[[2]]$landmarks | tmp[[2]]$regions
-if(sum(is_missing)>0){
-    cat("\n\n")
-    knitr::kable(tmp[[2]][is_missing,])
+if (sum(is_missing) > 0) {
+  cat("\n\n")
+  knitr::kable(tmp[[2]][is_missing, ])
 }
-cat(sprintf("\n\n### %s\n\n","mean"))
-tmp <- pairs_plot(input_csv_files, vis_type,"mean", return_missing=TRUE)
+cat(sprintf("\n\n### %s\n\n", "mean"))
+tmp <- pairs_plot(input_csv_files, vis_type, "mean", return_missing = TRUE)
 tmp[[1]]
 is_missing <- tmp[[2]]$tissue_masks | tmp[[2]]$landmarks | tmp[[2]]$regions
-if(sum(is_missing)>0){
-    cat("\n\n")
-    knitr::kable(tmp[[2]][is_missing,])
+if (sum(is_missing) > 0) {
+  cat("\n\n")
+  knitr::kable(tmp[[2]][is_missing, ])
 }
-cat(sprintf("\n\n### %s\n\n","quantile05"))
-tmp <- pairs_plot(input_csv_files, vis_type,"quantile05", return_missing=TRUE)
+cat(sprintf("\n\n### %s\n\n", "quantile05"))
+tmp <- pairs_plot(input_csv_files, vis_type, "quantile05", return_missing = TRUE)
 tmp[[1]]
 is_missing <- tmp[[2]]$tissue_masks | tmp[[2]]$landmarks | tmp[[2]]$regions
-if(sum(is_missing)>0){
-    cat("\n\n")
-    knitr::kable(tmp[[2]][is_missing,])
+if (sum(is_missing) > 0) {
+  cat("\n\n")
+  knitr::kable(tmp[[2]][is_missing, ])
 }
-cat(sprintf("\n\n### %s\n\n","quantile95"))
-tmp <- pairs_plot(input_csv_files, vis_type,"quantile95", return_missing=TRUE)
+cat(sprintf("\n\n### %s\n\n", "quantile95"))
+tmp <- pairs_plot(input_csv_files, vis_type, "quantile95", return_missing = TRUE)
 tmp[[1]]
 is_missing <- tmp[[2]]$tissue_masks | tmp[[2]]$landmarks | tmp[[2]]$regions
-if(sum(is_missing)>0){
-    cat("\n\n")
-    knitr::kable(tmp[[2]][is_missing,])
+if (sum(is_missing) > 0) {
+  cat("\n\n")
+  knitr::kable(tmp[[2]][is_missing, ])
 }
-cat(sprintf("\n\n### %s\n\n","min"))
-tmp <- pairs_plot(input_csv_files, vis_type,"min", return_missing=TRUE)
+cat(sprintf("\n\n### %s\n\n", "min"))
+tmp <- pairs_plot(input_csv_files, vis_type, "min", return_missing = TRUE)
 tmp[[1]]
 is_missing <- tmp[[2]]$tissue_masks | tmp[[2]]$landmarks | tmp[[2]]$regions
-if(sum(is_missing)>0){
-    cat("\n\n")
-    knitr::kable(tmp[[2]][is_missing,])
+if (sum(is_missing) > 0) {
+  cat("\n\n")
+  knitr::kable(tmp[[2]][is_missing, ])
 }
-cat(sprintf("\n\n### %s\n\n","max"))
-tmp <- pairs_plot(input_csv_files, vis_type,"max", return_missing=TRUE)
+cat(sprintf("\n\n### %s\n\n", "max"))
+tmp <- pairs_plot(input_csv_files, vis_type, "max", return_missing = TRUE)
 tmp[[1]]
 is_missing <- tmp[[2]]$tissue_masks | tmp[[2]]$landmarks | tmp[[2]]$regions
-if(sum(is_missing)>0){
-    cat("\n\n")
-    knitr::kable(tmp[[2]][is_missing,])
+if (sum(is_missing) > 0) {
+  cat("\n\n")
+  knitr::kable(tmp[[2]][is_missing, ])
 }
 cat("\n\n")
 ```
@@ -428,9 +443,9 @@ min_q50_dice <- 0.7
 ```{r}
 df <- read.csv(input_csv_files)
 
-df$IMS_Completeness <- df$IMS_to_postIMS_n_points/df$IMS_to_postIMS_n_points_total
+df$IMS_Completeness <- df$IMS_to_postIMS_n_points / df$IMS_to_postIMS_n_points_total
 
-IMS_error_thr <- median(df$IMS_to_postIMS_quantile50_error)+3*mad(df$IMS_to_postIMS_quantile50_error)
+IMS_error_thr <- median(df$IMS_to_postIMS_quantile50_error) + 3 * mad(df$IMS_to_postIMS_quantile50_error)
 keep_IMS_to_postIMS <- df$IMS_Completeness > min_completenes & df$IMS_to_postIMS_quantile50_error < IMS_error_thr
 
 ## postIMC to postIMS
@@ -440,9 +455,9 @@ postIMCpostIMS_lm[df$postIMC_to_postIMS_n_points_total > min_landmarks] <- df$po
 
 ### regions
 postIMCpostIMS_reg <- rep(NA, length(df$sample))
-postIMCpostIMS_reg[df$postIMC_to_postIMS_regions_n_points_total > min_regions] <- 
-df$postIMC_to_postIMS_regions_quantile50_error[df$postIMC_to_postIMS_regions_n_points_total > min_regions] < min_q50_error &
-df$postIMC_to_postIMS_regions_quantile50_dice[df$postIMC_to_postIMS_regions_n_points_total > min_regions] > min_q50_dice
+postIMCpostIMS_reg[df$postIMC_to_postIMS_regions_n_points_total > min_regions] <-
+  df$postIMC_to_postIMS_regions_quantile50_error[df$postIMC_to_postIMS_regions_n_points_total > min_regions] < min_q50_error &
+    df$postIMC_to_postIMS_regions_quantile50_dice[df$postIMC_to_postIMS_regions_n_points_total > min_regions] > min_q50_dice
 
 ## preIMS to postIMS
 ### landmarks
@@ -451,9 +466,9 @@ preIMSpostIMS_lm[df$preIMS_to_postIMS_n_points_total > min_landmarks] <- df$preI
 
 ### regions
 preIMSpostIMS_reg <- rep(NA, length(df$sample))
-preIMSpostIMS_reg[df$preIMS_to_postIMS_regions_n_points_total > min_regions] <- 
-df$preIMS_to_postIMS_regions_quantile50_error[df$preIMS_to_postIMS_regions_n_points_total > min_regions] < min_q50_error |
-df$preIMS_to_postIMS_regions_quantile50_dice[df$preIMS_to_postIMS_regions_n_points_total > min_regions] > min_q50_dice
+preIMSpostIMS_reg[df$preIMS_to_postIMS_regions_n_points_total > min_regions] <-
+  df$preIMS_to_postIMS_regions_quantile50_error[df$preIMS_to_postIMS_regions_n_points_total > min_regions] < min_q50_error |
+    df$preIMS_to_postIMS_regions_quantile50_dice[df$preIMS_to_postIMS_regions_n_points_total > min_regions] > min_q50_dice
 
 ### sitk
 preIMSpostIMS_sitk <- sqrt(df$preIMS_to_postIMS_sitk_global_x_shift**2 + df$preIMS_to_postIMS_sitk_global_y_shift**2) < min_q50_error
@@ -465,9 +480,9 @@ preIMCpreIMS_lm[df$preIMC_to_preIMS_n_points_total > min_landmarks] <- df$preIMC
 
 ### regions
 preIMCpreIMS_reg <- rep(NA, length(df$sample))
-preIMCpreIMS_reg[df$preIMC_to_preIMS_regions_n_points_total > min_regions] <- 
-df$preIMC_to_preIMS_regions_quantile50_error[df$preIMC_to_preIMS_regions_n_points_total > min_regions] < min_q50_error |
-df$preIMC_to_preIMS_regions_quantile50_dice[df$preIMC_to_preIMS_regions_n_points_total > min_regions] > min_q50_dice
+preIMCpreIMS_reg[df$preIMC_to_preIMS_regions_n_points_total > min_regions] <-
+  df$preIMC_to_preIMS_regions_quantile50_error[df$preIMC_to_preIMS_regions_n_points_total > min_regions] < min_q50_error |
+    df$preIMC_to_preIMS_regions_quantile50_dice[df$preIMC_to_preIMS_regions_n_points_total > min_regions] > min_q50_dice
 
 ## postIMC to preIMC
 ### landmarks
@@ -476,42 +491,41 @@ postIMCpreIMC_lm[df$postIMC_to_preIMC_n_points_total > min_landmarks] <- df$post
 
 ### regions
 postIMCpreIMC_reg <- rep(NA, length(df$sample))
-postIMCpreIMC_reg[df$postIMC_to_preIMC_regions_n_points_total > min_regions] <- 
-df$postIMC_to_preIMC_regions_quantile50_error[df$postIMC_to_preIMC_regions_n_points_total > min_regions] < min_q50_error |
-df$postIMC_to_preIMC_regions_quantile50_dice[df$postIMC_to_preIMC_regions_n_points_total > min_regions] > min_q50_dice
-
+postIMCpreIMC_reg[df$postIMC_to_preIMC_regions_n_points_total > min_regions] <-
+  df$postIMC_to_preIMC_regions_quantile50_error[df$postIMC_to_preIMC_regions_n_points_total > min_regions] < min_q50_error |
+    df$postIMC_to_preIMC_regions_quantile50_dice[df$postIMC_to_preIMC_regions_n_points_total > min_regions] > min_q50_dice
 ```
 ```{r}
 to_keep_df <- data.frame(
-    sample = df$sample,
-    IMS_to_postIMS = keep_IMS_to_postIMS,
-    postIMCpostIMS_lm = postIMCpostIMS_lm,
-    postIMCpostIMS_reg = postIMCpostIMS_reg,
-    preIMSpostIMS_lm = preIMSpostIMS_lm,
-    preIMSpostIMS_reg = preIMSpostIMS_reg,
-    preIMSpostIMS_sitk = preIMSpostIMS_sitk,
-    preIMCpreIMS_lm = preIMCpreIMS_lm,
-    preIMCpreIMS_reg = preIMCpreIMS_reg,
-    postIMCpreIMC_lm = postIMCpreIMC_lm,
-    postIMCpreIMC_reg = postIMCpreIMC_reg
+  sample = df$sample,
+  IMS_to_postIMS = keep_IMS_to_postIMS,
+  postIMCpostIMS_lm = postIMCpostIMS_lm,
+  postIMCpostIMS_reg = postIMCpostIMS_reg,
+  preIMSpostIMS_lm = preIMSpostIMS_lm,
+  preIMSpostIMS_reg = preIMSpostIMS_reg,
+  preIMSpostIMS_sitk = preIMSpostIMS_sitk,
+  preIMCpreIMS_lm = preIMCpreIMS_lm,
+  preIMCpreIMS_reg = preIMCpreIMS_reg,
+  postIMCpreIMC_lm = postIMCpreIMC_lm,
+  postIMCpreIMC_reg = postIMCpreIMC_reg
 )
 ```
 
 ```{r}
-postIMC_to_postIMS = ifelse(is.na(postIMCpostIMS_lm),FALSE,postIMCpostIMS_lm) | ifelse(is.na(postIMCpostIMS_reg),FALSE,postIMCpostIMS_reg)
+postIMC_to_postIMS <- ifelse(is.na(postIMCpostIMS_lm), FALSE, postIMCpostIMS_lm) | ifelse(is.na(postIMCpostIMS_reg), FALSE, postIMCpostIMS_reg)
 postIMC_to_postIMS[!postIMC_to_postIMS][is.na(postIMCpostIMS_lm[!postIMC_to_postIMS]) & is.na(postIMCpostIMS_reg[!postIMC_to_postIMS])] <- NA
 
-preIMS_to_postIMS = ifelse(is.na(preIMSpostIMS_lm),FALSE,preIMSpostIMS_lm) | ifelse(is.na(preIMSpostIMS_reg),FALSE,preIMSpostIMS_reg) | ifelse(is.na(preIMSpostIMS_sitk),FALSE,preIMSpostIMS_sitk)
+preIMS_to_postIMS <- ifelse(is.na(preIMSpostIMS_lm), FALSE, preIMSpostIMS_lm) | ifelse(is.na(preIMSpostIMS_reg), FALSE, preIMSpostIMS_reg) | ifelse(is.na(preIMSpostIMS_sitk), FALSE, preIMSpostIMS_sitk)
 preIMS_to_postIMS[!preIMS_to_postIMS][is.na(preIMSpostIMS_lm[!preIMS_to_postIMS]) & is.na(preIMSpostIMS_reg[!preIMS_to_postIMS])] <- NA
 
-preIMC_to_preIMS = ifelse(is.na(preIMCpreIMS_lm),FALSE,preIMCpreIMS_lm) | ifelse(is.na(preIMCpreIMS_reg),FALSE,preIMCpreIMS_reg)
+preIMC_to_preIMS <- ifelse(is.na(preIMCpreIMS_lm), FALSE, preIMCpreIMS_lm) | ifelse(is.na(preIMCpreIMS_reg), FALSE, preIMCpreIMS_reg)
 preIMC_to_preIMS[!preIMC_to_preIMS][is.na(preIMCpreIMS_lm[!preIMC_to_preIMS]) & is.na(preIMCpreIMS_reg[!preIMC_to_preIMS])] <- NA
 
-postIMC_to_preIMC = ifelse(is.na(postIMCpreIMC_lm),FALSE,postIMCpreIMC_lm) | ifelse(is.na(postIMCpreIMC_reg),FALSE,postIMCpreIMC_reg)
+postIMC_to_preIMC <- ifelse(is.na(postIMCpreIMC_lm), FALSE, postIMCpreIMC_lm) | ifelse(is.na(postIMCpreIMC_reg), FALSE, postIMCpreIMC_reg)
 postIMC_to_preIMC[!postIMC_to_preIMC][is.na(postIMCpreIMC_lm[!postIMC_to_preIMC]) & is.na(postIMCpreIMC_reg[!postIMC_to_preIMC])] <- NA
 
 t1 <- (keep_IMS_to_postIMS & preIMS_to_postIMS & preIMC_to_preIMS & postIMC_to_preIMC)
-to_keep_overall <- ifelse(is.na(t1),FALSE,t1) | ifelse(is.na(postIMC_to_postIMS),FALSE,postIMC_to_postIMS)
+to_keep_overall <- ifelse(is.na(t1), FALSE, t1) | ifelse(is.na(postIMC_to_postIMS), FALSE, postIMC_to_postIMS)
 to_keep_overall[!to_keep_overall][is.na(t1[!to_keep_overall]) | is.na(postIMC_to_postIMS[!to_keep_overall])] <- NA
 
 to_keep_df_aggr <- data.frame(
@@ -527,6 +541,110 @@ to_keep_df_aggr <- data.frame(
 
 ## Summarized results
 
+### Continuous
+```{r}
+# limits
+minsc <- c(0, 0)
+maxsc <- c(10, 100)
+
+df <- read.csv(input_csv_files[1])
+df1 <- df[, c("sample", "IMS_to_postIMS_quantile50_error", "postIMC_to_preIMC_quantile50_error", "preIMC_to_preIMS_quantile50_error", "preIMS_to_postIMS_quantile50_error", "postIMC_to_postIMS_quantile50_error", "postIMC_to_preIMC_regions_quantile50_error", "postIMC_to_preIMC_regions_quantile50_dice", "preIMC_to_preIMS_regions_quantile50_error", "preIMC_to_preIMS_regions_quantile50_dice", "preIMS_to_postIMS_regions_quantile50_error", "preIMS_to_postIMS_regions_quantile50_dice", "postIMC_to_postIMS_regions_quantile50_error", "postIMC_to_postIMS_regions_quantile50_dice")]
+
+lookupdf <- data.frame(
+  metric = c(
+    "IMS_to_postIMS_quantile50_error",
+    "postIMC_to_preIMC_quantile50_error",
+    "preIMC_to_preIMS_quantile50_error",
+    "preIMS_to_postIMS_quantile50_error",
+    "postIMC_to_postIMS_quantile50_error",
+    "postIMC_to_preIMC_regions_quantile50_error",
+    "postIMC_to_preIMC_regions_quantile50_dice",
+    "preIMC_to_preIMS_regions_quantile50_error",
+    "preIMC_to_preIMS_regions_quantile50_dice",
+    "preIMS_to_postIMS_regions_quantile50_error",
+    "preIMS_to_postIMS_regions_quantile50_dice",
+    "postIMC_to_postIMS_regions_quantile50_error",
+    "postIMC_to_postIMS_regions_quantile50_dice"
+  ),
+  confidence = c(
+    "IMS_to_postIMS_n_landmarks",
+    "postIMC_to_preIMC_n_points_total",
+    "preIMC_to_preIMS_n_points_total",
+    "preIMS_to_postIMS_n_points_total",
+    "postIMC_to_postIMS_n_points_total",
+    "postIMC_to_preIMC_regions_n_points_total",
+    "postIMC_to_preIMC_regions_n_points_total",
+    "preIMC_to_preIMS_regions_n_points_total",
+    "preIMC_to_preIMS_regions_n_points_total",
+    "preIMS_to_postIMS_regions_n_points_total",
+    "preIMS_to_postIMS_regions_n_points_total",
+    "postIMC_to_postIMS_regions_n_points_total",
+    "postIMC_to_postIMS_regions_n_points_total"
+  )
+)
+
+df2 <- df[, c("sample", "IMS_to_postIMS_n_landmarks", "postIMC_to_preIMC_n_points_total", "preIMC_to_preIMS_n_points_total", "preIMS_to_postIMS_n_points_total", "postIMC_to_postIMS_n_points_total", "postIMC_to_preIMC_regions_n_points_total", "preIMC_to_preIMS_regions_n_points_total", "preIMS_to_postIMS_regions_n_points_total", "postIMC_to_postIMS_regions_n_points_total")]
+
+df1l <- tidyr::pivot_longer(df1, -sample, names_to = "metric", values_to = "value")
+df2l <- tidyr::pivot_longer(df2, -sample, names_to = "confidence", values_to = "confidence_value")
+df2l <- dplyr::left_join(df2l, lookupdf, by = c("confidence"), relationship = "many-to-many")
+
+dfc <- dplyr::left_join(df1l, df2l, by = c("sample", "metric"))
+dfc$metric_type <- ifelse(stringr::str_detect(dfc$metric, "dice"), "dice", "distance")
+dfc$type <- stringr::str_replace(dfc$metric, "(_regions_quantile50_error|_regions_quantile50_dice|_quantile50_error)", "") |>
+  stringr::str_replace_all("_", "\n")
+
+dfc$confidence_value_scaled <- dfc$confidence_value
+dfc$confidence_value_scaled[dfc$metric_type == "dice"] <- (dfc$confidence_value[dfc$metric_type == "dice"] - minsc[1]) / (maxsc[1] - minsc[1])
+dfc$confidence_value_scaled[dfc$metric_type == "dice"][dfc$confidence_value_scaled[dfc$metric_type == "dice"] > 1] <- 1
+dfc$confidence_value_scaled[dfc$metric_type == "distance"] <- (dfc$confidence_value[dfc$metric_type == "distance"] - minsc[2]) / (maxsc[2] - minsc[2])
+dfc$confidence_value_scaled[dfc$metric_type == "distance"][dfc$confidence_value_scaled[dfc$metric_type == "distance"] > 1] <- 1
+
+dfc$type <- factor(dfc$type, levels = c("IMS\nto\npostIMS", "preIMS\nto\npostIMS", "preIMC\nto\npreIMS", "postIMC\nto\npreIMC", "postIMC\nto\npostIMS"))
+dfc$evaluation_type <- ifelse(stringr::str_detect(dfc$metric, "region"), "region", "landmark")
+```
+
+The following graph represents a summary of the registration results. On the y-axis are individual samples. On the x-axis different registration metrics are shown. The panels represents the different registration steps. The background color indicates the type of evaluation, either 'landmark' or 'region'. Three different metrics are shown on the x-axis 'landmark_error' (the median distance between matching landmarks), 'regions_dice' (the median dice score between matching regions) and 'regions_error' (the median distance between centroids of matching regions). The size of the points indicates the (somewhat quantitative) confidence in the shown value with bigger sizes meaning more confidence. 
+This 'Confidence guess' is determined as follows: for the landmark based metrics ('landmark_error') a value of 0 corresponds to 'r minsc[2]' landmarks and a value of 1 correspones to 'r maxsc[2]' or more landmarks. 
+For the regions based metrics ('regions_dice' and 'regions_error') a value of 0 correspones to 'r minsc[1]' regions and a value of 1 correspones to 'r maxsc[1]' or more regions. 
+The rightmost panel ('postIMC to postIMS') is the direct comparison between postIMC to postIMS and would be the best comparison but it is in general difficult to get good measures between these two images as they are very different. Thus, the other panels show the individual registration steps and if all those panels show good performance the overall registration is probably also good. 
+Values that are grayed out are missing. 
+Overall some care should be taken when interpreting these results as the presented metrics are not always a good indicator of the quality of the registration. It is therefore advised to also look at the images and plots below, especially for edge cases and cases with missing values.
+
+
+```{r, fig.width=10,fig.height=10}
+xlabels <- stringr::str_extract(unique(dfc$metric), "(regions_quantile50_error|regions_quantile50_dice|quantile50_error)") |>
+  stringr::str_replace("quantile50_", "") |>
+  stringr::str_replace("^error$", "landmark_error")
+names(xlabels) <- unique(dfc$metric)
+
+ggplot() +
+  geom_tile(data = dfc, aes(metric, sample, fill = evaluation_type)) +
+  scale_fill_manual(values = c(region = "gray92", landmark = "white")) +
+  new_scale_color() +
+  geom_point(
+    data = dplyr::filter(dfc, metric_type == "distance"),
+    aes(metric, sample, color = value, size = confidence_value_scaled)
+  ) +
+  scale_color_viridis_c(option = "mako", limits = c(0, 16), na.value = "gray95", direction = -1) +
+  new_scale_color() +
+  geom_point(
+    data = dplyr::filter(dfc, metric_type == "dice"),
+    aes(metric, sample, color = value, size = confidence_value_scaled)
+  ) +
+  scale_color_viridis_c(option = "viridis", limits = c(0, 1), na.value = "gray90") +
+  facet_grid(cols = vars(type), scales = "free_x", space = "free_x") +
+  scale_x_discrete(labels = xlabels) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(colour = "Dice\ncoefficient", size = "Confidence\nguess", colour_new = "Distance", x = "", y = "", fill = "Evaluation\nType")
+```
+
+
+
+
+### Binarized
+
 The following heatmap is a summary of the results. The columns are the different registration steps and the rows are the samples. The color of the cells indicate whether the registration step was successful or not. The used thresholds are: 
 
 | Threshold                                  | Value         |
@@ -540,13 +658,13 @@ The following heatmap is a summary of the results. The columns are the different
 This evaluation is rather strict meaning that if the 'overall' column is TRUE, the sample is likely to be registered well. However, if the 'overall' column is FALSE or NA, it does not necessarily mean that the sample is not registered well. Therefore it is adviced to check the FALSE and NA entries in the additional plots and images below. 
 
 ```{r, fig.width=12, fig.height=8}
-data_long <- tidyr::pivot_longer(to_keep_df_aggr, c("IMS_to_postIMS","postIMC_to_postIMS","preIMS_to_postIMS","preIMC_to_preIMS","postIMC_to_preIMC","overall"))
-data_long$name <- factor(data_long$name,c("IMS_to_postIMS","preIMS_to_postIMS","preIMC_to_preIMS","postIMC_to_preIMC","postIMC_to_postIMS","overall"))
+data_long <- tidyr::pivot_longer(to_keep_df_aggr, c("IMS_to_postIMS", "postIMC_to_postIMS", "preIMS_to_postIMS", "preIMC_to_preIMS", "postIMC_to_preIMC", "overall"))
+data_long$name <- factor(data_long$name, c("IMS_to_postIMS", "preIMS_to_postIMS", "preIMC_to_preIMS", "postIMC_to_preIMC", "postIMC_to_postIMS", "overall"))
 
-ggplot2::ggplot(data_long,ggplot2::aes(name, sample, fill = value)) +
+ggplot2::ggplot(data_long, ggplot2::aes(name, sample, fill = value)) +
   ggplot2::geom_tile() +
-  ggplot2::labs(x = NULL, y = NULL, fill="keep") +
-  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) 
+  ggplot2::labs(x = NULL, y = NULL, fill = "keep") +
+  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
 ```
 
 # IMS to postIMS
@@ -564,19 +682,19 @@ Color legend for the below images:
 | Green | IMS pixel    |
 
 ```{r}
-tthr <- median(df$IMS_to_postIMS_quantile50_error)+mad(df$IMS_to_postIMS_quantile50_error)
+tthr <- median(df$IMS_to_postIMS_quantile50_error) + mad(df$IMS_to_postIMS_quantile50_error)
 df$IMS_to_postIMS_show_image <- df$IMS_to_postIMS_quantile50_error > tthr
 
 bn <- basename(IMS_to_postIMS_svg)
-bn <- stringr::str_replace(bn,"_IMS_to_postIMS_combined_registration_all.svg","")
+bn <- stringr::str_replace(bn, "_IMS_to_postIMS_combined_registration_all.svg", "")
 project_name <- basename(dirname(dirname(dirname(dirname(IMS_to_postIMS_svg[1])))))
-bn <- stringr::str_replace(bn,paste0(project_name,"_"),"")
-tdf <- dplyr::right_join(df, data.frame(sample=bn, filename=IMS_to_postIMS_svg), by="sample")
+bn <- stringr::str_replace(bn, paste0(project_name, "_"), "")
+tdf <- dplyr::right_join(df, data.frame(sample = bn, filename = IMS_to_postIMS_svg), by = "sample")
 
 filenames <- dplyr::filter(tdf, IMS_to_postIMS_show_image)$filename
 sample_names_cp <- sample_names
 sample_names <- dplyr::filter(tdf, IMS_to_postIMS_show_image)$sample
-img_height=1000
+img_height <- 1000
 ```
 ```{r plot_images_IMS_to_postIMS, ref.label='plot_images', results='asis'}
 ```
@@ -607,8 +725,8 @@ vis_type <- "IMS_to_postIMS"
 
 ```{r}
 vis_type <- "postIMC_to_postIMS"
-imgtype1 <- stringr::str_split(vis_type,"_to_")[[1]][1]
-imgtype2 <- stringr::str_split(vis_type,"_to_")[[1]][2]
+imgtype1 <- stringr::str_split(vis_type, "_to_")[[1]][1]
+imgtype2 <- stringr::str_split(vis_type, "_to_")[[1]][2]
 ```
 ```{r pairs_plots_postIMC_to_postIMS, ref.label='pairs_plots', results='asis', fig.width=12, fig.height=7}
 ```
@@ -630,7 +748,7 @@ Color legend for the below images:
 
 ```{r}
 filenames <- postIMCmask_to_postIMSmask_png
-img_height=700
+img_height <- 700
 ```
 ```{r plot_images_postIMC_to_postIMS_mask, ref.label='plot_images', results='asis'}
 ```
@@ -667,7 +785,7 @@ Below are shown the regions from the `r imgtype1` image (left) and the `r imgtyp
 
 ```{r}
 filenames <- regions_postIMC_transformed_on_postIMS_png
-img_height=700
+img_height <- 700
 ```
 ```{r plot_images_postIMC_to_postIMS_regions, ref.label='plot_images', results='asis'}
 ```
@@ -676,7 +794,7 @@ img_height=700
 
 ```{r}
 filenames <- gif_postIMC_postIMS
-img_height=500
+img_height <- 500
 ```
 ```{r plot_images_postIMC_to_postIMS_gif, ref.label='plot_images', results='asis'}
 ```
@@ -696,8 +814,8 @@ img_height=500
 
 ```{r}
 vis_type <- "preIMS_to_postIMS"
-imgtype1 <- stringr::str_split(vis_type,"_to_")[[1]][1]
-imgtype2 <- stringr::str_split(vis_type,"_to_")[[1]][2]
+imgtype1 <- stringr::str_split(vis_type, "_to_")[[1]][1]
+imgtype2 <- stringr::str_split(vis_type, "_to_")[[1]][2]
 ```
 ```{r pairs_plots_preIMS_to_postIMS, ref.label='pairs_plots', results='asis', fig.width=15, fig.height=7}
 ```
@@ -718,7 +836,7 @@ Color legend for the below images:
 
 ```{r}
 filenames <- preIMSmask_to_postIMSmask_png
-img_height=700
+img_height <- 700
 ```
 ```{r plot_images_preIMS_to_postIMS_mask, ref.label='plot_images', results='asis'}
 ```
@@ -753,7 +871,7 @@ Below are shown the regions from the `r imgtype1` image (left) and the `r imgtyp
 
 ```{r}
 filenames <- regions_preIMS_transformed_on_postIMS_png
-img_height=700
+img_height <- 700
 ```
 ```{r plot_images_preIMS_to_postIMS_regions, ref.label='plot_images', results='asis'}
 ```
@@ -762,7 +880,7 @@ img_height=700
 
 ```{r}
 filenames <- gif_preIMS_postIMS
-img_height=500
+img_height <- 500
 ```
 ```{r plot_images_preIMS_to_postIMS_gif, ref.label='plot_images', results='asis'}
 ```
@@ -792,8 +910,8 @@ fig
 
 ```{r}
 vis_type <- "preIMC_to_preIMS"
-imgtype1 <- stringr::str_split(vis_type,"_to_")[[1]][1]
-imgtype2 <- stringr::str_split(vis_type,"_to_")[[1]][2]
+imgtype1 <- stringr::str_split(vis_type, "_to_")[[1]][1]
+imgtype2 <- stringr::str_split(vis_type, "_to_")[[1]][2]
 ```
 ```{r pairs_plots_preIMC_to_preIMS, ref.label='pairs_plots', results='asis', fig.width=15, fig.height=7}
 ```
@@ -815,7 +933,7 @@ Color legend for the below images:
 
 ```{r}
 filenames <- preIMCmask_to_preIMSmask_png
-img_height=700
+img_height <- 700
 ```
 ```{r plot_images_preIMC_to_preIMS_mask, ref.label='plot_images', results='asis'}
 ```
@@ -850,7 +968,7 @@ Below are shown the regions from the `r imgtype1` image (left) and the `r imgtyp
 
 ```{r}
 filenames <- regions_preIMC_transformed_on_preIMS_png
-img_height=700
+img_height <- 700
 ```
 ```{r plot_images_preIMC_to_preIMS_regions, ref.label='plot_images', results='asis'}
 ```
@@ -859,7 +977,7 @@ img_height=700
 
 ```{r}
 filenames <- gif_preIMC_preIMS
-img_height=500
+img_height <- 500
 ```
 ```{r plot_images_preIMC_to_preIMS_gif, ref.label='plot_images', results='asis'}
 ```
@@ -879,8 +997,8 @@ img_height=500
 
 ```{r}
 vis_type <- "postIMC_to_preIMC"
-imgtype1 <- stringr::str_split(vis_type,"_to_")[[1]][1]
-imgtype2 <- stringr::str_split(vis_type,"_to_")[[1]][2]
+imgtype1 <- stringr::str_split(vis_type, "_to_")[[1]][1]
+imgtype2 <- stringr::str_split(vis_type, "_to_")[[1]][2]
 ```
 ```{r pairs_plots_postIMC_to_preIMC, ref.label='pairs_plots', results='asis', fig.width=15, fig.height=7}
 ```
@@ -902,7 +1020,7 @@ Color legend for the below images:
 
 ```{r}
 filenames <- postIMCmask_to_preIMCmask_png
-img_height=700
+img_height <- 700
 ```
 ```{r plot_images_postIMC_to_preIMC_mask, ref.label='plot_images', results='asis'}
 ```
@@ -937,7 +1055,7 @@ Below are shown the regions from the `r imgtype1` image (left) and the `r imgtyp
 
 ```{r}
 filenames <- regions_postIMC_transformed_on_preIMC_png
-img_height=700
+img_height <- 700
 ```
 ```{r plot_images_postIMC_to_preIMC_regions, ref.label='plot_images', results='asis'}
 ```
@@ -947,7 +1065,7 @@ img_height=700
 
 ```{r}
 filenames <- gif_postIMC_preIMC
-img_height=500
+img_height <- 500
 ```
 ```{r plot_images_postIMC_to_preIMC_gif, ref.label='plot_images', results='asis'}
 ```
