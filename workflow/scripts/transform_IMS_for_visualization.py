@@ -1,7 +1,8 @@
 import numpy as np
+import json
 import pandas as pd
 import h5py
-from image_utils import get_image_shape, saveimage_tile
+from image_utils import get_image_shape, readimage_crop
 from utils import setNThreads, snakeMakeMock
 import sys,os
 import logging, traceback
@@ -14,8 +15,10 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake.params["microscopy_pixelsize"] = 0.22537
     snakemake.input["imzml_peaks"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/IMS_test_combined_peaks.h5"
     snakemake.input["imzml_coords"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/postIMS_to_IMS_test_combined-Cirrhosis-TMA-5_New_Detector_002-IMSML-coords.h5"
-    snakemake.input['postIMS'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/postIMS/test_combined_postIMS.ome.tiff"
+    snakemake.input['IMCmask_on_postIMS'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed_on_postIMS.ome.tiff"
+    snakemake.input['IMC_location'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMC_location/test_combined_IMC_mask_on_postIMS_B1.geojson"
     snakemake.output["IMS_transformed"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/test_combined_Cirrhosis-TMA-5_New_Detector_002_IMS_transformed.ome.tiff"
+    snakemake.output["IMC_mask_transformed"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMC_mask/test_combined_Cirrhosis-TMA-5_New_Detector_002_transformed_on_postIMS_cropped.ome.tiff"
     if bool(getattr(sys, 'ps1', sys.flags.interactive)):
         raise Exception("Running in interactive mode!!")
 # logging setup
@@ -29,9 +32,34 @@ microscopy_spacing = snakemake.params["microscopy_pixelsize"]
 # inputs
 imsml_peaks = snakemake.input["imzml_peaks"]
 imsml_coords = snakemake.input["imzml_coords"]
-postIMS = snakemake.input['postIMS']
+IMCmask_on_postIMS = snakemake.input['IMCmask_on_postIMS']
+IMC_location = snakemake.input['IMC_location']
+if isinstance(IMC_location, list):
+    IMC_location = IMC_location[0]
 # outputs
 ims_out = snakemake.output["IMS_transformed"]
+imc_mask_out = snakemake.output["IMC_mask_transformed"]
+
+
+logging.info("core bounding box extraction")
+IMC_geojson = json.load(open(IMC_location, "r"))
+if isinstance(IMC_geojson,list):
+    IMC_geojson=IMC_geojson[0]
+boundary_points = np.array(IMC_geojson['geometry']['coordinates'])[0,:,:]
+xmin=np.min(boundary_points[:,1])
+xmax=np.max(boundary_points[:,1])
+ymin=np.min(boundary_points[:,0])
+ymax=np.max(boundary_points[:,0])
+
+bb1 = [int(xmin-201/microscopy_spacing),int(ymin-201/microscopy_spacing),int(xmax+201/microscopy_spacing),int(ymax+201/microscopy_spacing)]
+
+m2full_shape = get_image_shape(IMCmask_on_postIMS)
+bb1[0] = bb1[0] if bb1[0]>=0 else 0
+bb1[1] = bb1[1] if bb1[1]>=0 else 0
+bb1[2] = bb1[2] if bb1[2]<=m2full_shape[0] else m2full_shape[0]
+bb1[3] = bb1[3] if bb1[3]<=m2full_shape[1] else m2full_shape[1]
+logging.info(f"bounding box mask whole image 1: {bb1}")
+
 
 logging.info("Read h5 coords file")
 with h5py.File(imsml_coords, "r") as f:
@@ -88,7 +116,8 @@ peaks[np.isnan(peaks)] = 0
 
 
 logging.info("Create image")
-image_shape = get_image_shape(postIMS)[:2]
+image_shape = [bb1[2]-bb1[0],bb1[3]-bb1[1]]
+coords = coords-bb1[:2]
 # Calculate ranges
 stepsize_px =  int(ims_spacing / microscopy_spacing)
 stepsize_px_half = int(stepsize_px/2)
@@ -100,58 +129,69 @@ image = np.zeros((image_shape[0],image_shape[1],peaks.shape[1]))
 for i, (xr, yr) in enumerate(zip(x_ranges.T, y_ranges.T)):
     image[xr[0]:(xr[1]+1), yr[0]:(yr[1]+1)] = peaks[i,:]
 
-logging.info("Save image")
 # from: https://forum.image.sc/t/creating-a-multi-channel-pyramid-ome-tiff-with-tiffwriter-in-python/76424
-from tifffile import TiffWriter
+def write_tiff(im, filename, subifds=3):
+    from tifffile import TiffWriter
 
-image=image.astype(np.uint8)
-nchannels = image.shape[-1]
-subifds = 3
+    nchannels = im.shape[-1]
 
-ome_xml = '''<?xml version="1.0" encoding="UTF-8"?>
-<OME xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06"
- xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
- xsi:schemaLocation="http://www.openmicroscopy.org/Schemas/OME/2016-06
-  http://www.openmicroscopy.org/Schemas/OME/2016-06/ome.xsd">
- <Image ID="Image:0" Name="Image0">
-  <Pixels ID="Pixels:0" DimensionOrder="XYCZT" Type="uint8"
-   SizeX="2048" SizeY="2048" SizeC="2" SizeZ="1" SizeT="1">
-   <Channel ID="Channel:0:0" SamplesPerPixel="1"><LightPath/></Channel>
-   <Channel ID="Channel:0:1" SamplesPerPixel="1"><LightPath/></Channel>
-   <TiffData IFD="0" PlaneCount="2"/>
-  </Pixels>
- </Image>
-</OME>'''
+    ome_xml = '''<?xml version="1.0" encoding="UTF-8"?>
+    <OME xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.openmicroscopy.org/Schemas/OME/2016-06
+    http://www.openmicroscopy.org/Schemas/OME/2016-06/ome.xsd">
+    <Image ID="Image:0" Name="Image0">
+    <Pixels ID="Pixels:0" DimensionOrder="XYCZT" Type="uint8"
+    SizeX="2048" SizeY="2048" SizeC="2" SizeZ="1" SizeT="1">
+    <Channel ID="Channel:0:0" SamplesPerPixel="1"><LightPath/></Channel>
+    <Channel ID="Channel:0:1" SamplesPerPixel="1"><LightPath/></Channel>
+    <TiffData IFD="0" PlaneCount="2"/>
+    </Pixels>
+    </Image>
+    </OME>'''
 
-with TiffWriter(ims_out, ome=False, bigtiff=True) as tif:
-    for channeli in range(nchannels):
-        tif.write(
-            image[:, :, channeli],
-            description=ome_xml,
-            subifds=subifds,
-            metadata=False,  # do not write tifffile metadata
-            tile=(1024, 1024),
-            photometric='minisblack',
-            compression='jpeg',
-            # resolution = ...,
-            # resolutionunit = ...,
-        )
-        for i in range(subifds):
-            res = 2 ** (i + 1)
+    with TiffWriter(filename, ome=False, bigtiff=True) as tif:
+        for channeli in range(nchannels):
             tif.write(
-                image[::res, ::res, channeli],  # in production use resampling
-                subfiletype=1,
-                metadata=False,
+                im[:, :, channeli],
+                description=ome_xml,
+                subifds=subifds,
+                metadata=False,  # do not write tifffile metadata
                 tile=(1024, 1024),
                 photometric='minisblack',
-                compression='jpeg',
+                compression='zlib',
                 # resolution = ...,
                 # resolutionunit = ...,
             )
+            for i in range(subifds):
+                res = 2 ** (i + 1)
+                tif.write(
+                    im[::res, ::res, channeli],  # in production use resampling
+                    subfiletype=1,
+                    metadata=False,
+                    tile=(1024, 1024),
+                    photometric='minisblack',
+                    compression='zlib',
+                    # resolution = ...,
+                    # resolutionunit = ...,
+                )
+
+logging.info("Save IMS image")
+write_tiff(image, ims_out)
+
+
+logging.info("Read IMC mask image")
+imcimg = readimage_crop(IMCmask_on_postIMS, bb1)
+imcimg = imcimg.reshape(imcimg.shape[0],imcimg.shape[1],1)
+
+logging.info("Save IMC mask image")
+write_tiff(imcimg, imc_mask_out)
+
 
 
 logging.info("Finished")
 # import matplotlib.pyplot as plt
 # plt.imshow(image[:,:,0])
+# plt.imshow(imcimg)
 # plt.show()
 
