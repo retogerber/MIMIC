@@ -91,6 +91,13 @@ rule all:
             "results/{project_name}/data/registration_metric/report/{project_name}_registration_evaluation.html",
             project_name=project_names,
         ),
+        expand(
+            "results/{project_name}/data/IMS/{project_name}_{sample}_IMS_transformed.ome.tiff",
+            zip,
+            project_name=project_names,
+            sample=sample_names,
+        ),
+
 
 rule prepare_register_postIMC_to_postIMS:
     params:
@@ -1222,6 +1229,51 @@ rule register_IMS_to_postIMS_single_core_2:
         config["container"]
     script:
         "scripts/image_registration_IMS_to_preIMS_3.py"
+
+rule transform_IMS_core_for_visualization:
+    threads: 1
+    resources:
+        mem_mb=20000,
+    params:
+        IMS_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMS_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+    input:
+        imzml_coords=choose_imsml_coordsfile,
+        imzml_peaks=imzml_peaks_from_sample_and_project,
+        #imzml_peaks="results/{project_name}/data/IMS/{imzml_base}_peaks.h5",
+        #imzml_peaks=lambda wildcards: get_column_entry_from_metadata_two_conditions(
+        #    wildcards.project_name,
+        #    wildcards.sample_name,
+        #    #f"{wildcards.imzml_base}.imzML",
+        #    "imzml_filename",
+        #    "project_name",
+        #    "sample_name",
+        #    read_sample_metadata(config["sample_metadata"]),
+        #),
+        postIMS="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
+    output:
+        IMS_transformed="results/{project_name}/data/IMS/{project_name}_{sample}_IMS_transformed.ome.tiff"
+    log:
+        stdout="logs/transform_IMS_core_for_visualization/{project_name}_{sample}.stdout",
+    benchmark:
+        "benchmarks/transform_IMS_core_for_visualization/{project_name}_{sample}.txt",
+    # conda:
+    #    "env/image_registration_qc.yaml"
+    container:
+        config["container"]
+    script:
+        "scripts/transform_IMS_for_visualization.py"
+
 
 
 rule download_sam_weights:

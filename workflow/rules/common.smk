@@ -153,6 +153,19 @@ def choose_imsml_coordsfile(wildcards):
             filename_out = f"results/{wildcards.project_name}/data/IMS/{filename}"
         return filename_out
 
+def imzml_peaks_from_sample_and_project(wildcards):
+    imzml_file=get_column_entry_from_metadata_two_conditions(
+            wildcards.project_name,
+            wildcards.sample,
+            "imzml_filename",
+            "project_name",
+            "sample_name",
+            read_sample_metadata(config["sample_metadata"]),
+        )
+    imzml_base = imzml_file.replace(".imzML","")
+    return f"results/{wildcards.project_name}/data/IMS/{imzml_base}_peaks.h5"
+
+
 def choose_IMS_to_postIMS_svg(wildcards):
         sample_names = get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all = True)
         filenames_out = list()
