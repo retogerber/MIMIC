@@ -1,4 +1,5 @@
 import numpy as np
+import cv2
 import json
 import pandas as pd
 import h5py
@@ -13,12 +14,12 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake = snakeMakeMock()
     snakemake.params["IMS_pixelsize"] = 30
     snakemake.params["microscopy_pixelsize"] = 0.22537
-    snakemake.input["imzml_peaks"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/IMS_test_combined_peaks.h5"
-    snakemake.input["imzml_coords"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/postIMS_to_IMS_test_combined-Cirrhosis-TMA-5_New_Detector_002-IMSML-coords.h5"
-    snakemake.input['IMCmask_on_postIMS'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMC_mask/Cirrhosis-TMA-5_New_Detector_002_transformed_on_postIMS.ome.tiff"
-    snakemake.input['IMC_location'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMC_location/test_combined_IMC_mask_on_postIMS_B1.geojson"
-    snakemake.output["IMS_transformed"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/test_combined_Cirrhosis-TMA-5_New_Detector_002_IMS_transformed.ome.tiff"
-    snakemake.output["IMC_mask_transformed"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMC_mask/test_combined_Cirrhosis-TMA-5_New_Detector_002_transformed_on_postIMS_cropped.ome.tiff"
+    snakemake.input["imzml_peaks"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMS/cirrhosis_TMA_IMS_peaks.h5"
+    snakemake.input["imzml_coords"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMS/postIMS_to_IMS_cirrhosis_TMA-Cirrhosis_TMA_5_01262022_004-IMSML-coords.h5"
+    snakemake.input['IMCmask_on_postIMS'] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMC_mask/Cirrhosis_TMA_5_01262022_004_transformed_on_postIMS.ome.tiff"
+    snakemake.input['IMC_location'] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMC_location/cirrhosis_TMA_IMC_mask_on_postIMS_E8.geojson"
+    snakemake.output["IMS_transformed"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMS/cirrhosis_TMA_Cirrhosis_TMA_5_01262022_004_IMS_transformed.ome.tiff"
+    snakemake.output["IMC_mask_transformed"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMC_mask/Cirrhosis_TMA_5_01262022_004_transformed_on_postIMS_cropped.ome.tiff"
     if bool(getattr(sys, 'ps1', sys.flags.interactive)):
         raise Exception("Running in interactive mode!!")
 # logging setup
@@ -51,7 +52,7 @@ xmax=np.max(boundary_points[:,1])
 ymin=np.min(boundary_points[:,0])
 ymax=np.max(boundary_points[:,0])
 
-bb1 = [int(xmin-201/microscopy_spacing),int(ymin-201/microscopy_spacing),int(xmax+201/microscopy_spacing),int(ymax+201/microscopy_spacing)]
+bb1 = [int(xmin-901/microscopy_spacing),int(ymin-901/microscopy_spacing),int(xmax+901/microscopy_spacing),int(ymax+901/microscopy_spacing)]
 
 m2full_shape = get_image_shape(IMCmask_on_postIMS)
 bb1[0] = bb1[0] if bb1[0]>=0 else 0
@@ -116,13 +117,13 @@ peaks[np.isnan(peaks)] = 0
 
 
 logging.info("Create image")
-image_shape = [bb1[2]-bb1[0],bb1[3]-bb1[1]]
-coords = coords-bb1[:2]
+image_shape = [bb1[3]-bb1[1],bb1[2]-bb1[0]]
+coords = coords-bb1[:2][::-1]
 # Calculate ranges
 stepsize_px =  int(ims_spacing / microscopy_spacing)
 stepsize_px_half = int(stepsize_px/2)
-x_ranges = np.clip([coords[:,0] - stepsize_px_half, coords[:,0] + stepsize_px_half], 0, image_shape[0]-1)
-y_ranges = np.clip([coords[:,1] - stepsize_px_half, coords[:,1] + stepsize_px_half], 0, image_shape[1]-1)
+x_ranges = np.clip([coords[:,1] - stepsize_px_half, coords[:,1] + stepsize_px_half], 0, image_shape[1]-1)
+y_ranges = np.clip([coords[:,0] - stepsize_px_half, coords[:,0] + stepsize_px_half], 0, image_shape[0]-1)
 # create empty image
 image = np.zeros((image_shape[0],image_shape[1],peaks.shape[1]))
 # Fill the image 
@@ -159,9 +160,9 @@ def write_tiff(im, filename, subifds=3):
                 metadata=False,  # do not write tifffile metadata
                 tile=(1024, 1024),
                 photometric='minisblack',
-                compression='zlib',
-                # resolution = ...,
-                # resolutionunit = ...,
+                compression='LZW',
+                resolution = (microscopy_spacing, microscopy_spacing),
+                resolutionunit = "MICROMETER",
             )
             for i in range(subifds):
                 res = 2 ** (i + 1)
@@ -171,17 +172,22 @@ def write_tiff(im, filename, subifds=3):
                     metadata=False,
                     tile=(1024, 1024),
                     photometric='minisblack',
-                    compression='zlib',
-                    # resolution = ...,
-                    # resolutionunit = ...,
+                    compression='LZW',
+                    resolution = (microscopy_spacing, microscopy_spacing),
+                    resolutionunit = "MICROMETER",
                 )
 
-logging.info("Save IMS image")
-write_tiff(image, ims_out)
+logging.info("Downscale image")
+wn = int(image.shape[0]*microscopy_spacing)
+hn = int(image.shape[1]*microscopy_spacing)
+image = cv2.resize(image, (hn,wn), interpolation=cv2.INTER_NEAREST)
 
+logging.info("Save IMS image")
+write_tiff(image.astype(np.float16), ims_out)
 
 logging.info("Read IMC mask image")
 imcimg = readimage_crop(IMCmask_on_postIMS, bb1)
+imcimg = cv2.resize(imcimg, (hn,wn), interpolation=cv2.INTER_NEAREST)
 imcimg = imcimg.reshape(imcimg.shape[0],imcimg.shape[1],1)
 
 logging.info("Save IMC mask image")

@@ -1233,7 +1233,7 @@ rule register_IMS_to_postIMS_single_core_2:
 rule transform_IMS_core_for_visualization:
     threads: 1
     resources:
-        mem_mb=20000,
+        mem_mb=30000,
     params:
         IMS_pixelsize=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
