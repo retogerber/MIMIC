@@ -1,3 +1,5 @@
+# adapted from: https://stackoverflow.com/a/65732832
+
 import sys,os
 import logging, traceback
 from typing import Optional
@@ -28,7 +30,11 @@ class StreamToLogger(object):
     def flush(self):
         pass
 
+
 def logging_setup(logfile: Optional[str]) -> None:
+    """
+    Setup logging to logfile (if 'logfile' is defined) or stdout
+    """
     # for interactive debugging
     if logfile is None:
         logging.basicConfig(level=logging.INFO,
@@ -47,6 +53,9 @@ def logging_setup(logfile: Optional[str]) -> None:
         sys.stderr = StreamToLogger(logging.getLogger(),logging.ERROR)
 
 def log_snakemake_info(snakemake) -> None:
+    """
+    output set snakemake threads, params, input and output
+    """
     logging.info("Start")
     logging.info(f"snakemake config:")
     logging.info(f"\tthreads: {snakemake.threads}")

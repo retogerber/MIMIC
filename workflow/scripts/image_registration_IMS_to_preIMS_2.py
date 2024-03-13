@@ -597,8 +597,7 @@ def init_mask_registration(fixed, moving, yx_translation):
     logging.info("Setup registration")
     R = sitk.ImageRegistrationMethod()
     R.SetMetricAsCorrelation()
-    R.SetMetricSamplingStrategy(R.REGULAR)
-    R.SetMetricSamplingPercentage(1)
+    R.SetMetricSamplingStrategy(R.NONE)
     R.SetInterpolator(sitk.sitkNearestNeighbor)
     R.SetOptimizerAsGradientDescent(
         learningRate=1000, numberOfIterations=1000, 

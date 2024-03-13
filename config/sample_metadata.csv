@@ -1,7 +1,8 @@
-sample_name,project_name,core_name,reg_type,IMS_pixel_size,IMS_shrink_factor,IMC_pixel_size,microscopy_pixel_size,coords_filename,imzml_filename,IMS_rotation_angle,IMS_to_postIMS_n_splits,IMS_to_postIMS_init_gridsearch,within_IMC_fine_registration,min_index_length,max_index_length
-Cirrhosis-TMA-5_New_Detector_001,test_combined,A1,precise,30,0.8,1,0.22537,postIMS_to_IMS_test_combined-IMSML-coords.h5,IMS_test_combined.imzML,180,9,0,True,18,20
-Cirrhosis-TMA-5_New_Detector_002,test_combined,B1,precise,30,0.8,1,0.22537,,IMS_test_combined.imzML,180,5,1,True,18,20
-Cirrhosis-TMA-5_New_Detector_001,test_split_ims,A1,precise,30,0.8,1,0.22537,,IMS_test_split_ims_1.imzML,180,13,2,False,18,20
-Cirrhosis-TMA-5_New_Detector_002,test_split_ims,B1,precise,30,0.8,1,0.22537,postIMS_to_IMS_test_split_ims_2-IMSML-coords.h5,IMS_test_split_ims_2.imzML,180,9,3,True,18,20
-Cirrhosis-TMA-5_New_Detector_001,test_split_pre,A1,precise,30,0.8,1,0.22537,postIMS_to_IMS_test_split_pre-IMSML-coords.h5,IMS_test_split_pre.imzML,180,9,1,True,18,20
-Cirrhosis-TMA-5_New_Detector_002,test_split_pre,B1,precise,30,0.8,1,0.22537,,IMS_test_split_pre.imzML,180,9,1,False,18,20
+sample_name,project_name,core_name,reg_type,do_register_IMC_location,register_IMC_location_with_pycpd,IMS_pixel_size,IMS_shrink_factor,IMC_pixel_size,microscopy_pixel_size,coords_filename,imzml_filename,IMS_rotation_angle,IMS_to_postIMS_n_splits,IMS_to_postIMS_init_gridsearch,within_IMC_fine_registration,min_index_length,max_index_length
+Cirrhosis-TMA-5_New_Detector_002,test_split_pre,B1,precise,True,True,30,0.8,1,0.22537,,IMS_test_split_pre.imzML,180,9,1,False,18,20
+Cirrhosis-TMA-5_New_Detector_001,test_combined,A1,precise,True,True,30,0.8,1,0.22537,postIMS_to_IMS_test_combined-IMSML-coords.h5,IMS_test_combined.imzML,180,9,0,True,18,20
+Cirrhosis-TMA-5_New_Detector_002,test_combined,B1,precise,True,True,30,0.8,1,0.22537,,IMS_test_combined.imzML,180,5,1,True,18,20
+Cirrhosis-TMA-5_New_Detector_001,test_split_ims,A1,precise,True,True,30,0.8,1,0.22537,,IMS_test_split_ims_1.imzML,180,13,2,False,18,20
+Cirrhosis-TMA-5_New_Detector_002,test_split_ims,B1,precise,True,True,30,0.8,1,0.22537,postIMS_to_IMS_test_split_ims_2-IMSML-coords.h5,IMS_test_split_ims_2.imzML,180,9,3,True,18,20
+Cirrhosis-TMA-5_New_Detector_001,test_split_pre,A1,precise,True,True,30,0.8,1,0.22537,postIMS_to_IMS_test_split_pre-IMSML-coords.h5,IMS_test_split_pre.imzML,180,9,1,True,18,20
+Cirrhosis-TMA-5_New_Detector_002,test_split_pre,B1,precise,True,True,30,0.8,1,0.22537,,IMS_test_split_pre.imzML,180,9,1,False,18,20

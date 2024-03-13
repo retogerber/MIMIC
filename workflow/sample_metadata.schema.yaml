@@ -15,6 +15,14 @@ properties:
     pattern: (precise)|(register)
     default: precise
     description: type of registration
+  do_register_IMC_location:
+    type: boolean
+    default: true
+    description: should IMC_location file be registered to postIMC image
+  IMC_location_with_pycpd:
+    type: boolean
+    default: true
+    description: should IMC_location file be registered to postIMC image
   IMS_pixel_size:
     type: number
     exclusiveMinimum: 0

@@ -334,7 +334,7 @@ init_transform.SetTranslation((-init_trans[[1,0]].astype(np.double))/tmp_downsca
 R = sitk.ImageRegistrationMethod()
 R.SetMetricAsCorrelation()
 R.SetMetricSamplingStrategy(R.RANDOM)
-R.SetMetricSamplingPercentage(0.01)
+R.SetMetricSamplingPercentage(0.01, seed=1234)
 R.SetInterpolator(sitk.sitkLinear)
 R.SetOptimizerAsRegularStepGradientDescent(
     minStep=1, learningRate=1.0, numberOfIterations=1000

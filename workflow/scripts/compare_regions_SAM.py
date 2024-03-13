@@ -443,7 +443,7 @@ if len(regions1)>=1 and len(regions2)>=1:
         R = sitk.ImageRegistrationMethod()
         R.SetMetricAsMeanSquares()
         R.SetMetricSamplingStrategy(R.REGULAR)
-        R.SetMetricSamplingPercentage(0.1)
+        R.SetMetricSamplingPercentage(0.1, seed=1234)
         R.SetInterpolator(sitk.sitkLinear)
         R.SetOptimizerAsGradientDescentLineSearch(
             learningRate=1, numberOfIterations=1000, 

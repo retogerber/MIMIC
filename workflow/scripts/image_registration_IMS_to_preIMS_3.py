@@ -624,7 +624,7 @@ if (np.sum(pcontsc) > np.sum(pcontsi)/10) and np.all(prop_diff < 0.25) and do_wi
     R = sitk.ImageRegistrationMethod()
     R.SetMetricAsMeanSquares()
     R.SetMetricSamplingStrategy(R.REGULAR)
-    R.SetMetricSamplingPercentage(0.25)
+    R.SetMetricSamplingPercentage(0.25, seed=1234)
     R.SetInterpolator(sitk.sitkLinear)
     R.SetOptimizerAsGradientDescent(
         learningRate=1, numberOfIterations=1000, 

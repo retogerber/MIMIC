@@ -164,8 +164,7 @@ moving = sitk.GetImageFromArray(microscopy_image_1[imcbbox_outer[0]:imcbbox_oute
 
 R = sitk.ImageRegistrationMethod()
 R.SetMetricAsMeanSquares()
-R.SetMetricSamplingStrategy(R.REGULAR)
-R.SetMetricSamplingPercentage(1)
+R.SetMetricSamplingStrategy(R.NONE)
 R.SetMetricFixedMask(sitk.GetImageFromArray(mask_grid.astype(np.uint8)))
 R.SetInterpolator(sitk.sitkLinear)
 R.SetOptimizerAsGradientDescentLineSearch(
