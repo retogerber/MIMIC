@@ -1,61 +1,61 @@
-# logging
-stdlog <- file(snakemake@log[["stdout"]], open="wt")
-sink(stdlog, type = "output")
-sink(stdlog, type = "message")
+if (interactive()){
+  source(file.path("imc_to_ims_workflow", "workflow", "scripts", "combine_IMS_utils.R"))
+  source(file.path("imc_to_ims_workflow", "workflow", "scripts", "logging_utils.R"))
+} else{
+  source(file.path("workflow", "scripts", "combine_IMS_utils.R"))
+  source(file.path("workflow", "scripts", "logging_utils.R"))
+}
 
-# n_worker <- snakemake@threads
-# RhpcBLASctl::blas_set_num_threads(n_worker)
-source(file.path("workflow", "scripts", "combine_IMS_utils.R"))
+# prepare
+set_threads(snakemake)
+log_snakemake_variables(snakemake)
 
-# imspeaks_filename <- "/home/retger/Downloads/mSpleen_test/mSpleen_pngasesa_05132023_peaks.h5"
-# imspeaks_filename <- here::here("data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/", project_name, "/data/IMS/", paste0(project_name, "_IMS_peaks.h5"))
-# imspeaks_filename <- "/home/retger/Downloads/test_IMS_coords_comb/NASH_HCC_TMA_IMS_peaks.h5"
-# imspeaks_filename <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/IMS_test_split_ims_2_peaks.h5"
-# imspeaks_filename <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/IMS_test_combined_peaks.h5"
-imspeaks_filename <- snakemake@input[["peaks"]]
+if (interactive()){
+  # params
+  maldi_step_size <- 30
+  maldi_pixel_size <- 24
+
+  # input
+  imspeaks_filename <- c("")
+  imscoords_filename <- c("")
+  celloverlap_filename <- c("")
+  cellcentroids_filename <- c("")
+} else{
+  # params
+  maldi_step_size <- as.numeric(snakemake@params["IMS_pixelsize"])
+  maldi_pixel_size <- maldi_step_size*as.numeric(snakemake@params["IMS_shrink_factor"])
+
+  # input
+  imspeaks_filename <- snakemake@input[["peaks"]]
+  imscoords_filename <- unique(snakemake@input[["imsml_coords_fp"]])
+  celloverlap_filename <- snakemake@input[["cell_overlaps"]]
+  cellcentroids_filename <- snakemake@input[["cell_centroids"]]
+
+  #output
+  combined_data_out <- snakemake@output[["combined_data"]]
+}
+
 
 imzml_name <- gsub("_peaks.h5","",basename(imspeaks_filename))
-
-
-# project_name <- "test_split_ims"
-# project_name <- "mSpleen"
-# project_name <- "NASH_HCC_TMA"
+log_message(sprintf("IMZML name: %s", imzml_name))
 project_name <- basename(dirname(dirname(dirname(imspeaks_filename)[1])))
+log_message(sprintf("Project name: %s", project_name))
 
-# imscoords_filename <- "/home/retger/Downloads/mSpleen_test/mSpleen-IMSML-coords.h5"
-# imscoords_filename <- here::here("data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/", project_name, "/data/IMS/", paste0(project_name, "_IMSML-coords.h5"))
-# imscoords_filename <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/postIMS_to_IMS_test_split_ims-Cirrhosis-TMA-5_New_Detector_002-IMSML-coords.h5"
-
-# imscoords_filename <- sapply(1:45, function(i) sprintf("/home/retger/Downloads/test_IMS_coords_comb/postIMS_to_IMS_NASH_HCC_TMA-NASH_HCC_TMA-2_0%02d-IMSML-coords.h5",i))[-39]
-# imscoords_filename[11] <- "/home/retger/Downloads/test_images_ims_to_imc_workflow/NASH_HCC_TMA_011-IMSML-coords.h5"
-# imscoords_filename <- sapply(1:4, function(i) sprintf("/home/retger/Downloads/test_IMS_coords_comb/postIMS_to_IMS_NASH_HCC_TMA-NASH_HCC_TMA-2_0%02d-IMSML-coords.h5",i))
-imscoords_filename <- unique(snakemake@input[["imsml_coords_fp"]])
 names(imscoords_filename) <- basename(imscoords_filename) |>
   gsub(pattern="(-|_)IMSML-coords.h5",replacement="") |>
   gsub(pattern="postIMS_to_IMS_",replacement="") |>
   gsub(pattern=paste0("^",project_name,"(-|_)"),replacement="")
-# imscoords_filename <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/IMS/postIMS_to_IMS_test_split_ims_2-IMSML-coords.h5"
-# imscoords_filename <- c("/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/postIMS_to_IMS_test_combined-IMSML-coords.h5","/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMS/postIMS_to_IMS_test_combined-Cirrhosis-TMA-5_New_Detector_002-IMSML-coords.h5")
+log_message(sprintf("IMS coords names: %s", paste(names(imscoords_filename), collapse=", ")))
 
-
-# maldi_step_size <- 10
-# maldi_step_size <- 30
-# maldi_step_size <- 20
-maldi_step_size <- as.numeric(snakemake@params["IMS_pixelsize"])
-
-# maldi_pixel_size <- 8
-# maldi_pixel_size <- 24
-# maldi_pixel_size <- 16 
-maldi_pixel_size <- maldi_step_size*as.numeric(snakemake@params["IMS_shrink_factor"])
-
-# celloverlap_filename <- sapply(1:3, function(i) sprintf("/home/retger/Downloads/mSpleen_test/mSpleen_mSpleen_06092023_0%02d_cell_overlap_IMS.csv",i))
-# celloverlap_filename <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/cell_overlap/test_split_ims_Cirrhosis-TMA-5_New_Detector_002_cell_overlap_IMS.csv"
-# celloverlap_filename <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/cell_overlap/test_combined_Cirrhosis-TMA-5_New_Detector_001_cell_overlap_IMS.csv"
-# celloverlap_filename <- sapply(1:45, function(i) sprintf("/home/retger/Downloads/test_IMS_coords_comb/NASH_HCC_TMA_NASH_HCC_TMA-2_0%02d_cell_overlap_IMS.csv",i))[-39]
-celloverlap_filename <- snakemake@input[["cell_overlaps"]]
 names(celloverlap_filename) <- basename(celloverlap_filename) |>
   gsub(pattern="_cell_overlap_IMS.csv",replacement="") |>
   gsub(pattern=paste0(project_name,"_"),replacement="")
+log_message(sprintf("Cell overlap names: %s", paste(names(celloverlap_filename), collapse=", ")))
+
+names(cellcentroids_filename) <- basename(cellcentroids_filename) |>
+  gsub(pattern="_cell_centroids.csv",replacement="") |>
+  gsub(pattern=paste0(project_name,"_"),replacement="")
+log_message(sprintf("Cell centroids names: %s", paste(names(cellcentroids_filename), collapse=", ")))
 
 # if (length(imscoords_filename)<length(celloverlap_filename)){
 #   if (length(imscoords_filename)==0) {
@@ -69,29 +69,19 @@ names(celloverlap_filename) <- basename(celloverlap_filename) |>
 # check and replace names of manual imsmicrolink files
 if (length(imscoords_filename)>1) {
   is_correct <- names(imscoords_filename) == names(celloverlap_filename)
-  sprintf("Number of matching names %s / %s", sum(is_correct), length(names(imscoords_filename)))
+  log_message(sprintf("Number of matching names %s / %s", sum(is_correct), length(names(imscoords_filename))))
   if (sum(is_correct) < length(is_correct)){
     for (i in seq_len(length(is_correct)-sum(is_correct))) {
-      print(sprintf("Incorrect name: %s, expected: %s", names(imscoords_filename)[!is_correct][i], names(celloverlap_filename)[!is_correct][i]))
+      log_message(sprintf("Incorrect name: %s, expected: %s", names(imscoords_filename)[!is_correct][i], names(celloverlap_filename)[!is_correct][i]))
     }
-    print("Replacing names")
+    log_message("Replacing names")
     names(imscoords_filename)[!is_correct] <- names(celloverlap_filename)[!is_correct]
   }
 }
 
-# cellcentroids_filename <- sapply(1:3, function(i) sprintf("/home/retger/Downloads/mSpleen_test/mSpleen_mSpleen_06092023_0%02d_cell_centroids.csv",i))
-# cellcentroids_filename <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_ims/data/cell_overlap/test_split_ims_Cirrhosis-TMA-5_New_Detector_002_cell_centroids.csv"
-# cellcentroids_filename <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/cell_overlap/test_combined_Cirrhosis-TMA-5_New_Detector_001_cell_centroids.csv"
-# cellcentroids_filename <- sapply(1:45, function(i) sprintf("/home/retger/Downloads/test_IMS_coords_comb/NASH_HCC_TMA_NASH_HCC_TMA-2_0%02d_cell_centroids.csv",i))[-39]
-# cellcentroids_filename <- sapply(1:4, function(i) sprintf("/home/retger/Downloads/test_IMS_coords_comb/NASH_HCC_TMA_NASH_HCC_TMA-2_0%02d_cell_centroids.csv",i))
-cellcentroids_filename <- snakemake@input[["cell_centroids"]]
-names(cellcentroids_filename) <- basename(cellcentroids_filename) |>
-  gsub(pattern="_cell_centroids.csv",replacement="") |>
-  gsub(pattern=paste0(project_name,"_"),replacement="")
-
 
 idx_by_location <- rep(TRUE, length(imscoords_filename))
-
+log_message("Running create_imsc")
 imcims_df <- create_imsc(
   imspeaks_filename, 
   imscoords_filename, 
@@ -101,11 +91,14 @@ imcims_df <- create_imsc(
   complete_maldi = TRUE,
   idx_by_location = idx_by_location
 )
-
+log_message("Finished create_imsc")
+log_message("Add metadata")
 imcims_df[["maldi_pixel_size"]] <- maldi_pixel_size
 imcims_df[["maldi_step_size"]] <- maldi_step_size
 imcims_df[["project_name"]] <- project_name
 imcims_df[["imzml_name"]] <- imzml_name
 
+log_message("Writing combined data")
+data.table::fwrite(imcims_df, combined_data_out)
 
-data.table::fwrite(imcims_df, snakemake@output[["combined_data"]])
+log_message("Finished")
