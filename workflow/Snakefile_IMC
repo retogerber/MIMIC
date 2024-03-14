@@ -1,0 +1,372 @@
+
+rule split_IMC_location_geojson:
+    params:
+        scaling=lambda wildcards: float(get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        )) / float(get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        )),
+    threads: 1
+    input:
+        combined_geojson_file="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC.geojson",
+    output:
+        geojson_files="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC_{core}.geojson",
+    log:
+        stdout="logs/split_IMC_location_geojson/{project_name}_{core}.stdout",
+        stderr="logs/split_IMC_location_geojson/{project_name}_{core}.stderr",
+    container:
+        config["container"]
+    shell:
+        "workflow/scripts/split_geojson.sh -f {input.combined_geojson_file} -s {params.scaling} -c {wildcards.core}  > {log.stdout} 2> {log.stderr}"
+
+rule register_IMC_location_on_postIMC:
+    params:
+        microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMC_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        polygon_expand = 10,
+        preprocessing_type = "saturation",
+        use_pycpd=lambda wildcards: get_column_entry_from_metadata_two_conditions(
+            wildcards.project_name,
+            wildcards.core,
+            "register_IMC_location_with_pycpd",
+            "project_name",
+            "core_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        do_registration=lambda wildcards: get_column_entry_from_metadata_two_conditions(
+            wildcards.project_name,
+            wildcards.core,
+            "do_register_IMC_location",
+            "project_name",
+            "core_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+    input:
+        postIMC_geojson_file="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC_{core}.geojson",
+        postIMC="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff",
+        IMC=lambda wildcards: f"results/{wildcards.project_name}/data/IMC/{get_column_entry_from_metadata_two_conditions(wildcards.core, wildcards.project_name, 'sample_name', 'core_name', 'project_name', read_sample_metadata(config['sample_metadata']))}.tiff",
+    output:
+        postIMC_geojson_file="results/{project_name}/data/IMC_location/{project_name}_registered_IMC_mask_on_postIMC_{core}.geojson",
+        IMC_location_extraction_image="logs/IMC_location_from_postIMC/{project_name}_{core}.ome.tiff",
+    log:
+        stdout="logs/IMC_location_from_postIMC/{project_name}_{core}.stdout",
+        stderr="logs/IMC_location_from_postIMC/{project_name}_{core}.stderr",
+    benchmark:
+        "benchmarks/IMC_location_from_postIMC/{project_name}_{core}.txt",
+    container:
+        config["container"]
+    script:
+        "scripts/IMC_location_from_postIMC.py"
+
+rule transform_IMC_location_to_preIMC:
+    params:
+        input_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        output_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        transform_target="preIMC"
+    threads: 8
+    resources:
+        mem_mb=30000,
+    input:
+        IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_registered_IMC_mask_on_postIMC_{core}.geojson",
+        postIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_transformations.json",
+    output:
+        IMC_location_transformed="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_preIMC_{core}.geojson",
+    log:
+        stdout="logs/transform_IMC_location_to_preIMC/{project_name}_{core}.stdout"
+    benchmark:
+        "benchmarks/transform_IMC_location_to_preIMC/{project_name}_{core}.txt",
+    # conda:
+    #    "env/image_registration_wsireg.yaml"
+    container:
+        config["container"]
+    script:
+        "scripts/transform_IMC_location.py"
+
+use rule transform_IMC_location_to_preIMC as transform_IMC_location_to_preIMS with:
+    params:
+        input_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        output_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        transform_target="preIMS",
+    resources:
+        mem_mb=100000,
+    input:
+        IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_registered_IMC_mask_on_postIMC_{core}.geojson",
+        postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
+    output:
+        IMC_location_transformed="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_preIMS_{core}.geojson",
+    log:
+        stdout="logs/transform_IMC_location_to_preIMS/{project_name}_{core}.stdout",
+    benchmark:
+        "benchmarks/transform_IMC_location_to_preIMS/{project_name}_{core}.txt",
+
+use rule transform_IMC_location_to_preIMC as transform_IMC_location_to_postIMS with:
+    params:
+        input_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        output_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        transform_target="postIMS",
+    resources:
+        mem_mb=100000,
+    input:
+        IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_registered_IMC_mask_on_postIMC_{core}.geojson",
+        postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
+    output:
+        IMC_location_transformed="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMS_{core}.geojson",
+    log:
+        stdout="logs/transform_IMC_location_to_postIMS/{project_name}_{core}.stdout",
+    benchmark:
+        "benchmarks/transform_IMC_location_to_postIMS/{project_name}_{core}.txt",
+ 
+
+rule aggregate_IMC_file:
+    params:
+        IMC_channels_for_aggr=config["IMC_channels_for_aggr"],
+    threads: 1
+    input:
+        IMC="results/{project_name}/data/IMC/{sample}.tiff",
+        IMC_summary_panel="results/{project_name}/data/IMC_summary_panel/{sample}_summary.csv",
+    output:
+        IMC_aggr="results/{project_name}/data/IMC/{sample}_aggr.ome.tiff",
+    log:
+        stdout="logs/aggregate_IMC_file/{project_name}_{sample}.stdout",
+        stderr="logs/aggregate_IMC_file/{project_name}_{sample}.stderr",
+    # conda:
+    #    "env/image_registration_wsireg.yaml"
+    container:
+        config["container"]
+    script:
+        "scripts/prepare_imc_for_registration.py"
+
+
+checkpoint match_preIMC_location_with_IMC_location:
+    threads: 1
+    input:
+        table="results/{project_name}/data/preIMS_location/available_masks.csv",
+        preIMC_location="results/{project_name}/data/preIMC_location_combined/{project_name}_reg_mask_on_preIMC.geojson",
+        IMC_location=IMC_location_from_project_name,
+    output:
+        matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
+    log:
+        stdout="logs/match_preIMC_location_with_IMC_location/{project_name}.stdout",
+        stderr="logs/match_preIMC_location_with_IMC_location/{project_name}.stderr",
+    # conda:
+    #    "env/image_registration_wsireg.yaml"
+    container:
+        config["container"]
+    script:
+        "scripts/match_preIMC_location_with_IMC_location.py"
+
+
+rule prepare_register_IMC_to_preIMC:
+    params:
+        microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMC_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+    threads: 1
+    input:
+        template_file="config/template_IMC_to_preIMC-wsireg-config.yaml",
+        preIMC="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
+        IMC_aggr=IMC_aggr_sample_name_from_core_name,
+        IMC_location_on_preIMC="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_preIMC_{core}.geojson",
+    output:
+        wsireg_config="results/{project_name}/registrations/IMC_to_preIMC/{project_name}_{core}-wsireg-config.yaml",
+    log:
+        stdout="logs/prepare_register_IMC_to_preIMC/{project_name}_{core}.stdout",
+        stderr="logs/prepare_register_IMC_to_preIMC/{project_name}_{core}.stderr",
+    container:
+        config["container"]
+    shell:
+        "workflow/scripts/prepare_IMC_to_preIMC_wsireg_config.sh -p {wildcards.project_name}_{wildcards.core} -f {input.preIMC} -m {input.IMC_location_on_preIMC} -a {input.IMC_aggr} -s {params.microscopy_pixelsize} -i {params.IMC_pixelsize} -t {input.template_file} -o results/{wildcards.project_name}/registrations/IMC_to_preIMC  > {log.stdout} 2> {log.stderr}"
+
+
+rule register_IMC_to_preIMC:
+    threads: 32
+    input:
+        IMC_aggr=IMC_aggr_sample_name_from_core_name,
+        IMC_location_on_preIMC="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_preIMC_{core}.geojson",
+        preIMC="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
+        wsireg_config="results/{project_name}/registrations/IMC_to_preIMC/{project_name}_{core}-wsireg-config.yaml",
+    output:
+        IMC_to_preIMC_transform="results/{project_name}/registrations/IMC_to_preIMC/{project_name}_{core}/{project_name}_{core}-IMC_to_preIMC_transformations.json",
+        IMC_to_preIMC_image="results/{project_name}/registrations/IMC_to_preIMC/{project_name}_{core}/{project_name}_{core}-IMC_to_preIMC_registered.ome.tiff",
+        imcache_dir=directory(
+            "results/{project_name}/registrations/IMC_to_preIMC/{project_name}_{core}/.imcache_{project_name}_{core}"
+        ),
+        preIMC_orig_size_transform="results/{project_name}/registrations/IMC_to_preIMC/{project_name}_{core}/.imcache_{project_name}_{core}/preIMC_orig_size_tform.json",
+    log:
+        stdout="logs/register_IMC_to_preIMC/{project_name}_{core}.stdout",
+        stderr="logs/register_IMC_to_preIMC/{project_name}_{core}.stderr",
+    benchmark:
+        "benchmarks/register_IMC_to_preIMC/{project_name}_{core}.txt",
+    # conda:
+    #    "env/image_registration_wsireg.yaml"
+    container:
+        config["container"]
+    shell:
+        "wsireg2d {input.wsireg_config}  > {log.stdout} 2> {log.stderr}"
+
+
+rule precise_register_IMC_to_preIMC:
+    threads: 1
+    params:
+        microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMC_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+    input:
+        IMC_aggr=IMC_aggr_sample_name_from_core_name,
+        IMC_location_on_preIMC="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_preIMC_{core}.geojson",
+        preIMC="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
+    output:
+        preIMC_orig_size_transform="results/{project_name}/registrations/IMC_to_preIMC/{project_name}_{core}/{project_name}_{core}_precise_preIMC_orig_size_tform.json",
+        IMC_to_preIMC_transform="results/{project_name}/registrations/IMC_to_preIMC/{project_name}_{core}/{project_name}_{core}-precise_IMC_to_preIMC_transformations.json",
+    log:
+        stdout="logs/precise_register_IMC_to_preIMC/{project_name}_{core}.stdout",
+        stderr="logs/precise_register_IMC_to_preIMC/{project_name}_{core}.stderr",
+    # conda:
+    #    "env/image_registration_wsireg.yaml"
+    container:
+        config["container"]
+    script:
+        "scripts/register_precise_IMC_to_preIMC.py"
+
+
+rule transform_IMCaggr_to_postIMS:
+    threads: 16
+    resources:
+        mem_mb=40000,
+    params:
+        input_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMC_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        output_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+    input:
+        IMC_to_preIMC_transform=IMC_to_preIMC_transform_pkl_core_name_from_sample_name,
+        preIMC_orig_size_transform=preIMC_orig_size_transform_core_name_from_sample_name,
+        preIMC_to_postIMS_transform=choose_preIMC_to_postIMS_transform,
+        table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
+        IMC="results/{project_name}/data/IMC/{sample}_aggr.ome.tiff",
+    output:
+        IMC_transformed="results/{project_name}/data/IMC/{sample}_aggr_transformed.ome.tiff",
+    log:
+        stdout="logs/transform_IMCaggr_to_postIMS/{project_name}_{sample}.stdout",
+        stderr="logs/transform_IMCaggr_to_postIMS/{project_name}_{sample}.stderr",
+    benchmark:
+        "benchmarks/transform_IMCaggr_to_postIMS/{project_name}_{sample}.txt",
+    # conda:
+    #    "env/image_registration_wsireg.yaml"
+    container:
+        config["container"]
+    script:
+        "scripts/transform_IMC_to_postIMS.py"
+
+
+rule transform_IMCmask_to_postIMS:
+    threads: 16
+    resources:
+        mem_mb=75000,
+    params:
+        input_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMC_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        output_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        transform_target="postIMS",
+    input:
+        IMC_to_preIMC_transform=IMC_to_preIMC_transform_pkl_core_name_from_sample_name,
+        preIMC_orig_size_transform=preIMC_orig_size_transform_core_name_from_sample_name,
+        preIMC_to_postIMS_transform=choose_preIMC_to_postIMS_transform,
+        table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
+        IMC="results/{project_name}/data/IMC_mask/{sample}.tiff",
+    output:
+        IMC_transformed="results/{project_name}/data/IMC_mask/{sample}_transformed_on_postIMS.ome.tiff",
+    log:
+        stdout="logs/transform_IMCmask_to_postIMS/{project_name}_{sample}.stdout",
+        stderr="logs/transform_IMCmask_to_postIMS/{project_name}_{sample}.stderr",
+    benchmark:
+        "benchmarks/transform_IMCmask_to_postIMS/{project_name}_{sample}.txt",
+    # conda:
+    #    "env/image_registration_wsireg.yaml"
+    container:
+        config["container"]
+    script:
+        "scripts/transform_IMC_to_postIMS.py"
+
+

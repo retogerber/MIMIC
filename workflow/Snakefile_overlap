@@ -1,0 +1,154 @@
+
+rule transformed_IMCmask_to_shape:
+    threads: 4
+    params:
+        input_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        input_spacing_IMC_location=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        output_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMC_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+    input:
+        IMCmask="results/{project_name}/data/IMC_mask/{sample}_transformed_on_postIMS.ome.tiff",
+        IMC_location=lambda wildcards: f'results/{wildcards.project_name}/data/IMC_location/{wildcards.project_name}_IMC_mask_on_postIMS_{get_column_entry_from_metadata_two_conditions(wildcards.sample,wildcards.project_name, "core_name", "sample_name","project_name", read_sample_metadata(config["sample_metadata"]))}.geojson',
+    output:
+        IMCmask_shape_transformed="results/{project_name}/data/IMC_mask/{sample}_transformed_on_postIMS_cell_masks.geojson",
+        cell_indices="results/{project_name}/data/IMC_mask/{sample}_transformed_on_postIMS_cell_indices.pkl",
+    log:
+        stdout="logs/transform_IMCmask_to_shape/{project_name}_{sample}.stdout",
+    benchmark:
+        "benchmarks/transform_IMCmask_to_shape/{project_name}_{sample}.txt",
+    # conda:
+    #    "env/image_registration_wsireg.yaml"
+    container:
+        config["container"]
+    script:
+        "scripts/shapes_from_IMCmask.py"
+
+
+rule calculate_cell_centroid_positions:
+    threads: 1
+    input:
+        cell_indices="results/{project_name}/data/IMC_mask/{sample}_transformed_on_postIMS_cell_indices.pkl",
+        IMCmask_transformed="results/{project_name}/data/IMC_mask/{sample}_transformed_on_postIMS_cell_masks.geojson",
+    output:
+        cell_centroids="results/{project_name}/data/cell_overlap/{project_name}_{sample}_cell_centroids.csv",
+    log:
+        stdout="logs/calculate_cell_centroid_positions/{project_name}_{sample}.stdout",
+        stderr="logs/calculate_cell_centroid_positions/{project_name}_{sample}.stderr",
+    benchmark:
+        "benchmarks/calculate_cell_centroid_positions/{project_name}_{sample}.txt",
+    # conda:
+    #    "env/image_registration_wsireg.yaml"
+    container:
+        config["container"]
+    script:
+        "scripts/cell_centroids_from_shapes.py"
+
+
+rule calculate_cell_overlap_with_IMS:
+    params:
+        IMS_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMS_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        IMS_shrink_factor=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMS_shrink_factor",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+    threads: 1
+    input:
+        imsml_coords_fp=choose_imsml_coordsfile,
+        cell_indices="results/{project_name}/data/IMC_mask/{sample}_transformed_on_postIMS_cell_indices.pkl",
+        IMCmask_transformed="results/{project_name}/data/IMC_mask/{sample}_transformed_on_postIMS_cell_masks.geojson",
+    output:
+        cell_overlaps="results/{project_name}/data/cell_overlap/{project_name}_{sample}_cell_overlap_IMS.csv",
+    log:
+        stdout="logs/calculate_cell_overlap_with_IMS/{project_name}_{sample}.stdout",
+        stderr="logs/calculate_cell_overlap_with_IMS/{project_name}_{sample}.stderr",
+    benchmark:
+        "benchmarks/calculate_cell_overlap_with_IMS/{project_name}_{sample}.txt",
+    # conda:
+    #    "env/image_registration_wsireg.yaml"
+    container:
+        config["container"]
+    script:
+        "scripts/cell_ims_intersections.py"
+
+rule combine_IMS_celloverlap_data:
+    params:
+        IMS_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMS_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        IMS_shrink_factor=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMS_shrink_factor",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+    threads: 16
+    resources:
+        mem_mb=20000,
+    input:
+        imsml_coords_fp=choose_imsml_coordsfile_from_imzml,
+        peaks="results/{project_name}/data/IMS/{imzml_base}_peaks.h5",
+        cell_overlaps=lambda wildcards: expand(
+            "results/{{project_name}}/data/cell_overlap/{{project_name}}_{sample}_cell_overlap_IMS.csv",
+            sample=get_column_entry_from_metadata_two_conditions(
+                wildcards.project_name,
+                f"{wildcards.imzml_base}.imzML",
+                "sample_name",
+                "project_name",
+                "imzml_filename",
+                read_sample_metadata(config["sample_metadata"]),
+                return_all=True,
+            ),
+        ),
+        cell_centroids=lambda wildcards: expand(
+            "results/{{project_name}}/data/cell_overlap/{{project_name}}_{sample}_cell_centroids.csv",
+            sample=get_column_entry_from_metadata_two_conditions(
+                wildcards.project_name,
+                f"{wildcards.imzml_base}.imzML",
+                "sample_name",
+                "project_name",
+                "imzml_filename",
+                read_sample_metadata(config["sample_metadata"]),
+                return_all=True,
+            ),
+        ),
+    output:
+        combined_data="results/{project_name}/data/cell_overlap/{project_name}_{imzml_base}_peak_cell_overlap.csv",
+    log:
+        stdout="logs/combine_IMS_celloverlap_data/{project_name}_{imzml_base}.stdout",
+    benchmark:
+        "benchmarks/combine_IMS_celloverlap_data/{project_name}_{imzml_base}.txt",
+    container:
+        config["container"]
+    script:
+        "scripts/combine_IMS.R"
+

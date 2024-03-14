@@ -5,6 +5,17 @@ container: "docker://ghcr.io/retogerber/imc_to_ims_workflow:analysis_1.0"
 # name of csv file containing sample information
 sample_metadata: "config/sample_metadata.csv"
 
+# define which parts of the pipeline should be run
+# specify one or multiple or all of:
+# - regIMC: registration of IMC location to postIMC
+# - IMS: processing of IMS
+# - regIMS: registration of IMS to postIMS
+# - Microscopy: registration of microscopy images
+# - QC: quality control of registration (will also run "regIMC", "regIMS" and "Microscopy")
+# - overlap: overlap of IMS pixels with IMC cells (whole pipeline except "QC")
+# - all: run complete pipeline
+stages: ["regIMC", "IMS", "regIMS", "Microscopy", "QC", "overlap"]
+
 # channel names of IMC for aggregation for registration 
 IMC_channels_for_aggr: ["E-cadherin","ST6GAL1","Collagen-1","HepPar1","Seg1","Seg2","Seg3"]
 

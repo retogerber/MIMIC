@@ -135,23 +135,26 @@ def choose_postIMC_to_postIMS_transform(wildcards):
             return outfile
 
 
-def choose_imsml_coordsfile(wildcards):
-        filename = get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
+#def choose_imsml_coordsfile(wildcards):
+#        filename = get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
+#        filename = str(filename).strip()
+#        if filename == "":
+#            filename_out = f"results/{wildcards.project_name}/data/IMS/postIMS_to_IMS_{wildcards.project_name}-{wildcards.sample}-IMSML-coords.h5"
+#        else:
+#            filename_out = f"results/{wildcards.project_name}/data/IMS/{filename}"
+#        return filename_out
+
+def choose_imsml_coordsfile_base(sample, project_name):
+        filename = get_column_entry_from_metadata_two_conditions(sample, project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
         filename = str(filename).strip()
         if filename == "":
-            filename_out = f"results/{wildcards.project_name}/data/IMS/postIMS_to_IMS_{wildcards.project_name}-{wildcards.sample}-IMSML-coords.h5"
+            filename_out = f"results/{project_name}/data/IMS/postIMS_to_IMS_{project_name}-{sample}-IMSML-coords.h5"
         else:
-            filename_out = f"results/{wildcards.project_name}/data/IMS/{filename}"
+            filename_out = f"results/{project_name}/data/IMS/{filename}"
         return filename_out
 
 def choose_imsml_coordsfile(wildcards):
-        filename = get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
-        filename = str(filename).strip()
-        if filename == "":
-            filename_out = f"results/{wildcards.project_name}/data/IMS/postIMS_to_IMS_{wildcards.project_name}-{wildcards.sample}-IMSML-coords.h5"
-        else:
-            filename_out = f"results/{wildcards.project_name}/data/IMS/{filename}"
-        return filename_out
+        return choose_imsml_coordsfile_base(wildcards.sample, wildcards.project_name)
 
 def imzml_peaks_from_sample_and_project(wildcards):
     imzml_file=get_column_entry_from_metadata_two_conditions(
