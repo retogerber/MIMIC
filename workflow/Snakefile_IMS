@@ -1,4 +1,7 @@
 
+
+
+
 rule extract_core_mask_from_postIMS:
     threads: 16
     resources:
@@ -332,4 +335,30 @@ rule process_imzml:
     script:
         "scripts/process_imzml.R"
 
+
+
+rule create_IMS_tiff:
+    threads: 1
+    resources:
+        mem_mb=4000,
+    params:
+        IMS_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMS_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+    input:
+        imzml_peaks="results/{project_name}/data/IMS/{imzml_base}_peaks.h5",
+    output:
+        IMS_image="results/{project_name}/data/IMS/{imzml_base}_{project_name}_IMS.ome.tiff",
+    log:
+        stdout="logs/create_IMS_tiff/{project_name}_{imzml_base}.stdout",
+        stderr="logs/create_IMS_tiff/{project_name}_{imzml_base}.stderr",
+    benchmark:
+        "benchmarks/create_IMS_tiff/{project_name}_{imzml_base}.txt",
+    container:
+        config["container"]
+    script:
+        "scripts/create_IMS_tiff.py"
 

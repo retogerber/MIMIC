@@ -81,6 +81,12 @@ def return_output_files(wildcards):
             project_name=unique_imzml_project[1],
             imzml_base=unique_imzml_project[0],
         )
+        files +=  expand(
+            "results/{project_name}/data/IMS/{imzml_base}_{project_name}_IMS.ome.tiff",
+            zip,
+            project_name=unique_imzml_project[1],
+            imzml_base=unique_imzml_project[0],
+        )
     if "regIMS" in stages or "all" in stages:
         files += [choose_imsml_coordsfile_base(sample_names[i], project_names[i]) for i in range(len(sample_names))]
 
