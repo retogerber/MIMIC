@@ -149,7 +149,7 @@ logging.info(f"IMC dimensions to microscopy scale: {imcsize_scaled}")
 yx_translation = (int((blur.shape[1]-imcsize_scaled[1])/2),int((blur.shape[0]-imcsize_scaled[0])/2))
 logging.info(f"Initial translation: {yx_translation}")
 imcboximg = np.zeros(blur.shape, dtype=float)
-imcboximg[int(yx_translation[1]):int(yx_translation[1]+imcsize_scaled[1]),int(yx_translation[0]):int(yx_translation[0]+imcsize_scaled[0])] = 255
+imcboximg[int(yx_translation[1]):int(yx_translation[1]+imcsize_scaled[0]),int(yx_translation[0]):int(yx_translation[0]+imcsize_scaled[1])] = 255
 obs_area = np.sum(imcboximg==255)*(microscopy_pixelsize**2)
 
 logging.info(f"IMC area on image: {obs_area}")
@@ -253,7 +253,7 @@ if use_pycpd:
 
         # create mask for line
         linepoly = linerot.buffer(5/microscopy_pixelsize)
-        points = [[x, y] for x, y in zip(*linepoly.boundary.coords.xy)]
+        points = [[y, x] for x, y in zip(*linepoly.boundary.coords.xy)]
         # create mask image
         linemask = np.ones(blur.shape, dtype=np.uint8)*255
         linemasktr = cv2.fillPoly(linemask, np.array([points]).astype(np.int32), color=0)
@@ -271,9 +271,9 @@ if use_pycpd:
 
         # apply derivative like filter perpendicular to the aligned axis
         halfkernel = np.array([1,2,3,4],dtype=float)
-        if wm == 0:
+        if wm == 1:
             latkernel = np.zeros((9,1))
-            if side == 1:
+            if side == 2:
                 latkernel[:4,0]=halfkernel[::-1]
                 latkernel[5:,0]=-halfkernel
             else:
@@ -284,7 +284,7 @@ if use_pycpd:
             sx = cv2.filter2D(sx, cv2.CV_32F, np.ones((1,3))/3)
         else:
             latkernel = np.zeros((1,9))
-            if side == 0:
+            if side == 3:
                 latkernel[0,:4]=-halfkernel
                 latkernel[0,5:]=halfkernel[::-1]
             else:
@@ -295,12 +295,12 @@ if use_pycpd:
             sx = cv2.filter2D(sx, cv2.CV_32F, np.ones((3,1))/3)
 
         # find maximum perpendicularly to the aligned axis
-        sxmax = np.max(sx, axis=wm)
-        inds = np.arange(sx.shape[wm])
+        sxmax = np.max(sx, axis=wi)
+        inds = np.arange(sx.shape[wi])
         indls = list()
         posls = list()
-        for i in range(1,sx.shape[wi]):
-            if wm==1:
+        for i in range(1,sx.shape[wm]):
+            if wi==1:
                 tmpinds = inds[sx[i,:]==sxmax[i]]
             else:
                 tmpinds = inds[sx[:,i]==sxmax[i]]
@@ -327,13 +327,13 @@ if use_pycpd:
         posarfilt = posarfilt[posarfilt[:,2]>thr,:]
 
         # fit line to points
-        rsfit = sklearn.linear_model.RANSACRegressor(random_state=123, max_trials=1000, stop_probability=0.999, residual_threshold=1/microscopy_pixelsize, min_samples=0.5)
+        rsfit = sklearn.linear_model.RANSACRegressor(random_state=123, max_trials=10000, stop_probability=0.999, residual_threshold=1/microscopy_pixelsize, min_samples=0.75)
         rsfit.fit(posarfilt[:,0].reshape(-1,1), posarfilt[:,1].reshape(-1,1))
         # only keep inliers
         posarfilt = posarfilt[rsfit.inlier_mask_,:]
 
         # transform back to original image
-        if wm == 1:
+        if wm == 0:
             posarfilt = posarfilt[:,[1,0]]
         else:
             posarfilt = posarfilt[:,:2]
@@ -484,6 +484,8 @@ blurdraw = cv2.convertScaleAbs(cv2.convertScaleAbs(blurdraw, alpha=(15/255)),alp
 
 # import matplotlib.pyplot as plt
 # plt.imshow(blurdraw)
+# plt.scatter(xytrans[:,0], xytrans[:,1])
+# plt.scatter(xytrans2[:,0], xytrans2[:,1],c="blue")
 # plt.scatter(TY[:,0], TY[:,1])
 # plt.scatter(borderpoints[:,0], borderpoints[:,1])
 # plt.show()
