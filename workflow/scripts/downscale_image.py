@@ -1,6 +1,6 @@
 from wsireg.writers.ome_tiff_writer import OmeTiffWriter
 from wsireg.reg_transforms.reg_transform_seq import RegTransform, RegTransformSeq
-from wsireg.parameter_maps.transformations import BASE_RIG_TFORM
+from wsireg.parameter_maps.transformations import BASE_AFF_TFORM
 from wsireg.reg_images.loader import reg_image_loader
 from image_utils import get_image_shape 
 from utils import setNThreads, snakeMakeMock
@@ -24,6 +24,8 @@ setNThreads(snakemake.threads)
 # params 
 input_spacing = snakemake.params["input_spacing"]
 output_spacing = snakemake.params["output_spacing"]
+scale_factor = input_spacing / output_spacing
+
 # inputs
 img_file = snakemake.input["postIMS"]
 # outputs
@@ -36,10 +38,13 @@ logging.info("Create Transformation")
 imgshape = get_image_shape(img_file)
 
 # setup transformation sequence
-empty_transform = BASE_RIG_TFORM
+empty_transform = BASE_AFF_TFORM.copy()
 empty_transform['Spacing'] = (str(input_spacing),str(input_spacing))
 empty_transform['Size'] = (imgshape[1], imgshape[0])
+empty_transform['TransformParameters'] = (1/scale_factor,0,0,1/scale_factor,0,0)
 rt = RegTransform(empty_transform)
+rt.output_size = (int(imgshape[1]*scale_factor), int(imgshape[0]*scale_factor))
+rt.output_spacing = (output_spacing, output_spacing)
 rts = RegTransformSeq(rt,[0])
 
 logging.info("Transform and Save")
