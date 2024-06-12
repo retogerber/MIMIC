@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from snakemake.utils import validate
 import snakemake.workflow
+import json
 
 def read_sample_metadata(filename="config/sample_metadata.csv", validator=snakemake.workflow.srcdir("../sample_metadata.schema.yaml")):
     if not os.path.isfile(validator):
@@ -248,5 +249,16 @@ def n_threads_for_register_IMS_to_postIMS_single_core_1(wildcards, sample_metada
     )
     return int(min([n_threads_max,max([IMS_to_postIMS_n_splits/2,4])]))
 
+
+def is_linear_transform(transform):
+    tr =json.load(open(transform))
+    trls = list()
+    for k in tr.keys():
+        for i in range(len(tr[k])):
+            trls.append(tr[k][i]["Transform"][0])
+    if "BSplineTransform" in trls:
+        return False
+    else:
+        return True
 
 

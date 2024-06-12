@@ -12,7 +12,7 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake.params["input_spacing"] = 0.22537
     snakemake.params["output_spacing"] = 0.22537
     snakemake.params["transform_target"] = "preIMS"
-    snakemake.input["postIMC_to_postIMS_transform"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/registrations/postIMC_to_postIMS/A1/test_split_pre_A1-postIMC_to_postIMS_transformations.json"
+    snakemake.input["postIMC_to_postIMS_transform"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/registrations/postIMC_to_postIMS/test_combined-postIMC_to_postIMS_transformations.json"
     snakemake.input['IMC_location_on_postIMC'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_postIMC_A1.geojson"
     if bool(getattr(sys, 'ps1', sys.flags.interactive)):
         raise Exception("Running in interactive mode!!")
@@ -44,19 +44,30 @@ rtsn.set_output_spacing((float(output_spacing),float(output_spacing)))
 # if transform_target != "postIMS":
 rtls = rtsn.reg_transforms
 logging.info(f"Number of transforms: {len(rtls)}")
-# len=4 : direct registration
-# len=6 : additional separate registration between preIMC and preIMS
-assert(len(rtls)==6 or len(rtls)==4)
-is_split_transform = len(rtls)==6
+all_linear = np.array([r.is_linear for r in rtls]).all()
+if all_linear:
+    assert(len(rtls)==5 or len(rtls)==3)
+    is_split_transform = len(rtls)==5
+else:
+    # len=4 : direct registration
+    # len=6 : additional separate registration between preIMC and preIMS
+    assert(len(rtls)==6 or len(rtls)==4)
+    is_split_transform = len(rtls)==6
 
 
 logging.info("Setup transformation for image")
 if transform_target == "preIMC":
     n_end = 1
 elif transform_target == "preIMS":
-    n_end = 5 if is_split_transform else 3
+    if all_linear:
+        n_end = 4 if is_split_transform else 2
+    else:
+        n_end = 5 if is_split_transform else 3
 elif transform_target == "postIMS":
-    n_end = 6 if is_split_transform else 4
+    if all_linear:
+        n_end = 5 if is_split_transform else 3
+    else:
+        n_end = 6 if is_split_transform else 4
 else:
     raise ValueError("Unknown transform target: " + transform_target)
 

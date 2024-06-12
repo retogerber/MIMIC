@@ -75,6 +75,7 @@ logging.info("Create bounding box of preIMS tissue")
 imgshape = get_image_shape(preIMS_file)
 logging.info(f"preIMS shape: {imgshape}")
 corebboxls = list()
+preIMSstitch = np.zeros(imgshape[:2])
 for i,bb1 in enumerate(imcbboxls):
     logging.info(f"\t{imc_mask_files[i]}")
     logging.info(f"\t\t{bb1}")
@@ -88,8 +89,9 @@ for i,bb1 in enumerate(imcbboxls):
     logging.info(f"\t\t{bbn}")
 
     img_mask = extract_mask(preIMS_file, bbn, session=rembg_session, rescale=resolution/4, is_postIMS = False)[0,:,:]
-    wn = int(img_mask.shape[0]*(4/resolution))
-    hn = int(img_mask.shape[1]*(4/resolution))
+    img_mask = preprocess_mask(img_mask,1)
+    wn=bbn[2]-bbn[0]
+    hn=bbn[3]-bbn[1]
     img_mask = cv2.resize(img_mask.astype(np.uint8), (hn,wn), interpolation=cv2.INTER_NEAREST)
 
     bm = cv2.boundingRect(img_mask)
@@ -127,7 +129,7 @@ for i,bb1 in enumerate(imcbboxls):
         bbnn = (bbnn*resolution).astype(int)
     logging.info(f"\t\t{bbnn}")
     corebboxls.append(bbnn)
-
+    preIMSstitch[bbn[0]:bbn[2],bbn[1]:bbn[3]] = np.max(np.stack([preIMSstitch[bbn[0]:bbn[2],bbn[1]:bbn[3]],img_mask], axis=0),axis=0)
 
 
 # def extract_mask(img: np.ndarray, session, rescale: float):
@@ -216,15 +218,44 @@ for i in inds:
     # to gray scale, rescale
     saminp = convert_and_scale_image(saminp, resolution)
     saminp = np.stack([saminp, saminp, saminp], axis=2)
-    # run SAM segmentation model
-    postIMSmasks, scores1 = sam_core(saminp, sam)
-    # postprocess
-    postIMSmasks = np.stack([preprocess_mask(msk,1) for msk in postIMSmasks ])
-    tmpareas = np.array([np.sum(im) for im in postIMSmasks])
+
     imcarea = (imcbboxls[i][2]-imcbboxls[i][0])*(imcbboxls[i][3]-imcbboxls[i][1])
+    pts = np.array([
+        [imcbboxls[i][0]-corebboxls[i][0],imcbboxls[i][1]-corebboxls[i][1]],
+        [imcbboxls[i][2]-corebboxls[i][0],imcbboxls[i][1]-corebboxls[i][1]],
+        [imcbboxls[i][2]-corebboxls[i][0],imcbboxls[i][3]-corebboxls[i][1]],
+        [imcbboxls[i][0]-corebboxls[i][0],imcbboxls[i][3]-corebboxls[i][1]],
+        [((imcbboxls[i][2]-corebboxls[i][0])-(imcbboxls[i][0]-corebboxls[i][0]))//2,((imcbboxls[i][3]-corebboxls[i][1])-(imcbboxls[i][1]-corebboxls[i][1]))//2],
+    ])
+    postIMSmasks, scores1 = sam_core(saminp, sam, pts)
+    postIMSmasks = np.stack([preprocess_mask(msk,1) for msk in postIMSmasks ])
+    tmpperimeters = np.array([skimage.measure.regionprops(im)[0].perimeter for im in postIMSmasks ])
+    tmpareas = np.array([np.sum(im) for im in postIMSmasks])
+    tmpcircularity = np.array([4*np.pi*a/p**2 for a,p in zip(tmpareas,tmpperimeters)])
+    thr1=(np.max([postIMSmasks.shape[1], postIMSmasks.shape[2]])/2)**2*np.pi
     tmpinds = np.array(list(range(3)))
-    tmpinds = tmpinds[tmpareas > imcarea*1.02]
-    tmpind = tmpinds[scores1[tmpinds]==np.max(scores1[tmpinds])]
+    tmpinds = tmpinds[np.logical_and(tmpareas > imcarea*1.02, tmpareas < thr1)]
+    logging.info(f"\t areas: {tmpareas}")
+    logging.info(f"\t scores: {scores1}")
+    logging.info(f"\t tmpinds: {tmpinds}")
+
+    if len(tmpinds) == 0:
+        logging.info(f"Could not find a mask for {os.path.basename(imc_mask_files[i])}")
+         # run SAM segmentation model
+        postIMSmasks, scores1 = sam_core(saminp, sam)
+        # postprocess
+        postIMSmasks = np.stack([preprocess_mask(msk,1) for msk in postIMSmasks ])
+        tmpareas = np.array([np.sum(im) for im in postIMSmasks])
+        tmpinds = np.array(list(range(3)))
+        tmpinds = tmpinds[np.logical_and(tmpareas > imcarea*1.02, tmpareas < thr1)]
+
+        logging.info(f"\t areas: {tmpareas}")
+        logging.info(f"\t scores: {scores1}")
+        logging.info(f"\t tmpinds: {tmpinds}")
+
+    assert len(tmpinds) > 0
+    harmonic_scores = np.array([a*b for a,b in zip(scores1[tmpinds],tmpcircularity[tmpinds])])
+    tmpind = tmpinds[harmonic_scores==np.max(harmonic_scores)]
     tmpimg = postIMSmasks[tmpind,:,:][0,:,:].astype(np.uint8)*255
     sam_mask_areas.append(np.sum(tmpimg>0))
     wn, hn = postIMSstitch[xmin:xmax,ymin:ymax].shape
@@ -238,6 +269,9 @@ for i in inds:
     logging.info(f"\tshape 2: {tmpimg.shape}")
     postIMSstitch[xmin:xmax,ymin:ymax] = np.max(np.stack([postIMSstitch[xmin:xmax,ymin:ymax],tmpimg], axis=0),axis=0)
 
+# TODO: add options to use preIMS only or maximum of preIMS and postIMS
+if False:
+    postIMSstitch = np.max(np.stack([postIMSstitch,preIMSstitch],axis=0),axis=0)
 postIMSsamr = postIMSstitch>0
 
 logging.info("Check mask")

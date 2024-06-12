@@ -68,6 +68,12 @@ sed -i "s,SEDVAR_POSTIMC_FILE,${postIMC_file},g" "${out_config_file}"
 sed -i "s,SEDVAR_OUTPUT_DIR,${outdir},g" "${out_config_file}"
 sed -i "s,SEDVAR_MICROSCOPY_PIXELSIZE,${microscopy_pixelsize},g" "${out_config_file}"
 
+# if preIMC and preIMS are the same, do linear registration only 
+md5preIMC=($(md5sum ${preIMC_file} ))
+md5preIMS=($(md5sum ${preIMS_file} ))
 
+if [ "${md5preIMC[0]}" == "${md5preIMS[0]}" ]; then
+    sed -i "/ - nl/d" "${out_config_file}"
+fi
 
 

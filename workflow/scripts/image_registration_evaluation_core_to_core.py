@@ -414,7 +414,15 @@ if tc:
     params.loMethod = cv2.LOCAL_OPTIM_GC
     params.loIterations = 100
     # params.loSampleSize = 20 
-    M, mask = cv2.estimateAffine2D(kpf1complfilt, kpf2complfilt, params)
+    try:
+        M, mask = cv2.estimateAffine2D(kpf1complfilt, kpf2complfilt, params)
+    except:
+        if len(kpf1complfilt) > 10000:
+            np.random.seed(1234)
+            inds = np.random.permutation(np.arange(len(kpf1complfilt)))[:10000]
+        else:
+            inds = np.arange(len(kpf1complfilt))
+        M, mask = cv2.estimateAffine2D(kpf1complfilt[inds], kpf2complfilt[inds], params)
     mask=mask.ravel()
 
 mean_error = np.nan if not tc else np.mean(dists_realfilt)

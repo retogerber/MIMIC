@@ -27,6 +27,8 @@ rule prepare_register_postIMC_to_postIMS:
 
 rule register_postIMC_to_postIMS:
     threads: 32
+    resources:
+        mem_mb=200000,
     input:
         postIMS="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
         preIMS="results/{project_name}/data/preIMS/{project_name}_preIMS.ome.tiff",
@@ -166,6 +168,8 @@ rule prepare_register_preIMC_to_preIMS:
 
 rule register_preIMC_to_preIMS:
     threads: 32
+    resources:
+        mem_mb=200000,
     input:
         preIMS_mask="results/{project_name}/data/preIMS_location/{project_name}_reg_mask_on_preIMS_{part}.geojson",
         preIMC_mask="results/{project_name}/data/preIMC_location/{project_name}_reg_mask_on_preIMC_{part}.geojson",
