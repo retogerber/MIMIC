@@ -453,8 +453,14 @@ def find_w(img_median: np.ndarray, img_convolved: np.ndarray, mask1: np.ndarray,
     centsredlssort = [centsredls[i] for i in inds]
 
     from functools import reduce
-    centsred = reduce(combine_points, centsredlssort)
-    centsred = filter_points(centsred)
+    if len(centsredlssort)>0:
+        if len(centsredlssort[0])>0:
+            centsred = reduce(combine_points, centsredlssort)
+            centsred = filter_points(centsred)
+        else:
+            centsred = centsredlssort[0]
+    else:
+        centsred = np.zeros((0,0))
 
     return max_score, threshold, w, centsred
 
@@ -511,7 +517,30 @@ logging.info("Max score (inner): "+str(max_score_inner))
 logging.info("Corresponding threshold (inner): "+str(threshold_inner))
 logging.info("Corresponding weight (inner): "+str(w_inner))
 
-centsred = combine_points(centsred_outer, centsred_inner)
+assert centsred_outer.shape[0] > 0 or centsred_inner.shape[0] > 0
+if centsred_outer.shape[0] == 0:
+    logging.info(f"No outer points detected, rerun with new mask from convex hull of inner points")
+    import skimage.morphology
+
+    centsred_inner_scaled = centsred_inner*stepsize/resolution
+    cropped_postIMSrcut = np.zeros(postIMSmpre.shape, dtype=bool)
+    for i in range(centsred_inner_scaled.shape[0]):
+        cropped_postIMSrcut[int(centsred_inner_scaled[i,0]),int(centsred_inner_scaled[i,1])]=True
+    cropped_postIMSrcut = skimage.morphology.convex_hull_image(cropped_postIMSrcut)
+    new_postIMSringmask = create_ring_mask(cropped_postIMSrcut, (1/resolution)*stepsize*imspixel_outscale, (1/resolution)*stepsize*imspixel_inscale)
+    new_postIMSoutermask_small = cv2.morphologyEx(src=cropped_postIMSrcut.astype(np.uint8)*255, op = cv2.MORPH_DILATE, kernel = skimage.morphology.square(2*int((1/resolution)*stepsize))).astype(bool)
+    max_score_outer, threshold_outer, w_outer, centsred_outer = find_w(postIMSmpre, tmp2, new_postIMSoutermask_small, new_postIMSringmask, ws, threads=threads)
+    del new_postIMSringmask, new_postIMSoutermask_small, cropped_postIMSrcut
+
+    if centsred_outer.shape[0] == 0:
+        logging.info("No outer points detected, using inner points")
+        centsred = centsred_inner
+    else:
+        centsred = combine_points(centsred_outer, centsred_inner)
+elif centsred_inner.shape[0] == 0:
+    centsred = centsred_outer
+else:
+    centsred = combine_points(centsred_outer, centsred_inner)
 centsred = filter_points(centsred)
 
 # fig = plot_plotly_scatter_image(tmp2, centsred*stepsize/resolution)
@@ -689,7 +718,7 @@ fig.savefig(tmpfilename)
 logging.info("Create postIMS boundary from observed points")
 # create new ringmask based on found points
 postIMSn = np.zeros(postIMSmpre.shape, dtype=np.uint8)
-hull = cv2.convexHull((centsred / resolution * stepsize).astype(int).reshape(-1, 1, 2))
+hull = cv2.convexHull((np.flip(centsred, axis=1) / resolution * stepsize).astype(int).reshape(-1, 1, 2))
 postIMSn = cv2.drawContours(postIMSn, [hull], 0, (1), thickness=cv2.FILLED)
 postIMSn = postIMSn.astype(bool)
 postIMSnringmask = create_ring_mask(postIMSn, imspixel_outscale*stepsize/resolution, imspixel_inscale*stepsize/resolution)
@@ -784,6 +813,8 @@ def score_init_transform(tz):
     # calculate distances and matches 
     imz_distances, match_indices = kdt.query(tmpimzrot, k=1, return_distance=True)
     bool_ind = imz_distances<1
+    if np.sum(bool_ind)<3:
+        return [0,0,pconts,999999,999999,xsh,ysh,rot]
     a=np.stack([
         cents_indices[match_indices[bool_ind]],
         imz_indices[bool_ind[:,0]],

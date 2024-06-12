@@ -1,4 +1,5 @@
 import SimpleITK as sitk
+import numpy as np
 from wsireg.writers.ome_tiff_writer import OmeTiffWriter
 from wsireg.reg_transforms.reg_transform import RegTransform
 from wsireg.reg_transforms.reg_transform_seq import RegTransformSeq
@@ -86,13 +87,25 @@ rtsn=RegTransformSeq(transform_file_preIMC_to_postIMS)
 rtsn.set_output_spacing((float(output_spacing),float(output_spacing)))
 
 if transform_target != "postIMS":
+
     rtls = rtsn.reg_transforms
-    is_split_transform = len(rtls)==5
+    all_linear = np.array([r.is_linear for r in rtls]).all()
+    if all_linear:
+        assert(len(rtls)==4 or len(rtls)==2)
+        is_split_transform = len(rtls)==4
+    else:
+        # len=4 : direct registration
+        # len=6 : additional separate registration between preIMC and preIMS
+        assert(len(rtls)==5 or len(rtls)==3)
+        is_split_transform = len(rtls)==5
 
     if transform_target == "preIMC":
         n_end = 0
     elif transform_target == "preIMS":
-        n_end = 4 if is_split_transform else 2
+        if all_linear:
+            n_end = 3 if is_split_transform else 1
+        else:
+            n_end = 4 if is_split_transform else 2
     else:
         raise ValueError("Unknown transform target: " + transform_target)
 
