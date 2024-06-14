@@ -48,6 +48,10 @@ properties:
     type: string
     pattern: (.imzML$)
     description: name of imzML file
+  postIMSpreIMSmask:
+    type: boolean
+    default: false 
+    description: should postIMS and preIMS mask be used for registration
   IMS_rotation_angle:
     type: number
     default: 0

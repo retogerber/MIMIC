@@ -1,10 +1,10 @@
 import pandas as pd
 import numpy as np
 from snakemake.utils import validate
-import snakemake.workflow
 import json
+import os
 
-def read_sample_metadata(filename="config/sample_metadata.csv", validator=snakemake.workflow.srcdir("../sample_metadata.schema.yaml")):
+def read_sample_metadata(filename="config/sample_metadata.csv", validator=os.path.abspath("workflow/sample_metadata.schema.yaml")):
     if not os.path.isfile(validator):
         sys.exit(f"Validator file {validator} not found!")
 
@@ -262,3 +262,17 @@ def is_linear_transform(transform):
         return True
 
 
+def decide_postIMSpreIMSmask(wildcards, type):
+    assert type in ["preIMS","postIMS"]
+    postIMSpreIMSmask=get_column_entry_from_metadata(
+        wildcards.project_name,
+        "postIMSpreIMSmask",
+        "project_name",
+        read_sample_metadata(config["sample_metadata"]),
+    )
+    if postIMSpreIMSmask:
+        filename = f"results/{wildcards.project_name}/data/{type}/{wildcards.project_name}_{type}_mask_for_reg.ome.tiff"
+    else:
+        filename = f"results/{wildcards.project_name}/data/{type}/{wildcards.project_name}_{type}.ome.tiff"
+        filename = ""
+    return filename
