@@ -94,7 +94,7 @@ fi
 if [ "$preIMSmask_file" != "$preIMS_file" ]; then
     echo "add preIMS mask"
     echo "change mask path in config file"
-    preIMSmask=$preIMSmask_file results/Misc/yq -i '.modalities.preIMS.mask = strenv(postIMSmask)' "${out_config_file}"
+    preIMSmask=$preIMSmask_file results/Misc/yq -i '.modalities.preIMS.mask = strenv(preIMSmask)' "${out_config_file}"
 fi
 
 
