@@ -261,7 +261,6 @@ def is_linear_transform(transform):
     else:
         return True
 
-
 def decide_postIMSpreIMSmask(wildcards, type):
     assert type in ["preIMS","postIMS"]
     postIMSpreIMSmask=get_column_entry_from_metadata(
@@ -270,9 +269,15 @@ def decide_postIMSpreIMSmask(wildcards, type):
         "project_name",
         read_sample_metadata(config["sample_metadata"]),
     )
-    if postIMSpreIMSmask:
-        filename = f"results/{wildcards.project_name}/data/{type}/{wildcards.project_name}_{type}_mask_for_reg.ome.tiff"
+    assert postIMSpreIMSmask in ["bbox","segment"]
+    table_file = checkpoints.create_postIMSpreIMS_mask_table.get(project_name=wildcards.project_name).output['table']
+    df = pd.read_csv(table_file) 
+    geojson_exists=df.loc[df["type"] == type]["exists"].tolist()[0]!=0
+    if geojson_exists:
+        filename=f"results/{wildcards.project_name}/data/{type}/{wildcards.project_name}_{type}_mask_for_reg_geojson.ome.tiff",
+    elif postIMSpreIMSmask == "segment" and not geojson_exists:
+        filename=f"results/{wildcards.project_name}/data/{type}/{wildcards.project_name}_{type}_mask_for_reg_nogeojson.ome.tiff",
     else:
         filename = f"results/{wildcards.project_name}/data/{type}/{wildcards.project_name}_{type}.ome.tiff"
-        filename = ""
     return filename
+

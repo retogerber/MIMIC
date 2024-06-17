@@ -7,12 +7,10 @@ rule download_yq:
     # container:
     #    config["container"]
     shell:
-        "cd results/Misc && wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O yq && chmod +x yq > ../../{log.stdout} 2> ../../{log.stderr}"
-
-    
+        "cd results/Misc && wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O > ../../{log.stdout} 2> ../../{log.stderr} yq && chmod +x yq >> ../../{log.stdout} 2>> ../../{log.stderr}"
 
 
-rule extract_microscopy_mask_from_registration_postIMS:
+rule extract_microscopy_mask_from_registration_postIMS_nogeojson:
     params:
         microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
@@ -20,16 +18,22 @@ rule extract_microscopy_mask_from_registration_postIMS:
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
+        mask_type=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "postIMSpreIMSmask",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
     threads: 16
     input:
         postIMS="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
     output:
-        postIMSmask="results/{project_name}/data/postIMS/{project_name}_postIMS_mask_for_reg.ome.tiff",
+        postIMSmask="results/{project_name}/data/postIMS/{project_name}_postIMS_mask_for_reg_nogeojson.ome.tiff",
     log:
-        stdout="logs/extract_microscopy_mask_from_registration_postIMS/{project_name}.stdout",
-        stderr="logs/extract_microscopy_mask_from_registration_postIMS/{project_name}.stderr",
+        stdout="logs/extract_microscopy_mask_from_registration_postIMS_nogeojson/{project_name}.stdout",
+        stderr="logs/extract_microscopy_mask_from_registration_postIMS_nogeojson/{project_name}.stderr",
     benchmark:
-        "benchmarks/extract_microscopy_mask_from_registration_postIMS/{project_name}.txt",
+        "benchmarks/extract_microscopy_mask_from_registration_postIMS_nogeojson/{project_name}.txt",
     # conda:
     #    "env/image_registration_wsireg.yaml"
     container:
@@ -37,12 +41,54 @@ rule extract_microscopy_mask_from_registration_postIMS:
     script:
         "scripts/TMA_mask_from_image.py"
 
-use rule extract_microscopy_mask_from_registration_postIMS as extract_microscopy_mask_from_registration_preIMS with:
+use rule extract_microscopy_mask_from_registration_postIMS_nogeojson as extract_microscopy_mask_from_registration_preIMS_nogeojson with:
     input:
         postIMS="results/{project_name}/data/preIMS/{project_name}_preIMS.ome.tiff",
-        sam_weights = "results/Misc/sam_vit_h_4b8939.pth",
     output:
-        postIMSmask="results/{project_name}/data/preIMS/{project_name}_preIMS_mask_for_reg.ome.tiff",
+        postIMSmask="results/{project_name}/data/preIMS/{project_name}_preIMS_mask_for_reg_nogeojson.ome.tiff",
+    log:
+        stdout="logs/extract_microscopy_mask_from_registration_preIMS_nogeojson/{project_name}.stdout",
+        stderr="logs/extract_microscopy_mask_from_registration_preIMS_nogeojson/{project_name}.stderr",
+    benchmark:
+        "benchmarks/extract_microscopy_mask_from_registration_preIMS_nogeojson/{project_name}.txt",
+
+use rule extract_microscopy_mask_from_registration_postIMS_nogeojson as extract_microscopy_mask_from_registration_postIMS_geojson with:
+    input:
+        postIMS="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
+        TMA_location="results/{project_name}/data/TMA_location/{project_name}_TMA_mask_on_postIMS.geojson",
+    output:
+        postIMSmask="results/{project_name}/data/postIMS/{project_name}_postIMS_mask_for_reg_geojson.ome.tiff",
+    log:
+        stdout="logs/extract_microscopy_mask_from_registration_postIMS_nogeojson/{project_name}.stdout",
+        stderr="logs/extract_microscopy_mask_from_registration_postIMS_nogeojson/{project_name}.stderr",
+    benchmark:
+        "benchmarks/extract_microscopy_mask_from_registration_postIMS_nogeojson/{project_name}.txt",
+
+
+use rule extract_microscopy_mask_from_registration_postIMS_nogeojson as extract_microscopy_mask_from_registration_preIMS_geojson with:
+    input:
+        postIMS="results/{project_name}/data/preIMS/{project_name}_preIMS.ome.tiff",
+        TMA_location="results/{project_name}/data/TMA_location/{project_name}_TMA_mask_on_preIMS.geojson",
+    output:
+        postIMSmask="results/{project_name}/data/preIMS/{project_name}_preIMS_mask_for_reg_geojson.ome.tiff",
+    log:
+        stdout="logs/extract_microscopy_mask_from_registration_preIMS_nogeojson/{project_name}.stdout",
+        stderr="logs/extract_microscopy_mask_from_registration_preIMS_nogeojson/{project_name}.stderr",
+    benchmark:
+        "benchmarks/extract_microscopy_mask_from_registration_preIMS_nogeojson/{project_name}.txt",
+
+checkpoint create_postIMSpreIMS_mask_table:
+    input:
+        TMA_geojson_dir="results/{project_name}/data/TMA_location",
+    output:
+        table="results/{project_name}/data/TMA_location/use_which_postIMSpreIMS_geojsons.csv",
+    log:
+        stdout="logs/create_postIMSpreIMS_mask_table/{project_name}.stdout",
+        stderr="logs/create_postIMSpreIMS_mask_table/{project_name}.stderr",
+    container:
+        config["container"]
+    shell:
+        "workflow/scripts/create_postIMSpreIMSmask_geojson_presence.sh -i {input.TMA_geojson_dir} -o {output.table}  > {log.stdout} 2> {log.stderr} "
 
 
 rule prepare_register_postIMC_to_postIMS:
@@ -65,8 +111,8 @@ rule prepare_register_postIMC_to_postIMS:
         template_file="config/template_postIMC_to_postIMS-wsireg-config.yaml",
         postIMS="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
         postIMSmask=lambda wildcards: decide_postIMSpreIMSmask(wildcards, "postIMS"),
-        preIMSmask=lambda wildcards: decide_postIMSpreIMSmask(wildcards, "preIMS"),
         preIMS="results/{project_name}/data/preIMS/{project_name}_preIMS.ome.tiff",
+        preIMSmask=lambda wildcards: decide_postIMSpreIMSmask(wildcards, "preIMS"),
         preIMC="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
         postIMC="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff",
     output:
@@ -77,7 +123,7 @@ rule prepare_register_postIMC_to_postIMS:
     container:
         config["container"]
     shell:
-        "workflow/scripts/prepare_postIMC_to_postIMS_wsireg_config.sh -p {wildcards.project_name} -a {input.postIMS} -b {input.preIMS} -c {input.preIMC} -d {input.postIMC} -m {params.postIMSpreIMSmask} -s {params.microscopy_pixelsize} -t {input.template_file} -o results/{wildcards.project_name}/registrations/postIMC_to_postIMS > {log.stdout} 2> {log.stderr}"
+        "workflow/scripts/prepare_postIMC_to_postIMS_wsireg_config.sh -p {wildcards.project_name} -a {input.postIMS} -b {input.preIMS} -c {input.preIMC} -d {input.postIMC} -e {input.postIMSmask} -f {input.preIMSmask} -s {params.microscopy_pixelsize} -t {input.template_file} -o results/{wildcards.project_name}/registrations/postIMC_to_postIMS > {log.stdout} 2> {log.stderr}"
 
 
 rule register_postIMC_to_postIMS:
