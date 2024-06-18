@@ -141,9 +141,9 @@ rule register_postIMC_to_postIMS:
     output:
         preIMS_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMS_to_postIMS_transformations.json",
         preIMS_to_postIMS_image="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMS_to_postIMS_registered.ome.tiff",
-        preIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMC_to_postIMS_transformations.json",
+        preIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMC_to_postIMS_transformations_tmp.json",
         preIMC_to_postIMS_image="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMC_to_postIMS_registered.ome.tiff",
-        postIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_transformations.json",
+        postIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_transformations_tmp.json",
         postIMC_to_postIMS_image="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_registered.ome.tiff",
         imcache_dir=directory(
             "results/{project_name}/registrations/postIMC_to_postIMS/.imcache_{project_name}"
@@ -158,28 +158,33 @@ rule register_postIMC_to_postIMS:
     container:
         config["container"]
     shell:
-        "wsireg2d {input.wsireg_config}  > {log.stdout} 2> {log.stderr}"
+        "workflow/scripts/run_postIMC_to_postIMS_registration.sh -a {input.wsireg_config} -b {output.preIMC_to_postIMS_transform} -c {output.postIMC_to_postIMS_transform}  > {log.stdout} 2> {log.stderr}"
 
 
 rule postprocess_register_postIMC_to_postIMS:
     threads: 1
     input:
+        yq="results/Misc/yq",
         preIMS_to_postIMS_image="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMS_to_postIMS_registered.ome.tiff",
         preIMC_to_postIMS_image="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMC_to_postIMS_registered.ome.tiff",
         postIMC_to_postIMS_image="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_registered.ome.tiff",
+        preIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMC_to_postIMS_transformations_tmp.json",
+        postIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_transformations_tmp.json",
+        preIMS="results/{project_name}/data/preIMS/{project_name}_preIMS.ome.tiff",
+        preIMC="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
     output:
         preIMS_image="results/{project_name}/data/preIMS/{project_name}-preIMS_to_postIMS_registered.ome.tiff",
         preIMC_image="results/{project_name}/data/preIMC/{project_name}-preIMC_to_postIMS_registered.ome.tiff",
         postIMC_image="results/{project_name}/data/postIMC/{project_name}-postIMC_to_postIMS_registered.ome.tiff",
+        preIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMC_to_postIMS_transformations.json",
+        postIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_transformations.json",
     log:
         stdout="logs/postprocess_register_postIMC_to_postIMS/{project_name}.stdout",
         stderr="logs/postprocess_register_postIMC_to_postIMS/{project_name}.stderr",
     container:
         config["container"]
     shell:
-        "ln -sr -T {input.preIMS_to_postIMS_image} {output.preIMS_image} > {log.stdout} 2> {log.stderr} &&"
-        " ln -sr -T {input.preIMC_to_postIMS_image} {output.preIMC_image} >> {log.stdout} 2>> {log.stderr} &&"
-        " ln -sr -T {input.postIMC_to_postIMS_image} {output.postIMC_image} >> {log.stdout} 2>> {log.stderr}"
+        "workflow/scripts/postprocess_registration_postIMC_to_postIMS.sh -a {input.preIMS_to_postIMS_image} -b {input.preIMC_to_postIMS_image} -c {input.postIMC_to_postIMS_image} -d {input.preIMC_to_postIMS_transform} -e {input.postIMC_to_postIMS_transform} -f {input.preIMS} -g {input.preIMC} -h {output.preIMS_image} -i {output.preIMC_image} -j {output.postIMC_image} -k {output.preIMC_to_postIMS_transform} -l {output.postIMC_to_postIMS_transform} > {log.stdout} 2> {log.stderr}"
 
 
 rule split_preIMC_location_geojson:
