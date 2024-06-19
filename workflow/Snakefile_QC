@@ -459,7 +459,7 @@ rule image_registration_evaluation_transform_regions_SAM_postIMC_to_preIMC:
 
 use rule image_registration_evaluation_transform_regions_SAM_postIMC_to_preIMC as image_registration_evaluation_transform_regions_SAM_preIMC_to_preIMS with:
     resources:
-        mem_mb=lambda wc, input: 200000 if is_linear_transform(input.transform_file) else 20000,
+        mem_mb=lambda wc, input: 20000 if is_linear_transform(input.transform_file) else 200000,
     params:
         input_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
@@ -536,7 +536,7 @@ use rule image_registration_evaluation_transform_regions_SAM_postIMC_to_preIMC a
 
 use rule image_registration_evaluation_transform_regions_SAM_postIMC_to_preIMC as image_registration_evaluation_transform_regions_SAM_postIMC_to_postIMS with:
     resources:
-        mem_mb=lambda wc, input: 200000 if is_linear_transform(input.transform_file) else 20000,
+        mem_mb=lambda wc, input: 20000 if is_linear_transform(input.transform_file) else 200000,
     params:
         input_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,

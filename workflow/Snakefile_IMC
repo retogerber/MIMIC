@@ -124,7 +124,7 @@ use rule transform_IMC_location_to_preIMC as transform_IMC_location_to_preIMS wi
         ),
         transform_target="preIMS",
     resources:
-        mem_mb=lambda wc, input: 100000 if is_linear_transform(input.postIMC_to_postIMS_transform) else 10000,
+        mem_mb=lambda wc, input: 10000 if is_linear_transform(input.postIMC_to_postIMS_transform) else 100000,
     input:
         IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_registered_IMC_mask_on_postIMC_{core}.geojson",
         postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
@@ -151,7 +151,7 @@ use rule transform_IMC_location_to_preIMC as transform_IMC_location_to_postIMS w
         ),
         transform_target="postIMS",
     resources:
-        mem_mb=lambda wc, input: 100000 if is_linear_transform(input.postIMC_to_postIMS_transform) else 10000,
+        mem_mb=lambda wc, input: 10000 if is_linear_transform(input.postIMC_to_postIMS_transform) else 100000,
     input:
         IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_registered_IMC_mask_on_postIMC_{core}.geojson",
         postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
@@ -296,7 +296,7 @@ rule precise_register_IMC_to_preIMC:
 rule transform_IMCaggr_to_postIMS:
     threads: 16
     resources:
-        mem_mb=lambda wc, input: 40000 if is_linear_transform(input.preIMC_to_postIMS_transform) else 10000,
+        mem_mb=lambda wc, input: 10000 if is_linear_transform(input.preIMC_to_postIMS_transform) else 40000,
     params:
         input_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
@@ -334,7 +334,7 @@ rule transform_IMCaggr_to_postIMS:
 rule transform_IMCmask_to_postIMS:
     threads: 16
     resources:
-        mem_mb=lambda wc, input: 75000 if is_linear_transform(input.preIMC_to_postIMS_transform) else 10000,
+        mem_mb=lambda wc, input: 10000 if is_linear_transform(input.preIMC_to_postIMS_transform) else 75000,
     params:
         input_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,

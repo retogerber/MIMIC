@@ -129,7 +129,7 @@ logging.info(f"imcbbox_outer: {imcbbox_outer}")
 
 logging.info(f"Detect postIMS grid")
 img = microscopy_image_2[imcbbox_outer[0]:imcbbox_outer[2],imcbbox_outer[1]:imcbbox_outer[3]].copy()
-mask_2_on_2 = cv2.resize(mask_2, (microscopy_image_2.shape[1], microscopy_image_2.shape[0]), interpolation=cv2.INTER_NEAREST)
+mask_2_on_2 = cv2.resize(mask_2, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST)
 cv2.morphologyEx(mask_2_on_2, cv2.MORPH_CLOSE, np.ones((5,5),np.uint8),mask_2_on_2, iterations=1)
 img[mask_2_on_2==0]=0
 out = subtract_postIMS_grid(img)
