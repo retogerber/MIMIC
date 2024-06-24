@@ -9,6 +9,7 @@ output:
     toc: true
     toc_float: false 
     toc_collapsed: true
+    css: "style.css"
 toc_depth: 3
 number_sections: true
 theme: lumen
@@ -24,6 +25,10 @@ editor_options:
 }
 </style>
  -->
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+```
 
 ```{r}
 suppressPackageStartupMessages({
@@ -74,6 +79,7 @@ gif_postIMC_preIMC <- sapply(snakemake@input[["gif_postIMC_preIMC"]], function(s
 gif_postIMC_postIMS <- sapply(snakemake@input[["gif_postIMC_postIMS"]], function(s) file.path(basedir, s))
 gif_preIMC_preIMS <- sapply(snakemake@input[["gif_preIMC_preIMS"]], function(s) file.path(basedir, s))
 gif_preIMS_postIMS <- sapply(snakemake@input[["gif_preIMS_postIMS"]], function(s) file.path(basedir, s))
+IMC_location_extraction_image <- sapply(snakemake@input[["IMC_location_extraction_image"]], function(s) file.path(basedir, s))
 ```
 
 
@@ -1068,5 +1074,124 @@ filenames <- gif_postIMC_preIMC
 img_height <- 500
 ```
 ```{r plot_images_postIMC_to_preIMC_gif, ref.label='plot_images', results='asis'}
+```
+
+
+
+<!-- Source of the zoom box: https://www.w3schools.com/howto/howto_js_image_zoom.asp -->
+
+<style>
+* {box-sizing: border-box;}
+
+.img-zoom-container {
+  position: relative;
+  display: flex;
+}
+
+.img-zoom-lens {
+  position: absolute;
+  border: 1px solid #d4d4d4;
+  /*set the size of the lens:*/
+  width: 40px;
+  height: 40px;
+}
+
+.img-zoom-result {
+  border: 1px solid #d4d4d4;
+  /*set the size of the result div:*/
+  width: 500px;
+  height: 500px;
+}
+</style>
+<script>
+function imageZoom(imgID, resultID) {
+  var img, lens, result, cx, cy;
+  img = document.getElementById(imgID);
+  result = document.getElementById(resultID);
+  /*create lens:*/
+  lens = document.createElement("DIV");
+  lens.setAttribute("class", "img-zoom-lens");
+  /*insert lens:*/
+  img.parentElement.insertBefore(lens, img);
+  /*calculate the ratio between result DIV and lens:*/
+  cx = result.offsetWidth / lens.offsetWidth;
+  cy = result.offsetHeight / lens.offsetHeight;
+  /*set background properties for the result DIV:*/
+  result.style.backgroundImage = "url('" + img.src + "')";
+  result.style.backgroundSize = (img.width * cx) + "px " + (img.height * cy) + "px";
+  /*execute a function when someone moves the cursor over the image, or the lens:*/
+  lens.addEventListener("mousemove", moveLens);
+  img.addEventListener("mousemove", moveLens);
+  /*and also for touch screens:*/
+  lens.addEventListener("touchmove", moveLens);
+  img.addEventListener("touchmove", moveLens);
+  function moveLens(e) {
+    var pos, x, y;
+    /*prevent any other actions that may occur when moving over the image:*/
+    e.preventDefault();
+    /*get the cursor's x and y positions:*/
+    pos = getCursorPos(e);
+    /*calculate the position of the lens:*/
+    x = pos.x - (lens.offsetWidth / 2);
+    y = pos.y - (lens.offsetHeight / 2);
+    /*prevent the lens from being positioned outside the image:*/
+    if (x > img.width - lens.offsetWidth) {x = img.width - lens.offsetWidth;}
+    if (x < 0) {x = 0;}
+    if (y > img.height - lens.offsetHeight) {y = img.height - lens.offsetHeight;}
+    if (y < 0) {y = 0;}
+    /*set the position of the lens:*/
+    lens.style.left = x + "px";
+    lens.style.top = y + "px";
+    /*display what the lens "sees":*/
+    result.style.backgroundPosition = "-" + (x * cx) + "px -" + (y * cy) + "px";
+  }
+  function getCursorPos(e) {
+    var a, x = 0, y = 0;
+    e = e || window.event;
+    /*get the x and y positions of the image:*/
+    a = img.getBoundingClientRect();
+    /*calculate the cursor's x and y coordinates, relative to the image:*/
+    x = e.pageX - a.left;
+    y = e.pageY - a.top;
+    /*consider any page scrolling:*/
+    x = x - window.pageXOffset;
+    y = y - window.pageYOffset;
+    return {x : x, y : y};
+  }
+}
+</script>
+
+# IMC to postIMS 
+### images {.tabset}
+
+```{r}
+filenames <- IMC_location_extraction_image
+img_height <- 500
+sample_names <- sapply(IMC_location_extraction_image, function(x){
+  xl <- stringr::str_replace(basename(x),".ome.tiff","")
+  xl <- stringr::str_split(xl,"_")[[1]]
+  xl[length(xl)]
+})
+```
+
+
+```{r plot_images_IMC_location_extraction_image, results='asis', fig.width=8, fig.height=8}
+cat("\n\n")
+for (i in seq_along(filenames)) {
+  filename <- filenames[i]
+  if (file.exists(filename)) {
+    cat(sprintf("\n\n#### %s\n\n", sample_names[i]))
+    cat('<p float="left">')
+    cat('<div class="img-zoom-container">')
+    cat(sprintf("<img id=\"%s\" src=\"%s\" alt=\"%s\" height=\"%s\"/>", paste0(sample_names[i],"_img"), filename, filename, img_height))
+    cat(sprintf("<div id=\"%s\" class=\"img-zoom-result\"></div>", paste0(sample_names[i],"_zoom")))
+    cat('</div>')
+    cat('</p>')
+    cat('<script>')
+    cat(sprintf("imageZoom(\"%s\", \"%s\");", paste0(sample_names[i],"_img"), paste0(sample_names[i],"_zoom")))
+    cat('</script>')
+  }
+}
+cat("\n\n")
 ```
 

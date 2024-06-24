@@ -1195,6 +1195,16 @@ use rule symlink_IMS_to_postIMS_svg as symlink_postIMC_to_postIMS_region_mask wi
     log:
         stdout="logs/symlink_postIMC_to_postIMS_region_mask/{project_name}_{sample}.stdout",
 
+use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downscale_IMC_location_from_postIMC with:
+    params:
+        downscale_factor=1
+    input:
+        input_image="logs/IMC_location_from_postIMC/{project_name}_{core}.ome.tiff",
+    output:
+        output_image="results/{project_name}/data/registration_metric/report/{project_name}_IMC_{core}.png",
+    log:
+        stdout="logs/convert_image_to_png_and_downscale/{project_name}_{core}.stdout",
+
 
 
 rule generate_registration_report:
@@ -1399,6 +1409,16 @@ rule generate_registration_report:
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
                 "sample_name",
+                "project_name",
+                read_sample_metadata(config["sample_metadata"]),
+                return_all=True,
+            ),
+        ),
+        IMC_location_extraction_image = lambda wildcards: expand(
+            "results/{{project_name}}/data/registration_metric/report/{{project_name}}_IMC_{core}.png",
+            core=get_column_entry_from_metadata(
+                wildcards.project_name,
+                "core_name",
                 "project_name",
                 read_sample_metadata(config["sample_metadata"]),
                 return_all=True,

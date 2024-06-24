@@ -251,15 +251,18 @@ def n_threads_for_register_IMS_to_postIMS_single_core_1(wildcards, sample_metada
 
 
 def is_linear_transform(transform):
-    tr =json.load(open(transform))
-    trls = list()
-    for k in tr.keys():
-        for i in range(len(tr[k])):
-            trls.append(tr[k][i]["Transform"][0])
-    if "BSplineTransform" in trls:
+    try:
+        tr =json.load(open(transform))
+        trls = list()
+        for k in tr.keys():
+            for i in range(len(tr[k])):
+                trls.append(tr[k][i]["Transform"][0])
+        if "BSplineTransform" in trls:
+            return False
+        else:
+            return True
+    except:
         return False
-    else:
-        return True
 
 def decide_postIMSpreIMSmask(wildcards, type):
     assert type in ["preIMS","postIMS"]
