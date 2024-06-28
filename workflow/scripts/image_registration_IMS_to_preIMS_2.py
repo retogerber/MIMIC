@@ -607,6 +607,11 @@ hn = int(imzimg_regin.shape[1]*10)
 imzimg_regin = cv2.resize(imzimg_regin.astype(bool).astype(np.uint8), (hn,wn), interpolation=cv2.INTER_NEAREST)
 imzimg_regin = imzimg_regin.astype(float)*255
 
+boundary_buffer = 20
+logging.info(f"    - Pad with {boundary_buffer} pixels")
+postIMSpimg = np.pad(postIMSpimg, boundary_buffer, mode='constant', constant_values=0)
+imzimg_regin = np.pad(imzimg_regin, boundary_buffer, mode='constant', constant_values=0)
+
 
 logging.info("Convert images to sitk images")
 fixed = sitk.GetImageFromArray(imzimg_regin)
