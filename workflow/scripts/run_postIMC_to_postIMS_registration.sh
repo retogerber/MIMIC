@@ -30,8 +30,17 @@ if [ -z "$postIMC_to_postIMS_transform" ]; then
     exit 1
 fi
 
+# run registration
 wsireg2d $wsireg_config
-mv ${preIMC_to_postIMS_transform/_tmp.json/.json} ${preIMC_to_postIMS_transform}
-mv ${postIMC_to_postIMS_transform/_tmp.json/.json} ${postIMC_to_postIMS_transform}
 
 
+# move output files
+preIMC_to_postIMS_transform_out=${preIMC_to_postIMS_transform/_tmp.json/.json}
+if [ "$preIMC_to_postIMS_transform_out" != "$preIMC_to_postIMS_transform" ]; then
+    mv ${preIMC_to_postIMS_transform_out} ${preIMC_to_postIMS_transform}
+fi
+
+postIMC_to_postIMS_transform_out=${postIMC_to_postIMS_transform/_tmp.json/.json}
+if [ "$postIMC_to_postIMS_transform_out" != "$postIMC_to_postIMS_transform" ]; then
+    mv ${postIMC_to_postIMS_transform_out} ${postIMC_to_postIMS_transform}
+fi

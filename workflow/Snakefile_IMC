@@ -14,6 +14,7 @@ rule split_IMC_location_geojson:
         )),
     threads: 1
     input:
+        script="workflow/scripts/split_geojson.sh",
         combined_geojson_file="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC.geojson",
     output:
         geojson_files="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC_{core}.geojson",
@@ -218,6 +219,7 @@ rule prepare_register_IMC_to_preIMC:
         ),
     threads: 1
     input:
+        script="workflow/scripts/prepare_IMC_to_preIMC_wsireg_config.sh",
         template_file="config/template_IMC_to_preIMC-wsireg-config.yaml",
         preIMC="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
         IMC_aggr=IMC_aggr_sample_name_from_core_name,

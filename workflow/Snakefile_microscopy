@@ -79,6 +79,7 @@ use rule extract_microscopy_mask_from_registration_postIMS_nogeojson as extract_
 
 checkpoint create_postIMSpreIMS_mask_table:
     input:
+        script="workflow/scripts/create_postIMSpreIMSmask_geojson_presence.sh",
         TMA_geojson_dir="results/{project_name}/data/TMA_location",
     output:
         table="results/{project_name}/data/TMA_location/use_which_postIMSpreIMS_geojsons.csv",
@@ -107,6 +108,7 @@ rule prepare_register_postIMC_to_postIMS:
         ),
     threads: 1
     input:
+        script="workflow/scripts/prepare_postIMC_to_postIMS_wsireg_config.sh",
         yq="results/Misc/yq",
         template_file="config/template_postIMC_to_postIMS-wsireg-config.yaml",
         postIMS="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
@@ -131,6 +133,7 @@ rule register_postIMC_to_postIMS:
     resources:
         mem_mb=200000,
     input:
+        script="workflow/scripts/run_postIMC_to_postIMS_registration.sh",
         postIMS="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
         postIMSmask=lambda wildcards: decide_postIMSpreIMSmask(wildcards, "postIMS"),
         preIMS="results/{project_name}/data/preIMS/{project_name}_preIMS.ome.tiff",
@@ -164,6 +167,7 @@ rule register_postIMC_to_postIMS:
 rule postprocess_register_postIMC_to_postIMS:
     threads: 1
     input:
+        script="workflow/scripts/postprocess_registration_postIMC_to_postIMS.sh",
         yq="results/Misc/yq",
         preIMS_to_postIMS_image="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMS_to_postIMS_registered.ome.tiff",
         preIMC_to_postIMS_image="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMC_to_postIMS_registered.ome.tiff",
@@ -197,6 +201,7 @@ rule split_preIMC_location_geojson:
         ),
     threads: 1
     input:
+        script="workflow/scripts/split_geojson.sh",
         table="results/{project_name}/data/preIMS_location/available_masks.csv",
         combined_geojson_file="results/{project_name}/data/preIMC_location_combined/{project_name}_reg_mask_on_preIMC.geojson",
     output:
@@ -220,6 +225,7 @@ rule split_preIMS_location_geojson:
         ),
     threads: 1
     input:
+        script="workflow/scripts/split_geojson.sh",
         table="results/{project_name}/data/preIMS_location/available_masks.csv",
         combined_geojson_file="results/{project_name}/data/preIMS_location_combined/{project_name}_reg_mask_on_preIMS.geojson",
     output:
@@ -235,6 +241,7 @@ rule split_preIMS_location_geojson:
 
 checkpoint create_preIMS_mask_table:
     input:
+        script="workflow/scripts/create_IMS_location_table.sh",
         combined_preIMC_geojson_dir="results/{project_name}/data/preIMC_location_combined",
         combined_preIMS_geojson_dir="results/{project_name}/data/preIMS_location_combined",
     output:
@@ -258,6 +265,7 @@ rule prepare_register_preIMC_to_preIMS:
         ),
     threads: 1
     input:
+       script="workflow/scripts/prepare_preIMC_to_preIMS_wsireg_config.sh"
         template_file="config/template_preIMC_to_preIMS-wsireg-config.yaml",
         preIMS_mask="results/{project_name}/data/preIMS_location/{project_name}_reg_mask_on_preIMS_{part}.geojson",
         preIMC_mask="results/{project_name}/data/preIMC_location/{project_name}_reg_mask_on_preIMC_{part}.geojson",
