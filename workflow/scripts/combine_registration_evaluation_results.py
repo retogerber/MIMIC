@@ -36,6 +36,10 @@ input_jsons6 = snakemake.input['postIMC_to_preIMC_region_error']
 input_jsons7 = snakemake.input['preIMC_to_preIMS_region_error']
 input_jsons8 = snakemake.input['preIMS_to_postIMS_region_error']
 input_jsons9 = snakemake.input['postIMC_to_postIMS_region_error']
+input_jsons10 = snakemake.input['postIMC_to_postIMS_global_metrics']
+input_jsons11 = snakemake.input['postIMC_to_preIMC_global_metrics']
+input_jsons12 = snakemake.input['preIMC_to_preIMS_global_metrics']
+input_jsons13 = snakemake.input['preIMS_to_postIMS_global_metrics']
 output_csv = snakemake.output['registration_metrics_combined']
 
 logging.info("Read IMS_to_postIMS json")
@@ -158,6 +162,51 @@ for i in range(len(samplenames)):
     dfls.append(pd.DataFrame(jl[i], index=["sample"]))
 dfout18 = pd.concat(dfls).set_index("sample")
 
+logging.info("Read postIMC_to_postIMS global metrics json")
+jl = [json.load(open(f, "r")) for f in input_jsons10]
+samplenames = [re.sub("_global_error_metrics_postIMC_on_postIMS.json$","",os.path.basename(s)) for s in input_jsons10]
+
+logging.info("postIMC_to_postIMS global metrics to dataframe")
+dfls = []
+for i in range(len(samplenames)):
+    jl[i]["sample"] = samplenames[i]
+    dfls.append(pd.DataFrame(jl[i], index=["sample"]))
+dfout19 = pd.concat(dfls).set_index("sample")
+
+logging.info("Read postIMC_to_preIMC global metrics json")
+jl = [json.load(open(f, "r")) for f in input_jsons11]
+samplenames = [re.sub("_global_error_metrics_postIMC_on_preIMC.json$","",os.path.basename(s)) for s in input_jsons11]
+
+logging.info("postIMC_to_preIMC global metrics to dataframe")
+dfls = []
+for i in range(len(samplenames)):
+    jl[i]["sample"] = samplenames[i]
+    dfls.append(pd.DataFrame(jl[i], index=["sample"]))
+dfout110 = pd.concat(dfls).set_index("sample")
+
+logging.info("Read preIMC_to_preIMS global metrics json")
+jl = [json.load(open(f, "r")) for f in input_jsons12]
+samplenames = [re.sub("_global_error_metrics_preIMC_on_preIMS.json$","",os.path.basename(s)) for s in input_jsons12]
+
+logging.info("preIMC_to_preIMS global metrics to dataframe")
+dfls = []
+for i in range(len(samplenames)):
+    jl[i]["sample"] = samplenames[i]
+    dfls.append(pd.DataFrame(jl[i], index=["sample"]))
+dfout111 = pd.concat(dfls).set_index("sample")
+
+logging.info("Read preIMS_to_postIMS global metrics json")
+jl = [json.load(open(f, "r")) for f in input_jsons13]
+samplenames = [re.sub("_global_error_metrics_preIMS_on_postIMS.json$","",os.path.basename(s)) for s in input_jsons13]
+
+logging.info("preIMS_to_postIMS global metrics to dataframe")
+dfls = []
+for i in range(len(samplenames)):
+    jl[i]["sample"] = samplenames[i]
+    dfls.append(pd.DataFrame(jl[i], index=["sample"]))
+dfout112 = pd.concat(dfls).set_index("sample")
+
+
 
 
 
@@ -181,6 +230,10 @@ dfout3 = dfout3.join(dfout15)
 dfout3 = dfout3.join(dfout16)
 dfout3 = dfout3.join(dfout17)
 dfout3 = dfout3.join(dfout18)
+dfout3 = dfout3.join(dfout19)
+dfout3 = dfout3.join(dfout110)
+dfout3 = dfout3.join(dfout111)
+dfout3 = dfout3.join(dfout112)
 
 with pd.option_context('display.max_rows', None,
                        'display.max_columns', None,

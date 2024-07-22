@@ -127,8 +127,79 @@ pairs_plot <- function(input_csv_files, vis_type, quantile_type = "quantile50", 
   ismissing <- list(
     tissue_masks = rep(FALSE, nrow(df)),
     landmarks = rep(FALSE, nrow(df)),
-    regions = rep(FALSE, nrow(df))
+    regions = rep(FALSE, nrow(df)),
+    metrics = rep(FALSE, nrow(df))
   )
+  if ("structural_similarity" %in% colnames(df) & 
+    "mean_squared_error" %in% colnames(df) &
+    "normalized_mutual_information" %in% colnames(df) &
+    "normalized_root_mean_squared_error" %in% colnames(df) 
+    ) {
+    ismissing[["metrics"]] <- is.na(df$structural_similarity) | 
+      is.na(df$mean_squared_error) | 
+      is.na(df$normalized_mutual_information) | 
+      is.na(df$normalized_root_mean_squared_error)
+    
+    tmp_add_plotly_conf <- function(x,name1,name2){
+      x |>
+      plotly::layout(
+        xaxis = list(title = ""),
+        yaxis = list(title = name1)
+      ) |>
+      plotly::add_annotations(
+        text = name2,
+        x = 0.5,
+        y = 1,
+        yref = "paper",
+        xref = "paper",
+        xanchor = "middle",
+        yanchor = "top",
+        showarrow = FALSE,
+        font = list(size = 15)
+      )
+    }
+    ssimplt <-
+      plotly::add_markers(base,
+        y = ~structural_similarity,
+        x = ~jitter(1),
+        marker = list(color = "rgb(0,0,0)"),
+        hovertemplate = paste0("<b>%{text}</b><br>SSIM: %{y:.2f}")
+      ) |>
+      tmp_add_plotly_conf("Structural similarity", "SSIM")
+    mseplt <-
+      plotly::add_markers(base,
+        y = ~mean_squared_error,
+        x = ~jitter(1),
+        marker = list(color = "rgb(0,0,0)"),
+        hovertemplate = paste0("<b>%{text}</b><br>MSE: %{y:.2f}")
+      ) |>
+      tmp_add_plotly_conf("Mean squared error", "MSE")
+    nmiplt <-
+      plotly::add_markers(base,
+        y = ~normalized_mutual_information,
+        x = ~jitter(1),
+        marker = list(color = "rgb(0,0,0)"),
+        hovertemplate = paste0("<b>%{text}</b><br>NMI: %{y:.2f}")
+      ) |>
+      tmp_add_plotly_conf("Normalized mutual information", "NMI")
+    nrmseplt <-
+      plotly::add_markers(base,
+        y = ~normalized_root_mean_squared_error,
+        x = ~jitter(1),
+        marker = list(color = "rgb(0,0,0)"),
+        hovertemplate = paste0("<b>%{text}</b><br>NRMSE: %{y:.2f}")
+      ) |>
+      tmp_add_plotly_conf("Normalized root mean squared error", "NRMSE")
+    
+    metrics_plt <- plotly::subplot(
+      list(ssimplt, mseplt, nmiplt, nrmseplt),
+      nrows=2,
+      titleX = TRUE,
+      titleY = TRUE,
+      margin=0.05
+    )     
+    pltls <- c(pltls, list(metrics_plt))
+  }
   if ("euclidean_distance_centroids" %in% colnames(df) & "dice_score" %in% colnames(df)) {
     ismissing[["tissue_masks"]] <- is.na(df$euclidean_distance_centroids) | is.na(df$dice_score)
     masks_plt <-
@@ -231,11 +302,21 @@ pairs_plot <- function(input_csv_files, vis_type, quantile_type = "quantile50", 
     pltls <- c(pltls, list(regions_plt))
   }
   if (length(pltls) > 0) {
-    fig <- plotly::subplot(
-      pltls,
-      titleX = TRUE,
-      titleY = TRUE
-    ) |>
+    if ("structural_similarity" %in% colnames(df)){
+      fig <- plotly::subplot(
+        pltls,
+        widths = c(2, rep(1, length(pltls) - 1))/(length(pltls) + 1),
+        titleX = TRUE,
+        titleY = TRUE
+      ) 
+    } else{
+      fig <- plotly::subplot(
+        pltls,
+        titleX = TRUE,
+        titleY = TRUE
+      ) 
+    }
+    fig <- fig |>
       plotly::highlight(on = "plotly_hover", off = "plotly_doubleclick")
     if (return_missing) {
       missing_df <- data.frame(

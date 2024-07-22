@@ -272,7 +272,7 @@ def decide_postIMSpreIMSmask(wildcards, type):
         "project_name",
         read_sample_metadata(config["sample_metadata"]),
     )
-    assert postIMSpreIMSmask in ["bbox","segment"]
+    assert postIMSpreIMSmask in ["none","bbox","segment"]
     table_file = checkpoints.create_postIMSpreIMS_mask_table.get(project_name=wildcards.project_name).output['table']
     df = pd.read_csv(table_file) 
     geojson_exists=df.loc[df["type"] == type]["exists"].tolist()[0]!=0

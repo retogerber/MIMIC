@@ -49,8 +49,8 @@ properties:
     pattern: (.imzML$)
     description: name of imzML file
   postIMSpreIMSmask:
-    type: string 
-    pattern: ()|(bbox)|(segment)
+    type: string
+    pattern: (none)|(bbox)|(segment)
     default: 
     description: type of mask extraction for registration between preIMS and postIMS. Default is None (no mask), other available options are "bbox" and "segment"
   IMS_rotation_angle:

@@ -670,6 +670,87 @@ use rule image_registration_evaluation_compare_regions_postIMC_to_preIMC as imag
     benchmark:
         "benchmarks/image_registration_evaluation_compare_regions_postIMC_to_postIMS/{project_name}_{sample}_preIMS.txt",
 
+rule image_registration_evaluation_calculate_global_metrics_postIMC_to_preIMC:
+    threads: 1
+    resources:
+        mem_mb=2000,
+    params:
+        input_spacing_1=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMC_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        input_spacing_2=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        input_spacing_IMC_location=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        output_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMC_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+    input:
+        microscopy_image_1="results/{project_name}/data/postIMC/{sample}_transformed_on_preIMC.ome.tiff",
+        microscopy_image_2="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
+        IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"preIMC"),
+    output:
+        error_stats="results/{project_name}/data/registration_metric/{sample}_global_error_metrics_postIMC_on_preIMC.json",
+    log:
+        stdout="logs/image_registration_evaluation_calculate_global_metrics_postIMC_to_preIMC/{project_name}_{sample}_postIMC.stdout",
+    benchmark:
+        "benchmarks/image_registration_evaluation_calculate_global_metrics_postIMC_to_preIMC/{project_name}_{sample}_postIMC.txt",
+    container:
+        config["container"]
+    script:
+        "scripts/image_registration_evaluation_microscopy_metrics.py"
+
+use rule image_registration_evaluation_calculate_global_metrics_postIMC_to_preIMC as image_registration_evaluation_calculate_global_metrics_preIMC_to_preIMS with:
+    input:
+        microscopy_image_1="results/{project_name}/data/preIMC/{sample}_transformed_on_preIMS.ome.tiff",
+        microscopy_image_2="results/{project_name}/data/preIMS/{project_name}_preIMS.ome.tiff",
+        IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"preIMS"),
+    output:
+        error_stats="results/{project_name}/data/registration_metric/{sample}_global_error_metrics_preIMC_on_preIMS.json",
+    log:
+        stdout="logs/image_registration_evaluation_calculate_global_metrics_preIMC_to_preIMS/{project_name}_{sample}_preIMC.stdout",
+    benchmark:
+        "benchmarks/image_registration_evaluation_calculate_global_metrics_preIMC_to_preIMS/{project_name}_{sample}_preIMC.txt",
+
+use rule image_registration_evaluation_calculate_global_metrics_postIMC_to_preIMC as image_registration_evaluation_calculate_global_metrics_preIMS_to_postIMS with:
+    input:
+        microscopy_image_1="results/{project_name}/data/preIMS/{sample}_transformed_on_postIMS.ome.tiff",
+        microscopy_image_2="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
+        IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"postIMS"),
+    output:
+        error_stats="results/{project_name}/data/registration_metric/{sample}_global_error_metrics_preIMS_on_postIMS.json",
+    log:
+        stdout="logs/image_registration_evaluation_calculate_global_metrics_preIMS_to_postIMS/{project_name}_{sample}_preIMS.stdout",
+    benchmark:
+        "benchmarks/image_registration_evaluation_calculate_global_metrics_preIMS_to_postIMS/{project_name}_{sample}_preIMS.txt",
+
+use rule image_registration_evaluation_calculate_global_metrics_postIMC_to_preIMC as image_registration_evaluation_calculate_global_metrics_postIMC_to_postIMS with:
+    input:
+        microscopy_image_1="results/{project_name}/data/postIMC/{sample}_transformed_on_postIMS.ome.tiff",
+        microscopy_image_2="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
+        IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"postIMS"),
+    output:
+        error_stats="results/{project_name}/data/registration_metric/{sample}_global_error_metrics_postIMC_on_postIMS.json",
+    log:
+        stdout="logs/image_registration_evaluation_calculate_global_metrics_postIMC_to_postIMS/{project_name}_{sample}_postIMC.stdout",
+    benchmark:
+        "benchmarks/image_registration_evaluation_calculate_global_metrics_postIMC_to_postIMS/{project_name}_{sample}_postIMC.txt",
+
+
 
 rule image_registration_evaluation_create_blending_gif_postIMC_to_preIMC:
     threads: 1
@@ -955,6 +1036,46 @@ rule combine_image_registration_evaluation_results:
         ),
         postIMC_to_postIMS_region_error=lambda wildcards: expand(
             "results/{{project_name}}/data/registration_metric/{sample}_error_metrics_regions_postIMC_on_postIMS.json",
+            sample=get_column_entry_from_metadata(
+                wildcards.project_name,
+                "sample_name",
+                "project_name",
+                read_sample_metadata(config["sample_metadata"]),
+                return_all=True,
+            ),
+        ),
+        postIMC_to_postIMS_global_metrics=lambda wildcards: expand(
+            "results/{{project_name}}/data/registration_metric/{sample}_global_error_metrics_postIMC_on_postIMS.json",
+            sample=get_column_entry_from_metadata(
+                wildcards.project_name,
+                "sample_name",
+                "project_name",
+                read_sample_metadata(config["sample_metadata"]),
+                return_all=True,
+            ),
+        ),
+        postIMC_to_preIMC_global_metrics=lambda wildcards: expand(
+            "results/{{project_name}}/data/registration_metric/{sample}_global_error_metrics_postIMC_on_preIMC.json",
+            sample=get_column_entry_from_metadata(
+                wildcards.project_name,
+                "sample_name",
+                "project_name",
+                read_sample_metadata(config["sample_metadata"]),
+                return_all=True,
+            ),
+        ),
+        preIMC_to_preIMS_global_metrics=lambda wildcards: expand(
+            "results/{{project_name}}/data/registration_metric/{sample}_global_error_metrics_preIMC_on_preIMS.json",
+            sample=get_column_entry_from_metadata(
+                wildcards.project_name,
+                "sample_name",
+                "project_name",
+                read_sample_metadata(config["sample_metadata"]),
+                return_all=True,
+            ),
+        ),
+        preIMS_to_postIMS_global_metrics=lambda wildcards: expand(
+            "results/{{project_name}}/data/registration_metric/{sample}_global_error_metrics_preIMS_on_postIMS.json",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
                 "sample_name",
