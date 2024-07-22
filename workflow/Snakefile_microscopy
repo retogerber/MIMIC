@@ -265,7 +265,7 @@ rule prepare_register_preIMC_to_preIMS:
         ),
     threads: 1
     input:
-       script="workflow/scripts/prepare_preIMC_to_preIMS_wsireg_config.sh"
+       script="workflow/scripts/prepare_preIMC_to_preIMS_wsireg_config.sh",
         template_file="config/template_preIMC_to_preIMS-wsireg-config.yaml",
         preIMS_mask="results/{project_name}/data/preIMS_location/{project_name}_reg_mask_on_preIMS_{part}.geojson",
         preIMC_mask="results/{project_name}/data/preIMC_location/{project_name}_reg_mask_on_preIMC_{part}.geojson",
