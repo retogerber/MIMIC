@@ -55,7 +55,17 @@ properties:
   IMS_rotation_angle:
     type: number
     default: 0
+    minimum: 0
+    maximum: 270
+    multipleOf: 90
     description: rotation angle of IMS relative to postIMS microscopy image
+  IMC_rotation_angle:
+    type: number
+    default: 0
+    minimum: 0
+    maximum: 270
+    multipleOf: 90
+    description: rotation angle of IMC relative to postIMC microscopy image
   IMS_to_postIMS_n_splits:
     type: number
     default: 19

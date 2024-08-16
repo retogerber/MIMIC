@@ -16,7 +16,10 @@ sample_metadata: "config/sample_metadata.csv"
 # - all: run complete pipeline
 stages: ["regIMC", "IMS", "regIMS", "Microscopy", "QC", "overlap"]
 
-# channel names of IMC for aggregation for registration 
-IMC_channels_for_aggr: ["E-cadherin","ST6GAL1","Collagen-1","HepPar1","Seg1","Seg2","Seg3"]
+# channel names of IMC used for IMS overlap calculation
+# If empty list ( [] ) all channels are used
+# Otherwise selection of channels matching summary panel are used
+IMC_channels_for_aggr: []
+#IMC_channels_for_aggr: ["E-cadherin","ST6GAL1","Collagen-1","HepPar1","Seg1","Seg2","Seg3"]
 
 

@@ -33,7 +33,7 @@ rule transform_IMS_core_for_visualization:
     container:
         config["container"]
     script:
-        "scripts/transform_IMS_for_visualization.py"
+        "scripts/QC/transform_IMS_for_visualization.py"
 
 
 
@@ -98,7 +98,7 @@ rule image_registration_evaluation_postIMC_to_preIMC:
     container:
         config["container"]
     script:
-        "scripts/image_registration_evaluation_core_to_core.py"
+        "scripts/QC/image_registration_evaluation_core_to_core.py"
 
 
 use rule image_registration_evaluation_postIMC_to_preIMC as image_registration_evaluation_preIMC_to_preIMS with:
@@ -250,7 +250,7 @@ rule image_registration_evaluation_preIMS_to_postIMS_sitk:
     container:
         config["container"]
     script:
-        "scripts/image_registration_evaluation_preIMS_to_postIMS.py"
+        "scripts/QC/image_registration_evaluation_preIMS_to_postIMS.py"
 
 rule image_registration_evaluation:
     threads: 4
@@ -308,7 +308,7 @@ rule image_registration_evaluation:
     container:
         config["container"]
     script:
-        "scripts/image_registration_evaluation_SAM.py"
+        "scripts/QC/image_registration_evaluation_SAM.py"
 
 rule image_registration_evaluation_extract_regions_SAM_postIMC:
     threads: 16
@@ -351,7 +351,7 @@ rule image_registration_evaluation_extract_regions_SAM_postIMC:
     container:
         config["container"]
     script:
-        "scripts/extract_regions_SAM.py"
+        "scripts/QC/extract_regions_SAM.py"
 
 use rule image_registration_evaluation_extract_regions_SAM_postIMC as image_registration_evaluation_extract_regions_SAM_preIMC with:
     input:
@@ -455,7 +455,7 @@ rule image_registration_evaluation_transform_regions_SAM_postIMC_to_preIMC:
     container:
         config["container"]
     script:
-        "scripts/transform_regions_SAM.py"
+        "scripts/QC/transform_regions_SAM.py"
 
 use rule image_registration_evaluation_transform_regions_SAM_postIMC_to_preIMC as image_registration_evaluation_transform_regions_SAM_preIMC_to_preIMS with:
     resources:
@@ -622,7 +622,7 @@ rule image_registration_evaluation_compare_regions_postIMC_to_preIMC:
     container:
         config["container"]
     script:
-        "scripts/compare_regions_SAM.py"
+        "scripts/QC/compare_regions_SAM.py"
 
 
 use rule image_registration_evaluation_compare_regions_postIMC_to_preIMC as image_registration_evaluation_compare_regions_preIMC_to_preIMS with:
@@ -712,7 +712,7 @@ rule image_registration_evaluation_calculate_global_metrics_postIMC_to_preIMC:
     container:
         config["container"]
     script:
-        "scripts/image_registration_evaluation_microscopy_metrics.py"
+        "scripts/QC/image_registration_evaluation_microscopy_metrics.py"
 
 use rule image_registration_evaluation_calculate_global_metrics_postIMC_to_preIMC as image_registration_evaluation_calculate_global_metrics_preIMC_to_preIMS with:
     input:
@@ -796,7 +796,7 @@ rule image_registration_evaluation_create_blending_gif_postIMC_to_preIMC:
     container:
         config["container"]
     script:
-        "scripts/image_registration_evaluation_create_blending_gif.py"
+        "scripts/QC/image_registration_evaluation_create_blending_gif.py"
 
 use rule image_registration_evaluation_create_blending_gif_postIMC_to_preIMC as image_registration_evaluation_create_blending_gif_preIMC_to_preIMS with:
     input:
@@ -929,7 +929,7 @@ rule image_registration_evaluation_IMS_to_postIMS:
     container:
         config["container"]
     script:
-        "scripts/image_registration_evaluation_microlink.py"
+        "scripts/QC/image_registration_evaluation_microlink.py"
 
 
 rule combine_image_registration_evaluation_results:
@@ -1091,7 +1091,7 @@ rule combine_image_registration_evaluation_results:
     container:
         config["container"]
     script:
-        "scripts/combine_registration_evaluation_results.py"
+        "scripts/QC/combine_registration_evaluation_results.py"
 
 
 rule visualize_image_registration_evaluation_IMS_to_postIMS:
@@ -1109,7 +1109,7 @@ rule visualize_image_registration_evaluation_IMS_to_postIMS:
     container:
         config["container"]
     script:
-        "scripts/visualize_IMS_to_postIMS_error.R"
+        "scripts/QC/visualize_IMS_to_postIMS_error.R"
 
 
 use rule visualize_image_registration_evaluation_IMS_to_postIMS as visualize_image_registration_evaluation_postIMC_to_preIMC with:
@@ -1153,7 +1153,7 @@ rule visualize_image_registration_evaluation_preIMS_to_postIMS_sitk:
     container:
         config["container"]
     script:
-        "scripts/visualize_preIMS_to_postIMS_error.R"
+        "scripts/QC/visualize_preIMS_to_postIMS_error.R"
 
 
 rule convert_to_png_and_downscale_IMS_to_postIMS:
@@ -1172,7 +1172,7 @@ rule convert_to_png_and_downscale_IMS_to_postIMS:
     container:
         config["container"]
     script:
-        "scripts/convert_to_png_and_downscale.py"
+        "scripts/QC/convert_to_png_and_downscale.py"
 
 
 use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downscale_preIMSmask_to_postIMSmask with:
@@ -1552,7 +1552,7 @@ rule generate_registration_report:
     container:
         config["container"]
     script:
-        "scripts/visualize_registrations.Rmd"
+        "scripts/QC/visualize_registrations.Rmd"
 
 
 

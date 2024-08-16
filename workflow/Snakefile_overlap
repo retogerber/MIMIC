@@ -35,7 +35,7 @@ rule transformed_IMCmask_to_shape:
     container:
         config["container"]
     script:
-        "scripts/shapes_from_IMCmask.py"
+        "scripts/Overlap/shapes_from_IMCmask.py"
 
 
 rule calculate_cell_centroid_positions:
@@ -55,7 +55,7 @@ rule calculate_cell_centroid_positions:
     container:
         config["container"]
     script:
-        "scripts/cell_centroids_from_shapes.py"
+        "scripts/Overlap/cell_centroids_from_shapes.py"
 
 
 rule calculate_cell_overlap_with_IMS:
@@ -95,7 +95,53 @@ rule calculate_cell_overlap_with_IMS:
     container:
         config["container"]
     script:
-        "scripts/cell_ims_intersections.py"
+        "scripts/Overlap/cell_ims_intersections.py"
+
+rule calculate_mean_IMC_intensities_with_IMS:
+    params:
+        IMS_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMS_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        IMS_shrink_factor=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMS_shrink_factor",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        IMC_channels_for_aggr=config["IMC_channels_for_aggr"],
+        image_utils_file="workflow/scripts/utils/image_utils.py",
+    threads: 1
+    input:
+        imzml_coords=choose_imsml_coordsfile,
+        imzml_peaks=imzml_peaks_from_sample_and_project,
+        IMC_transformed="results/{project_name}/data/IMC/{sample}_aggr_transformed.ome.tiff",
+        IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"postIMS"),
+        IMC_summary_panel="results/{project_name}/data/IMC_summary_panel/{sample}_summary.csv",
+    output:
+        IMC_mean_on_IMS = "results/{project_name}/data/cell_overlap/{project_name}_{sample}_mean_intensity_on_IMS.csv"
+    log:
+        stdout="logs/calculate_mean_IMC_intensities_with_IMS/{project_name}_{sample}.stdout",
+        stderr="logs/calculate_mean_IMC_intensities_with_IMS/{project_name}_{sample}.stderr",
+    benchmark:
+        "benchmarks/calculate_mean_IMC_intensities_with_IMS/{project_name}_{sample}.txt",
+    # conda:
+    #    "env/image_registration_wsireg.yaml"
+    container:
+        config["container"]
+    script:
+        "scripts/Overlap/marker_intensities_ims_intersections.py"
+
+
+
 
 rule combine_IMS_celloverlap_data:
     params:
@@ -111,6 +157,7 @@ rule combine_IMS_celloverlap_data:
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
+        combine_IMS_utils_file="workflow/scripts/Overlap/combine_IMS_utils.R",
     threads: 16
     resources:
         mem_mb=20000,
@@ -141,6 +188,18 @@ rule combine_IMS_celloverlap_data:
                 return_all=True,
             ),
         ),
+        IMC_mean_on_IMS=lambda wildcards: expand(
+            "results/{{project_name}}/data/cell_overlap/{{project_name}}_{sample}_mean_intensity_on_IMS.csv",
+            sample=get_column_entry_from_metadata_two_conditions(
+                wildcards.project_name,
+                f"{wildcards.imzml_base}.imzML",
+                "sample_name",
+                "project_name",
+                "imzml_filename",
+                read_sample_metadata(config["sample_metadata"]),
+                return_all=True,
+            ),
+        ),
     output:
         combined_data="results/{project_name}/data/cell_overlap/{project_name}_{imzml_base}_peak_cell_overlap.csv",
     log:
@@ -150,5 +209,5 @@ rule combine_IMS_celloverlap_data:
     container:
         config["container"]
     script:
-        "scripts/combine_IMS.R"
+        "scripts/Overlap/combine_IMS.R"
 

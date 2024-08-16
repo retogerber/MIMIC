@@ -25,6 +25,7 @@ rule extract_core_mask_from_postIMS:
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
+        image_utils_file="workflow/scripts/utils/image_utils.py",
     input:
         sam_weights="results/Misc/sam_vit_h_4b8939.pth",
         IMCmask=lambda wildcards: expand(
@@ -50,7 +51,7 @@ rule extract_core_mask_from_postIMS:
     container:
         config["container"]
     script:
-        "scripts/image_registration_IMS_to_preIMS_0.py"
+        "scripts/IMS/image_registration_IMS_to_preIMS_0.py"
 
 
 rule register_IMS_to_postIMS:
@@ -85,6 +86,7 @@ rule register_IMS_to_postIMS:
             read_sample_metadata(config["sample_metadata"]),
         ),
         sample_core_names=lambda wildcards: sample_core_names(wildcards),
+        image_utils_file="workflow/scripts/utils/image_utils.py",
     input:
         postIMSmask_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced_mask.ome.tiff",
         imzml=lambda wildcards: os.path.join(
@@ -118,7 +120,7 @@ rule register_IMS_to_postIMS:
     container:
         config["container"]
     script:
-        "scripts/image_registration_IMS_to_preIMS_1.py"
+        "scripts/IMS/image_registration_IMS_to_preIMS_1.py"
 
 
 rule register_IMS_to_postIMS_single_core_1:
@@ -168,6 +170,8 @@ rule register_IMS_to_postIMS_single_core_1:
             "sample_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
+        image_utils_file="workflow/scripts/utils/image_utils.py",
+        registration_utils_file="workflow/scripts/utils/registration_utils.py",
     input:
         postIMS_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
         postIMSmask_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced_mask.ome.tiff",
@@ -201,7 +205,7 @@ rule register_IMS_to_postIMS_single_core_1:
     container:
         config["container"]
     script:
-        "scripts/image_registration_IMS_to_preIMS_2.py"
+        "scripts/IMS/image_registration_IMS_to_preIMS_2.py"
 
 
 rule register_IMS_to_postIMS_single_core_2:
@@ -259,6 +263,8 @@ rule register_IMS_to_postIMS_single_core_2:
             "sample_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
+        image_utils_file="workflow/scripts/utils/image_utils.py",
+        registration_utils_file="workflow/scripts/utils/registration_utils.py",
     input:
         masks_transform="results/{project_name}/data/registration_metric/{sample}_masks_transform.txt",
         gridsearch_transform="results/{project_name}/data/registration_metric/{sample}_gridsearch_transform.txt",
@@ -294,7 +300,7 @@ rule register_IMS_to_postIMS_single_core_2:
     container:
         config["container"]
     script:
-        "scripts/image_registration_IMS_to_preIMS_3.py"
+        "scripts/IMS/image_registration_IMS_to_preIMS_3.py"
 
 
 rule process_imzml:
@@ -333,7 +339,7 @@ rule process_imzml:
     container:
         config["container"]
     script:
-        "scripts/process_imzml.R"
+        "scripts/IMS/process_imzml.R"
 
 
 
@@ -360,5 +366,5 @@ rule create_IMS_tiff:
     container:
         config["container"]
     script:
-        "scripts/create_IMS_tiff.py"
+        "scripts/IMS/create_IMS_tiff.py"
 
