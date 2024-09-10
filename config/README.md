@@ -32,7 +32,8 @@ results/
 │   │   ├── preIMS
 │   │   ├── preIMS_location
 │   │   ├── preIMS_location_combined
-│   │   └── registration_metric
+│   │   ├── registration_metric
+│   │   └── TMA_location
 │   └── registrations
 │       ├── IMC_to_IMS
 │       ├── IMC_to_preIMC
@@ -81,10 +82,8 @@ Two options are possible, automatically or manually:
 ### Automatically
 
 Requirements: 
-- More than 2 layers of IMS pixels outside of tissue around the whole tissue.  
 - Stepsize higher than pixelsize so that individual pixels are clearly separate.
-If not around whole tissue automatic linking might not work.
-
+- (Maybe: More than 2 layers of IMS pixels outside of tissue around the whole tissue.)
 
 Adapt file `config/sample_metadata.csv`: (see also section [add metadata](#add-metadata))
 - `coords_filename`: empty ()
@@ -139,7 +138,9 @@ Adapt file `config/sample_metadata.csv`:
 - `microscopy_pixel_size`: size of microscopy pixels in micrometer
 - `coords_filename`: name of `-coords.h5` file as obtained from step `Manually using napari-imsmicrolink` or empty. If present the file should be placed in `results/{PROJECT_NAME}/data/IMS`
 - `imzml_filename`: name of `.imzML` file (in directory `results/data/{PROJECT_NAME}/IMS` ), `.ibd` file with same base name has to be present in the same directory
+- (optional) `postIMSpreIMSmask`: type of mask extraction for registration between preIMS and postIMS. Default is None (no mask), other available options are "bbox" and "segment"
 - (optional) `IMS_rotation_angle`: int, default=0, one of 0,90,180,270. Initial IMS rotation angle relative to postIMS microscopy image
+- (optional) `IMC_rotation_angle`: int, default=0, one of 0,90,180,270. Initial IMC rotation angle relative to postIMC microscopy image
 - (optional) `IMS_to_postIMS_n_splits`: int, default=19, should be a whole number between 3 and 19, number of splits for thresholding to find IMS ablation marks
 - (optional) `IMS_to_postIMS_init_gridsearch`: int, default=3, should be a whole number between 0 and 3, number of rounds of gridsearch for IMS ablation mark to IMS pixel initial registration
 - (optional) `within_IMC_fine_registration`: bool, default=True, should an additional registration step IMS to postIMS be done only taking into account IMS pixels within the location of IMC.
@@ -160,6 +161,9 @@ In QuPath:
 - Make sure the names of the corresponding regions are the same
 - Save as `results/{PROJECT_NAME}/data/preIMS_location_combined/{PROJECT_NAME}_reg_mask_on_preIMS.geojson`
 
+## Data obtained from the same slide
+
+In the case that the data was generated from the same slide the preIMS and preIMC microscopy images are effectively the same (or only one of the two exists). In this scenario add one of the two images (preIMS or preIMC) to its respective location and then create a symlink (or a copy) for the other image. The workflow will check if the preIMS and the preIMC images are the same, and if they are drop the registration step between the two.
 
 ## Run workflow
 
@@ -173,8 +177,27 @@ If there are links to files outside of the project directory adding the flag ` -
 snakemake --use-conda --use-singularity -c 1  --singularity-args "--bind $HOME"
 ```
 
+### Run individual parts of the workflow
+
+Individual parts of the workflow can be run separately with the following:
+
+```
+snakemake --use-conda --use-singularity -c 1 -R PART
+```
+
+where `PART` is one of `IMS`, `regIMS`, `regIMC`, `Microscopy`, `overlap`, `QC`.
+
+### Specify which QC metrics to calculate
+
+In the file `config/config.yaml` adapt the variables `QC_metrics` and `QC_steps` to only evaluate certain registration steps of the workflow. This can be useful for faster iteration if a certain step needs to be optimized.
+
+
 
 ## Check output
+
+A registration report can be found at `results/{PROJECT_NAME}/data/registration_metric/report/{PROJECT_NAME}_registration_evaluation.html`.
+
+Additionally the following sections might be helpful.
 
 ### Automatic linking of IMS pixels to postIMS
 
