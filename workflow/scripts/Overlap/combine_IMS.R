@@ -3,7 +3,7 @@ if (interactive()){
   source(file.path("imc_to_ims_workflow", "workflow", "scripts", "logging_utils.R"))
 } else{
   source(file.path("workflow", "scripts", "Overlap","combine_IMS_utils.R"))
-  source(file.path("workflow", "scripts", "logging_utils.R"))
+  source(file.path("workflow", "scripts", "utils", "logging_utils.R"))
 }
 
 # prepare

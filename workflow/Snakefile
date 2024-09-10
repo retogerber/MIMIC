@@ -139,3 +139,73 @@ rule all:
     input:
         return_output_files,
 
+
+rule IMS:
+    input:
+        files1 =  expand(
+            "results/{project_name}/data/IMS/{imzml_base}_peaks.h5",
+            zip,
+            project_name=unique_imzml_project[1],
+            imzml_base=unique_imzml_project[0],
+        ),
+        files2 =  expand(
+            "results/{project_name}/data/IMS/{imzml_base}_{project_name}_IMS.ome.tiff",
+            zip,
+            project_name=unique_imzml_project[1],
+            imzml_base=unique_imzml_project[0],
+        ),
+
+rule regIMS:
+    input:
+        files = [choose_imsml_coordsfile_base(sample_names[i], project_names[i]) for i in range(len(sample_names))],
+
+
+core_names = [
+    get_column_entry_from_metadata_two_conditions(
+        sample_names[i],
+        project_names[i],
+        'core_name',
+        'sample_name',
+        'project_name',
+        read_sample_metadata(config['sample_metadata']))
+    for i in range(len(sample_names))
+]
+rule regIMC:
+    input:
+        files = expand(
+            "results/{project_name}/data/IMC_location/{project_name}_registered_IMC_mask_on_postIMC_{core}.geojson",
+            zip,
+            project_name=project_names,
+            core=core_names,
+        )
+
+rule Microscopy:
+    input:
+        files = expand(
+            "results/{project_name}/data/postIMC/{sample}_transformed_on_postIMS.ome.tiff",
+            zip,
+            project_name=project_names,
+            sample=sample_names,
+        )
+
+rule overlap:
+    input:
+        files = expand(
+            "results/{project_name}/data/cell_overlap/{project_name}_{imzml_base}_peak_cell_overlap.csv",
+            zip,
+            project_name=unique_imzml_project[1],
+            imzml_base=unique_imzml_project[0],
+        )   
+
+rule QC:
+    input:
+        files1 = expand(
+            "results/{project_name}/data/registration_metric/report/{project_name}_registration_evaluation.html",
+            project_name=project_names,
+        ),
+        files2 = expand(
+            "results/{project_name}/data/IMS/{project_name}_{sample}_IMS_transformed.ome.tiff",
+            zip,
+            project_name=project_names,
+            sample=sample_names,
+        ),

@@ -7,7 +7,7 @@ output:
     self_contained: FALSE 
     code_folding: "hide"
     toc: true
-    toc_float: false 
+    toc_float: true 
     toc_collapsed: true
     css: "style.css"
 toc_depth: 3
@@ -16,15 +16,7 @@ theme: lumen
 editor_options:
   chunk_output_type: inline
 ---
-<!-- 
-<style type="text/css">
-.main-container {
-  max-width: 1800px;
-  margin-left: auto;
-  margin-right: auto;
-}
-</style>
- -->
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(knitr)
@@ -41,6 +33,7 @@ basedir <- getwd()
 # basedir <- "."
 # tmp <- "results/{project_name}/data/registration_metric/report/{project_name}_registration_evaluation.html"
 # basedir <- Reduce(file.path, rep("..",length(strsplit(dirname(snakemake@output[["html"]]),"/")[[1]])))
+generic_input <- snakemake@params[["generic_input"]]
 
 input_csv_files <- snakemake@input[["registration_metrics_combined"]]
 project_name <- basename(dirname(dirname(dirname(input_csv_files))))
@@ -93,6 +86,33 @@ input_csv_files <- "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_
 vis_type <- "IMS_to_postIMS"
 ```
 
+```{r}
+summary_dt <- function(input_csv_files, vis_type) {
+  df <- read.csv(input_csv_files)
+  colname_reg <- paste0(vis_type, "_")
+  b1 <- stringr::str_detect(colnames(df), paste0("(^", vis_type, ")|(_", vis_type, ")"))
+  t1 <- stringr::str_replace(vis_type, "_to_", "_")
+  b2 <- stringr::str_detect(colnames(df), paste0("(^", t1, ")|(_", t1, ")"))
+  b3 <- colnames(df) %in% c("sample", "project")
+  df <- df[, b1 | b2 | b3]
+  colnames(df) <- stringr::str_replace(colnames(df), paste0(vis_type, "_"), "")
+  colnames(df) <- stringr::str_replace(colnames(df), paste0("_", vis_type), "")
+  colnames(df) <- stringr::str_replace(colnames(df), paste0("_", stringr::str_replace(vis_type, "_to_", "_")), "")
+
+  if (vis_type == "IMS_to_postIMS") {
+    df$Completeness <- df$n_points / df$n_points_total
+  }
+  colnames(df)
+  for (col in colnames(df)) {
+    if (col != "sample" & col != "project") {
+      df[[col]] <- signif(as.numeric(df[[col]]), 3)
+    }
+  }
+  colnames(df) <- stringr::str_replace_all(colnames(df), "_", " ")
+
+  knitr::kable(df)
+}
+```
 
 ```{r}
 pairs_plot <- function(input_csv_files, vis_type, quantile_type = "quantile50", return_missing = FALSE) {
@@ -530,86 +550,142 @@ min_q50_dice <- 0.7
 ```{r}
 df <- read.csv(input_csv_files)
 
-df$IMS_Completeness <- df$IMS_to_postIMS_n_points / df$IMS_to_postIMS_n_points_total
+to_keep_df <- data.frame(
+  sample = df$sample
+)
 
-IMS_error_thr <- median(df$IMS_to_postIMS_quantile50_error) + 3 * mad(df$IMS_to_postIMS_quantile50_error)
-keep_IMS_to_postIMS <- df$IMS_Completeness > min_completenes & df$IMS_to_postIMS_quantile50_error < IMS_error_thr
+if("IMS_to_postIMS" %in% snakemake@params[["QC_steps"]]){
+  df$IMS_Completeness <- df$IMS_to_postIMS_n_points / df$IMS_to_postIMS_n_points_total
+
+  IMS_error_thr <- median(df$IMS_to_postIMS_quantile50_error) + 3 * mad(df$IMS_to_postIMS_quantile50_error)
+  keep_IMS_to_postIMS <- df$IMS_Completeness > min_completenes & df$IMS_to_postIMS_quantile50_error < IMS_error_thr
+  to_keep_df$keep_IMS_to_postIMS <- keep_IMS_to_postIMS
+} else{
+  to_keep_df$keep_IMS_to_postIMS <- rep(NA, length(df$sample))
+}
 
 ## postIMC to postIMS
 ### landmarks
-postIMCpostIMS_lm <- rep(NA, length(df$sample))
-postIMCpostIMS_lm[df$postIMC_to_postIMS_n_points_total > min_landmarks] <- df$postIMC_to_postIMS_quantile50_error[df$postIMC_to_postIMS_n_points_total > min_landmarks] < min_q50_error
-
+if("postIMC_to_postIMS" %in% snakemake@params[["QC_steps"]] & "landmarks" %in% snakemake@params[["QC_metrics"]]){
+  postIMCpostIMS_lm <- rep(NA, length(df$sample))
+  postIMCpostIMS_lm[df$postIMC_to_postIMS_n_points_total > min_landmarks] <- df$postIMC_to_postIMS_quantile50_error[df$postIMC_to_postIMS_n_points_total > min_landmarks] < min_q50_error
+  to_keep_df$postIMCpostIMS_lm <- postIMCpostIMS_lm
+}
 ### regions
-postIMCpostIMS_reg <- rep(NA, length(df$sample))
-postIMCpostIMS_reg[df$postIMC_to_postIMS_regions_n_points_total > min_regions] <-
-  df$postIMC_to_postIMS_regions_quantile50_error[df$postIMC_to_postIMS_regions_n_points_total > min_regions] < min_q50_error &
-    df$postIMC_to_postIMS_regions_quantile50_dice[df$postIMC_to_postIMS_regions_n_points_total > min_regions] > min_q50_dice
+if("postIMC_to_postIMS" %in% snakemake@params[["QC_steps"]] & "regions" %in% snakemake@params[["QC_metrics"]]){
+  postIMCpostIMS_reg <- rep(NA, length(df$sample))
+  postIMCpostIMS_reg[df$postIMC_to_postIMS_regions_n_points_total > min_regions] <-
+    df$postIMC_to_postIMS_regions_quantile50_error[df$postIMC_to_postIMS_regions_n_points_total > min_regions] < min_q50_error &
+      df$postIMC_to_postIMS_regions_quantile50_dice[df$postIMC_to_postIMS_regions_n_points_total > min_regions] > min_q50_dice
+  to_keep_df$postIMCpostIMS_reg <- postIMCpostIMS_reg
+}
 
 ## preIMS to postIMS
 ### landmarks
-preIMSpostIMS_lm <- rep(NA, length(df$sample))
-preIMSpostIMS_lm[df$preIMS_to_postIMS_n_points_total > min_landmarks] <- df$preIMS_to_postIMS_quantile50_error[df$preIMS_to_postIMS_n_points_total > min_landmarks] < min_q50_error
+if("preIMS_to_postIMS" %in% snakemake@params[["QC_steps"]] & "landmarks" %in% snakemake@params[["QC_metrics"]]){
+  preIMSpostIMS_lm <- rep(NA, length(df$sample))
+  preIMSpostIMS_lm[df$preIMS_to_postIMS_n_points_total > min_landmarks] <- df$preIMS_to_postIMS_quantile50_error[df$preIMS_to_postIMS_n_points_total > min_landmarks] < min_q50_error
+  to_keep_df$preIMSpostIMS_lm <- preIMSpostIMS_lm
+}
 
 ### regions
-preIMSpostIMS_reg <- rep(NA, length(df$sample))
-preIMSpostIMS_reg[df$preIMS_to_postIMS_regions_n_points_total > min_regions] <-
-  df$preIMS_to_postIMS_regions_quantile50_error[df$preIMS_to_postIMS_regions_n_points_total > min_regions] < min_q50_error |
-    df$preIMS_to_postIMS_regions_quantile50_dice[df$preIMS_to_postIMS_regions_n_points_total > min_regions] > min_q50_dice
+if("preIMS_to_postIMS" %in% snakemake@params[["QC_steps"]] & "regions" %in% snakemake@params[["QC_metrics"]]){
+  preIMSpostIMS_reg <- rep(NA, length(df$sample))
+  preIMSpostIMS_reg[df$preIMS_to_postIMS_regions_n_points_total > min_regions] <-
+    df$preIMS_to_postIMS_regions_quantile50_error[df$preIMS_to_postIMS_regions_n_points_total > min_regions] < min_q50_error |
+      df$preIMS_to_postIMS_regions_quantile50_dice[df$preIMS_to_postIMS_regions_n_points_total > min_regions] > min_q50_dice
+  to_keep_df$preIMSpostIMS_reg <- preIMSpostIMS_reg
+}
 
 ### sitk
-preIMSpostIMS_sitk <- sqrt(df$preIMS_to_postIMS_sitk_global_x_shift**2 + df$preIMS_to_postIMS_sitk_global_y_shift**2) < min_q50_error
+if("preIMS_to_postIMS" %in% snakemake@params[["QC_steps"]] & "sitk" %in% snakemake@params[["QC_metrics"]]){
+  preIMSpostIMS_sitk <- sqrt(df$preIMS_to_postIMS_sitk_global_x_shift**2 + df$preIMS_to_postIMS_sitk_global_y_shift**2) < min_q50_error
+  to_keep_df$preIMSpostIMS_sitk <- preIMSpostIMS_sitk
+}
 
 ## preIMC to preIMS
 ### landmarks
-preIMCpreIMS_lm <- rep(NA, length(df$sample))
-preIMCpreIMS_lm[df$preIMC_to_preIMS_n_points_total > min_landmarks] <- df$preIMC_to_preIMS_quantile50_error[df$preIMC_to_preIMS_n_points_total > min_landmarks] < min_q50_error
+if("preIMC_to_preIMS" %in% snakemake@params[["QC_steps"]] & "landmarks" %in% snakemake@params[["QC_metrics"]]){
+  preIMCpreIMS_lm <- rep(NA, length(df$sample))
+  preIMCpreIMS_lm[df$preIMC_to_preIMS_n_points_total > min_landmarks] <- df$preIMC_to_preIMS_quantile50_error[df$preIMC_to_preIMS_n_points_total > min_landmarks] < min_q50_error
+  to_keep_df$preIMCpreIMS_lm <- preIMCpreIMS_lm
+}
 
 ### regions
-preIMCpreIMS_reg <- rep(NA, length(df$sample))
-preIMCpreIMS_reg[df$preIMC_to_preIMS_regions_n_points_total > min_regions] <-
-  df$preIMC_to_preIMS_regions_quantile50_error[df$preIMC_to_preIMS_regions_n_points_total > min_regions] < min_q50_error |
-    df$preIMC_to_preIMS_regions_quantile50_dice[df$preIMC_to_preIMS_regions_n_points_total > min_regions] > min_q50_dice
+if("preIMC_to_preIMS" %in% snakemake@params[["QC_steps"]] & "regions" %in% snakemake@params[["QC_metrics"]]){
+  preIMCpreIMS_reg <- rep(NA, length(df$sample))
+  preIMCpreIMS_reg[df$preIMC_to_preIMS_regions_n_points_total > min_regions] <-
+    df$preIMC_to_preIMS_regions_quantile50_error[df$preIMC_to_preIMS_regions_n_points_total > min_regions] < min_q50_error |
+      df$preIMC_to_preIMS_regions_quantile50_dice[df$preIMC_to_preIMS_regions_n_points_total > min_regions] > min_q50_dice
+  to_keep_df$preIMCpreIMS_reg <- preIMCpreIMS_reg
+}
 
 ## postIMC to preIMC
 ### landmarks
-postIMCpreIMC_lm <- rep(NA, length(df$sample))
-postIMCpreIMC_lm[df$postIMC_to_preIMC_n_points_total > min_landmarks] <- df$postIMC_to_preIMC_quantile50_error[df$postIMC_to_preIMC_n_points_total > min_landmarks] < min_q50_error
+if("postIMC_to_preIMC" %in% snakemake@params[["QC_steps"]] & "landmarks" %in% snakemake@params[["QC_metrics"]]){
+  postIMCpreIMC_lm <- rep(NA, length(df$sample))
+  postIMCpreIMC_lm[df$postIMC_to_preIMC_n_points_total > min_landmarks] <- df$postIMC_to_preIMC_quantile50_error[df$postIMC_to_preIMC_n_points_total > min_landmarks] < min_q50_error
+  to_keep_df$postIMCpreIMC_lm <- postIMCpreIMC_lm
+}
 
 ### regions
-postIMCpreIMC_reg <- rep(NA, length(df$sample))
-postIMCpreIMC_reg[df$postIMC_to_preIMC_regions_n_points_total > min_regions] <-
-  df$postIMC_to_preIMC_regions_quantile50_error[df$postIMC_to_preIMC_regions_n_points_total > min_regions] < min_q50_error |
-    df$postIMC_to_preIMC_regions_quantile50_dice[df$postIMC_to_preIMC_regions_n_points_total > min_regions] > min_q50_dice
-```
-```{r}
-to_keep_df <- data.frame(
-  sample = df$sample,
-  IMS_to_postIMS = keep_IMS_to_postIMS,
-  postIMCpostIMS_lm = postIMCpostIMS_lm,
-  postIMCpostIMS_reg = postIMCpostIMS_reg,
-  preIMSpostIMS_lm = preIMSpostIMS_lm,
-  preIMSpostIMS_reg = preIMSpostIMS_reg,
-  preIMSpostIMS_sitk = preIMSpostIMS_sitk,
-  preIMCpreIMS_lm = preIMCpreIMS_lm,
-  preIMCpreIMS_reg = preIMCpreIMS_reg,
-  postIMCpreIMC_lm = postIMCpreIMC_lm,
-  postIMCpreIMC_reg = postIMCpreIMC_reg
-)
+if("postIMC_to_preIMC" %in% snakemake@params[["QC_steps"]] & "regions" %in% snakemake@params[["QC_metrics"]]){
+  postIMCpreIMC_reg <- rep(NA, length(df$sample))
+  postIMCpreIMC_reg[df$postIMC_to_preIMC_regions_n_points_total > min_regions] <-
+    df$postIMC_to_preIMC_regions_quantile50_error[df$postIMC_to_preIMC_regions_n_points_total > min_regions] < min_q50_error |
+      df$postIMC_to_preIMC_regions_quantile50_dice[df$postIMC_to_preIMC_regions_n_points_total > min_regions] > min_q50_dice
+  to_keep_df$postIMCpreIMC_reg <- postIMCpreIMC_reg
+}
 ```
 
 ```{r}
-postIMC_to_postIMS <- ifelse(is.na(postIMCpostIMS_lm), FALSE, postIMCpostIMS_lm) | ifelse(is.na(postIMCpostIMS_reg), FALSE, postIMCpostIMS_reg)
-postIMC_to_postIMS[!postIMC_to_postIMS][is.na(postIMCpostIMS_lm[!postIMC_to_postIMS]) & is.na(postIMCpostIMS_reg[!postIMC_to_postIMS])] <- NA
+## postIMC to postIMS
+if("postIMCpostIMS_lm" %in% colnames(to_keep_df) & "postIMCpostIMS_reg" %in% colnames(to_keep_df)){
+  postIMC_to_postIMS <- ifelse(is.na(postIMCpostIMS_lm), FALSE, postIMCpostIMS_lm) | ifelse(is.na(postIMCpostIMS_reg), FALSE, postIMCpostIMS_reg)
+  postIMC_to_postIMS[!postIMC_to_postIMS][is.na(postIMCpostIMS_lm[!postIMC_to_postIMS]) & is.na(postIMCpostIMS_reg[!postIMC_to_postIMS])] <- NA
+} else if ("postIMCpostIMS_lm" %in% colnames(to_keep_df)){ 
+  postIMC_to_postIMS <- postIMCpostIMS_lm
+} else if ("postIMCpostIMS_reg" %in% colnames(to_keep_df)){ 
+  postIMC_to_postIMS <- postIMCpostIMS_reg
+}
 
-preIMS_to_postIMS <- ifelse(is.na(preIMSpostIMS_lm), FALSE, preIMSpostIMS_lm) | ifelse(is.na(preIMSpostIMS_reg), FALSE, preIMSpostIMS_reg) | ifelse(is.na(preIMSpostIMS_sitk), FALSE, preIMSpostIMS_sitk)
-preIMS_to_postIMS[!preIMS_to_postIMS][is.na(preIMSpostIMS_lm[!preIMS_to_postIMS]) & is.na(preIMSpostIMS_reg[!preIMS_to_postIMS])] <- NA
+## preIMS to postIMS
+if("preIMSpostIMS_lm" %in% colnames(to_keep_df) & "preIMSpostIMS_reg" %in% colnames(to_keep_df) & "preIMSpostIMS_sitk" %in% colnames(to_keep_df)){
+  preIMS_to_postIMS <- ifelse(is.na(preIMSpostIMS_lm), FALSE, preIMSpostIMS_lm) | ifelse(is.na(preIMSpostIMS_reg), FALSE, preIMSpostIMS_reg) | ifelse(is.na(preIMSpostIMS_sitk), FALSE, preIMSpostIMS_sitk)
+  preIMS_to_postIMS[!preIMS_to_postIMS][is.na(preIMSpostIMS_lm[!preIMS_to_postIMS]) & is.na(preIMSpostIMS_reg[!preIMS_to_postIMS])] <- NA
+} else if ("preIMSpostIMS_lm" %in% colnames(to_keep_df)){ 
+  preIMS_to_postIMS <- preIMSpostIMS_lm
+} else if ("preIMSpostIMS_reg" %in% colnames(to_keep_df)){ 
+  preIMS_to_postIMS <- preIMSpostIMS_reg
+} else if ("preIMSpostIMS_sitk" %in% colnames(to_keep_df)){ 
+  preIMS_to_postIMS <- preIMSpostIMS_sitk
+} else{
+  preIMS_to_postIMS <- rep(NA, length(df$sample))
+}
 
-preIMC_to_preIMS <- ifelse(is.na(preIMCpreIMS_lm), FALSE, preIMCpreIMS_lm) | ifelse(is.na(preIMCpreIMS_reg), FALSE, preIMCpreIMS_reg)
-preIMC_to_preIMS[!preIMC_to_preIMS][is.na(preIMCpreIMS_lm[!preIMC_to_preIMS]) & is.na(preIMCpreIMS_reg[!preIMC_to_preIMS])] <- NA
+## preIMC to preIMS
+if("preIMCpreIMS_lm" %in% colnames(to_keep_df) & "preIMCpreIMS_reg" %in% colnames(to_keep_df)){
+  preIMC_to_preIMS <- ifelse(is.na(preIMCpreIMS_lm), FALSE, preIMCpreIMS_lm) | ifelse(is.na(preIMCpreIMS_reg), FALSE, preIMCpreIMS_reg)
+  preIMC_to_preIMS[!preIMC_to_preIMS][is.na(preIMCpreIMS_lm[!preIMC_to_preIMS]) & is.na(preIMCpreIMS_reg[!preIMC_to_preIMS])] <- NA
+} else if ("preIMCpreIMS_lm" %in% colnames(to_keep_df)){ 
+  preIMC_to_preIMS <- preIMCpreIMS_lm
+} else if ("preIMCpreIMS_reg" %in% colnames(to_keep_df)){ 
+  preIMC_to_preIMS <- preIMCpreIMS_reg
+} else{
+  preIMC_to_preIMS <- rep(NA, length(df$sample))
+}
 
-postIMC_to_preIMC <- ifelse(is.na(postIMCpreIMC_lm), FALSE, postIMCpreIMC_lm) | ifelse(is.na(postIMCpreIMC_reg), FALSE, postIMCpreIMC_reg)
-postIMC_to_preIMC[!postIMC_to_preIMC][is.na(postIMCpreIMC_lm[!postIMC_to_preIMC]) & is.na(postIMCpreIMC_reg[!postIMC_to_preIMC])] <- NA
+## postIMC to preIMC
+if("postIMCpreIMC_lm" %in% colnames(to_keep_df) & "postIMCpreIMC_reg" %in% colnames(to_keep_df)){
+  postIMC_to_preIMC <- ifelse(is.na(postIMCpreIMC_lm), FALSE, postIMCpreIMC_lm) | ifelse(is.na(postIMCpreIMC_reg), FALSE, postIMCpreIMC_reg)
+  postIMC_to_preIMC[!postIMC_to_preIMC][is.na(postIMCpreIMC_lm[!postIMC_to_preIMC]) & is.na(postIMCpreIMC_reg[!postIMC_to_preIMC])] <- NA
+} else if ("postIMCpreIMC_lm" %in% colnames(to_keep_df)){
+  postIMC_to_preIMC <- postIMCpreIMC_lm
+} else if ("postIMCpreIMC_reg" %in% colnames(to_keep_df)){
+  postIMC_to_preIMC <- postIMCpreIMC_reg
+} else{
+  postIMC_to_preIMC <- rep(NA, length(df$sample))
+}
 
 t1 <- (keep_IMS_to_postIMS & preIMS_to_postIMS & preIMC_to_preIMS & postIMC_to_preIMC)
 to_keep_overall <- ifelse(is.na(t1), FALSE, t1) | ifelse(is.na(postIMC_to_postIMS), FALSE, postIMC_to_postIMS)
@@ -635,7 +711,9 @@ minsc <- c(0, 0)
 maxsc <- c(10, 100)
 
 df <- read.csv(input_csv_files[1])
-df1 <- df[, c("sample", "IMS_to_postIMS_quantile50_error", "postIMC_to_preIMC_quantile50_error", "preIMC_to_preIMS_quantile50_error", "preIMS_to_postIMS_quantile50_error", "postIMC_to_postIMS_quantile50_error", "postIMC_to_preIMC_regions_quantile50_error", "postIMC_to_preIMC_regions_quantile50_dice", "preIMC_to_preIMS_regions_quantile50_error", "preIMC_to_preIMS_regions_quantile50_dice", "preIMS_to_postIMS_regions_quantile50_error", "preIMS_to_postIMS_regions_quantile50_dice", "postIMC_to_postIMS_regions_quantile50_error", "postIMC_to_postIMS_regions_quantile50_dice")]
+pot_columns1 <- c("sample", "IMS_to_postIMS_quantile50_error", "postIMC_to_preIMC_quantile50_error", "preIMC_to_preIMS_quantile50_error", "preIMS_to_postIMS_quantile50_error", "postIMC_to_postIMS_quantile50_error", "postIMC_to_preIMC_regions_quantile50_error", "postIMC_to_preIMC_regions_quantile50_dice", "preIMC_to_preIMS_regions_quantile50_error", "preIMC_to_preIMS_regions_quantile50_dice", "preIMS_to_postIMS_regions_quantile50_error", "preIMS_to_postIMS_regions_quantile50_dice", "postIMC_to_postIMS_regions_quantile50_error", "postIMC_to_postIMS_regions_quantile50_dice")
+pot_columns <- pot_columns1[pot_columns1 %in% colnames(df)]
+df1 <- df[, pot_columns]
 
 lookupdf <- data.frame(
   metric = c(
@@ -670,7 +748,10 @@ lookupdf <- data.frame(
   )
 )
 
-df2 <- df[, c("sample", "IMS_to_postIMS_n_landmarks", "postIMC_to_preIMC_n_points_total", "preIMC_to_preIMS_n_points_total", "preIMS_to_postIMS_n_points_total", "postIMC_to_postIMS_n_points_total", "postIMC_to_preIMC_regions_n_points_total", "preIMC_to_preIMS_regions_n_points_total", "preIMS_to_postIMS_regions_n_points_total", "postIMC_to_postIMS_regions_n_points_total")]
+pot_columns2 <- c("sample", "IMS_to_postIMS_n_landmarks", "postIMC_to_preIMC_n_points_total", "preIMC_to_preIMS_n_points_total", "preIMS_to_postIMS_n_points_total", "postIMC_to_postIMS_n_points_total", "postIMC_to_preIMC_regions_n_points_total", "preIMC_to_preIMS_regions_n_points_total", "preIMS_to_postIMS_regions_n_points_total", "postIMC_to_postIMS_regions_n_points_total")
+pot_columns <- pot_columns2[pot_columns2 %in% colnames(df)]
+df2 <- df[, pot_columns]
+
 
 df1l <- tidyr::pivot_longer(df1, -sample, names_to = "metric", values_to = "value")
 df2l <- tidyr::pivot_longer(df2, -sample, names_to = "confidence", values_to = "confidence_value")
@@ -692,14 +773,14 @@ dfc$evaluation_type <- ifelse(stringr::str_detect(dfc$metric, "region"), "region
 ```
 
 The following graph represents a summary of the registration results. On the y-axis are individual samples. On the x-axis different registration metrics are shown. The panels represents the different registration steps. The background color indicates the type of evaluation, either 'landmark' or 'region'. Three different metrics are shown on the x-axis 'landmark_error' (the median distance between matching landmarks), 'regions_dice' (the median dice score between matching regions) and 'regions_error' (the median distance between centroids of matching regions). The size of the points indicates the (somewhat quantitative) confidence in the shown value with bigger sizes meaning more confidence. 
-This 'Confidence guess' is determined as follows: for the landmark based metrics ('landmark_error') a value of 0 corresponds to 'r minsc[2]' landmarks and a value of 1 correspones to 'r maxsc[2]' or more landmarks. 
-For the regions based metrics ('regions_dice' and 'regions_error') a value of 0 correspones to 'r minsc[1]' regions and a value of 1 correspones to 'r maxsc[1]' or more regions. 
+This 'Confidence guess' is determined as follows: for the landmark based metrics ('landmark_error') a value of 0 corresponds to `r minsc[2]` landmarks and a value of 1 correspones to `r maxsc[2]` or more landmarks. 
+For the regions based metrics ('regions_dice' and 'regions_error') a value of 0 correspones to `r minsc[1]` regions and a value of 1 correspones to `r maxsc[1]` or more regions. 
 The rightmost panel ('postIMC to postIMS') is the direct comparison between postIMC to postIMS and would be the best comparison but it is in general difficult to get good measures between these two images as they are very different. Thus, the other panels show the individual registration steps and if all those panels show good performance the overall registration is probably also good. 
 Values that are grayed out are missing. 
 Overall some care should be taken when interpreting these results as the presented metrics are not always a good indicator of the quality of the registration. It is therefore advised to also look at the images and plots below, especially for edge cases and cases with missing values.
 
 
-```{r, fig.width=10,fig.height=10}
+```{r metrics_summary_plot, warning=FALSE, message=FALSE, fig.width=10,fig.height=5+0.5*length(unique(dfc$sample))}
 xlabels <- stringr::str_extract(unique(dfc$metric), "(regions_quantile50_error|regions_quantile50_dice|quantile50_error)") |>
   stringr::str_replace("quantile50_", "") |>
   stringr::str_replace("^error$", "landmark_error")
@@ -744,16 +825,22 @@ The following heatmap is a summary of the results. The columns are the different
 
 This evaluation is rather strict meaning that if the 'overall' column is TRUE, the sample is likely to be registered well. However, if the 'overall' column is FALSE or NA, it does not necessarily mean that the sample is not registered well. Therefore it is adviced to check the FALSE and NA entries in the additional plots and images below. 
 
-```{r, fig.width=12, fig.height=8}
+```{r metrics_summary_plot_bin, fig.width=12, fig.height=3+0.5*length(unique(dfc$sample))}
 data_long <- tidyr::pivot_longer(to_keep_df_aggr, c("IMS_to_postIMS", "postIMC_to_postIMS", "preIMS_to_postIMS", "preIMC_to_preIMS", "postIMC_to_preIMC", "overall"))
 data_long$name <- factor(data_long$name, c("IMS_to_postIMS", "preIMS_to_postIMS", "preIMC_to_preIMS", "postIMC_to_preIMC", "postIMC_to_postIMS", "overall"))
 
 ggplot2::ggplot(data_long, ggplot2::aes(name, sample, fill = value)) +
   ggplot2::geom_tile() +
   ggplot2::labs(x = NULL, y = NULL, fill = "keep") +
-  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
+  ggplot2::scale_fill_manual(values = c("TRUE" = "green", "FALSE" = "red", "NA" = "gray90")) 
 ```
 
+
+
+```{r}
+to_include <- "IMS_to_postIMS" %in% snakemake@params[["QC_steps"]] 
+```
 # IMS to postIMS
 
 ## Images
@@ -798,30 +885,58 @@ vis_type <- "IMS_to_postIMS"
 ```{r pairs_plots_IMS_to_postIMS, ref.label='pairs_plots', results='asis', fig.width=7, fig.height=7}
 ```
 
+```{r}
+to_include1 <- "postIMC_to_postIMS" %in% snakemake@params[["QC_steps"]] 
+```
 
-# postIMC to postIMS
+```{r, results='asis', include=to_include1}
+cat("
+\n# postIMC to postIMS\n
 
-## Summary plots of the registration metrics {.tabset}
+\n## Summary plots of the registration metrics {.tabset}\n
 
 | Position | Measure | x-axis | y-axis | color  | 
 |:---------|:--------|:-------|:-------|:-------|
 | Left     | Tissue masks | Distance between centroids | Dice coefficient | |
 | Middle   | Landmarks | Summarized distance between landmarks | Number of landmarks | |
 | Right    | Regions | Summarized distance between regions | Dice coefficients | Number of regions |
+")
+```
 
-
-```{r}
+```{r, include=to_include1}
 vis_type <- "postIMC_to_postIMS"
 imgtype1 <- stringr::str_split(vis_type, "_to_")[[1]][1]
 imgtype2 <- stringr::str_split(vis_type, "_to_")[[1]][2]
 ```
-```{r pairs_plots_postIMC_to_postIMS, ref.label='pairs_plots', results='asis', fig.width=12, fig.height=7}
+```{r pairs_plots_postIMC_to_postIMS, ref.label='pairs_plots', results='asis', fig.width=12, fig.height=7, include=to_include1}
+```
+
+```{r, results='asis', include=to_include1}
+cat("
+\n## Summary Table of the registration metrics\n\n
+")
+print(summary_dt(input_csv_files, vis_type))
 ```
 
 
-## Images {.tabset}
+```{r}
+to_include_masks <- ("masks" %in% snakemake@params[["QC_metrics"]]) & to_include1
+to_include_landmarks <- ("landmarks" %in% snakemake@params[["QC_metrics"]]) & to_include1
+to_include_regions <- ("regions" %in% snakemake@params[["QC_metrics"]]) & to_include1
+to_include_images <- ("images" %in% snakemake@params[["QC_metrics"]]) & to_include1
+to_include <- to_include_masks | to_include_landmarks | to_include_regions | to_include_images
+```
 
-### Tissue masks {.tabset}
+
+```{r, results='asis', include=to_include}
+cat("
+\n## Images {.tabset}\n
+")
+```
+
+```{r, results='asis', include=to_include_masks}
+cat(sprintf("
+\n### Tissue masks {.tabset}\n
 
 Shown below are the masks of the tissue masks, overlayed on top of each other. Extraction of the tissue masks is not always exact (especially for the postIMS images), so the results might be unreliable.
 Color legend for the below images:
@@ -829,68 +944,89 @@ Color legend for the below images:
 | Color | Description |
 |-------|-------------|
 | Black | Neither     |
-| Dark gray  | `r imgtype1` only |
-| Light gray  | `r imgtype2` only |
+| Dark gray  | %s only |
+| Light gray  | %s only |
 | White | Both        |
 
-```{r}
+", imgtype1, imgtype2))
+```
+
+```{r, include=to_include_masks}
 filenames <- postIMCmask_to_postIMSmask_png
 img_height <- 700
 ```
-```{r plot_images_postIMC_to_postIMS_mask, ref.label='plot_images', results='asis'}
+```{r plot_images_postIMC_to_postIMS_mask, ref.label='plot_images', results='asis', include=to_include_masks}
 ```
 
-### Images of Landmarks {.tabset}
+```{r, results='asis', include=to_include_landmarks}
+cat(sprintf("
+\n### Images of Landmarks {.tabset}\n
 
-Below are shown the landmarks from the `r imgtype1` image (left) and the `r imgtype2` image (right) after registration. The landmarks are shown as errors where the start of the arrow is on the respective image and the end is the corresponding landmark in the other image. The length of the arrows are therefore the distance between individual landmarks. 
+Below are shown the landmarks from the %s image (left) and the %s image (right) after registration. The landmarks are shown as errors where the start of the arrow is on the respective image and the end is the corresponding landmark in the other image. The length of the arrows are therefore the distance between individual landmarks. 
 
 |left | right|
 |:----|:-----|
-|`r imgtype1` | `r imgtype2` |
+| %s | %s |
 
+", imgtype1, imgtype2, imgtype1, imgtype2))
+```
 
-```{r}
+```{r, include=to_include_landmarks}
 filenames1 <- landmarks_postIMC_transformed_on_postIMS_png
 filenames2 <- landmarks_postIMS_to_postIMC_png
 ```
-```{r plot_2_images_preIMS_to_postIMS_landmarks, ref.label='plot_2_images', results='asis', fig.width=8, fig.height=8}
+```{r plot_2_images_preIMS_to_postIMS_landmarks, ref.label='plot_2_images', results='asis', fig.width=8, fig.height=8, include=to_include_landmarks}
 ```
 
 
 
-### Images of Regions {.tabset}
+```{r, results='asis', include=to_include_regions}
+cat(sprintf("
+\n### Images of Regions {.tabset}\n
 
-Below are shown the regions from the `r imgtype1` image (left) and the `r imgtype2` image (right) after registration. 
+Below are shown the regions from the %s image (left) and the %s image (right) after registration. 
 
 | Color | Description |
 |-------|-------------|
 | Black | Neither     |
-| Dark gray  | `r imgtype1` only |
-| Light gray  | `r imgtype2` only |
+| Dark gray  | %s only |
+| Light gray  | %s only |
 | White | Both        |
 
+", imgtype1, imgtype2, imgtype1, imgtype2))
+```
 
-```{r}
+```{r, include=to_include_regions}
 filenames <- regions_postIMC_transformed_on_postIMS_png
 img_height <- 700
 ```
-```{r plot_images_postIMC_to_postIMS_regions, ref.label='plot_images', results='asis'}
+```{r plot_images_postIMC_to_postIMS_regions, ref.label='plot_images', results='asis', include=to_include_regions}
 ```
 
-### Overlayed {.tabset}
+```{r, results='asis', include=to_include_images}
+cat("
+\n### Overlayed {.tabset}\n
+")
+```
 
-```{r}
+```{r, include=to_include_images}
 filenames <- gif_postIMC_postIMS
 img_height <- 500
 ```
-```{r plot_images_postIMC_to_postIMS_gif, ref.label='plot_images', results='asis'}
+```{r plot_images_postIMC_to_postIMS_gif, ref.label='plot_images', results='asis', include=to_include_images}
 ```
 
 
+```{r}
+to_include1 <- "preIMS_to_postIMS" %in% snakemake@params[["QC_steps"]] 
+```
 
-# preIMS to postIMS
 
-## Summary plots of the registration metrics {.tabset}
+```{r, results='asis', include=to_include1}
+cat("
+\n# preIMS to postIMS\n
+
+\n## Summary plots of the registration metrics {.tabset}\n
 
 | Position | Measure | x-axis | y-axis | color  | 
 |:---------|:--------|:-------|:-------|:-------|
@@ -898,18 +1034,46 @@ img_height <- 500
 | Middle   | Landmarks | Summarized distance between landmarks | Number of landmarks | |
 | Right    | Regions | Summarized distance between regions | Dice coefficients | Number of regions |
 
+")
+```
 
-```{r}
+```{r, include=to_include1}
 vis_type <- "preIMS_to_postIMS"
 imgtype1 <- stringr::str_split(vis_type, "_to_")[[1]][1]
 imgtype2 <- stringr::str_split(vis_type, "_to_")[[1]][2]
 ```
-```{r pairs_plots_preIMS_to_postIMS, ref.label='pairs_plots', results='asis', fig.width=15, fig.height=7}
+```{r pairs_plots_preIMS_to_postIMS, ref.label='pairs_plots', results='asis', fig.width=15, fig.height=7, include=to_include1}
 ```
 
-## Images {.tabset}
+```{r, results='asis', include=to_include1}
+cat("
+\n## Summary Table of the registration metrics\n
+")
+```
+```{r, include=to_include1}
+summary_dt(input_csv_files, vis_type)
+```
 
-### Tissue masks {.tabset}
+
+
+```{r}
+to_include_masks <- ("masks" %in% snakemake@params[["QC_metrics"]]) & to_include1
+to_include_landmarks <- ("landmarks" %in% snakemake@params[["QC_metrics"]]) & to_include1
+to_include_regions <- ("regions" %in% snakemake@params[["QC_metrics"]]) & to_include1
+to_include_images <- ("images" %in% snakemake@params[["QC_metrics"]]) & to_include1
+to_include_sitk <- ("sitk" %in% snakemake@params[["QC_metrics"]]) & to_include1
+to_include <- to_include_masks | to_include_landmarks | to_include_regions | to_include_images
+```
+
+```{r, results='asis', include=to_include}
+cat("
+\n## Images {.tabset}\n
+")
+```
+
+```{r, results='asis', include=to_include_masks}
+cat(sprintf("
+\n### Tissue masks {.tabset}\n
 
 Shown below are the masks of the tissue masks, overlayed on top of each other. Extraction of the tissue masks is not always exact (especially for the postIMS images), so the results might be unreliable.
 Color legend for the below images:
@@ -917,76 +1081,103 @@ Color legend for the below images:
 | Color | Description |
 |-------|-------------|
 | Black | Neither     |
-| Dark gray  | `r imgtype1` only |
-| Light gray  | `r imgtype2` only |
+| Dark gray  | %s only |
+| Light gray  | %s only |
 | White | Both        |
 
-```{r}
+", imgtype1, imgtype2))
+```
+
+```{r, include=to_include_masks}
 filenames <- preIMSmask_to_postIMSmask_png
 img_height <- 700
 ```
-```{r plot_images_preIMS_to_postIMS_mask, ref.label='plot_images', results='asis'}
+```{r plot_images_preIMS_to_postIMS_mask, ref.label='plot_images', results='asis', include=to_include_masks}
 ```
 
-### Images of Landmarks {.tabset}
 
-Below are shown the landmarks from the `r imgtype1` image (left) and the `r imgtype2` image (right) after registration. The landmarks are shown as errors where the start of the arrow is on the respective image and the end is the corresponding landmark in the other image. The length of the arrows are therefore the distance between individual landmarks. 
+```{r, results='asis', include=to_include_landmarks}
+cat(sprintf("
+\n### Images of Landmarks {.tabset}\n
+
+Below are shown the landmarks from the %s image (left) and the %s image (right) after registration. The landmarks are shown as errors where the start of the arrow is on the respective image and the end is the corresponding landmark in the other image. The length of the arrows are therefore the distance between individual landmarks. 
 
 |left | right|
 |:----|:-----|
-|`r imgtype1` | `r imgtype2` |
+|%s | %s |
 
+", imgtype1, imgtype2, imgtype1, imgtype2))
+```
 
-```{r}
+```{r, include=to_include_landmarks}
 filenames1 <- landmarks_preIMS_transformed_on_postIMS_png
 filenames2 <- landmarks_postIMS_png
 ```
-```{r plot_2_images_preIMS_to_postIMS_landmarks, ref.label='plot_2_images', results='asis', fig.width=8, fig.height=8}
+```{r plot_2_images_preIMS_to_postIMS_landmarks, ref.label='plot_2_images', results='asis', fig.width=8, fig.height=8, include=to_include_landmarks}
 ```
 
-### Images of Regions {.tabset}
+```{r, results='asis', include=to_include_regions}
+cat(sprintf("
+\n### Images of Regions {.tabset}\n
 
-Below are shown the regions from the `r imgtype1` image (left) and the `r imgtype2` image (right) after registration. 
+Below are shown the regions from the %s image (left) and the %s image (right) after registration. 
 
 | Color | Description |
 |-------|-------------|
 | Black | Neither     |
-| Dark gray  | `r imgtype1` only |
-| Light gray  | `r imgtype2` only |
+| Dark gray  | %s only |
+| Light gray  | %s only |
 | White | Both        |
 
+", imgtype1, imgtype2, imgtype1, imgtype2))
+```
 
-```{r}
+```{r, include=to_include_regions}
 filenames <- regions_preIMS_transformed_on_postIMS_png
 img_height <- 700
 ```
-```{r plot_images_preIMS_to_postIMS_regions, ref.label='plot_images', results='asis'}
+```{r plot_images_preIMS_to_postIMS_regions, ref.label='plot_images', results='asis', include=to_include_regions}
 ```
 
-### Overlayed {.tabset}
+```{r, results='asis', include=to_include_images}
+cat("
+\n### Overlayed {.tabset}\n
+")
+```
 
-```{r}
+```{r, include=to_include_images}
 filenames <- gif_preIMS_postIMS
 img_height <- 500
 ```
-```{r plot_images_preIMS_to_postIMS_gif, ref.label='plot_images', results='asis'}
+```{r plot_images_preIMS_to_postIMS_gif, ref.label='plot_images', results='asis', include=to_include_images}
 ```
 
 
-## Translations based on grid subtracted postIMS to preIMS registration
+```{r, results='asis', include=to_include_sitk}
+cat("
+\n## Translations based on grid subtracted postIMS to preIMS registration\n
 
 The plot below shows the translations (x and y) based on the grid subtracted postIMS to preIMS registration (using image intensities). The leftmost plot shows the translation in the X direction with the x-axis representing the infered translation from the landmarks and the y-axis the infered translation from the grid subtracted registration. The middle plot shows the same but in the Y direction. The rightmost plot shows the global translation (sqrt(x^2+y^2)) with the x-axis representing the infered translation from the landmarks and the y-axis the infered translation from the grid subtracted registration.
 
+")
+```
 
-```{r, fig.width=10, fig.height=5}
+```{r, fig.width=10, fig.height=5, include=to_include_sitk}
 fig <- sitk_error_plot(input_csv_files, "preIMS_to_postIMS")
 fig
 ```
 
 
-# preIMC to preIMS
 
-## Summary plots of the registration metrics {.tabset}
+```{r}
+to_include1 <- "preIMC_to_preIMS" %in% snakemake@params[["QC_steps"]] 
+```
+
+```{r, results='asis', include=to_include1}
+cat("
+\n# preIMC to preIMS\n
+
+\n## Summary plots of the registration metrics {.tabset}\n
 
 | Position | Measure | x-axis | y-axis | color  | 
 |:---------|:--------|:-------|:-------|:-------|
@@ -994,19 +1185,45 @@ fig
 | Middle   | Landmarks | Summarized distance between landmarks | Number of landmarks | |
 | Right    | Regions | Summarized distance between regions | Dice coefficients | Number of regions |
 
+")
+```
 
-```{r}
+```{r, include=to_include1}
 vis_type <- "preIMC_to_preIMS"
 imgtype1 <- stringr::str_split(vis_type, "_to_")[[1]][1]
 imgtype2 <- stringr::str_split(vis_type, "_to_")[[1]][2]
 ```
-```{r pairs_plots_preIMC_to_preIMS, ref.label='pairs_plots', results='asis', fig.width=15, fig.height=7}
+```{r pairs_plots_preIMC_to_preIMS, ref.label='pairs_plots', results='asis', fig.width=15, fig.height=7, include=to_include1}
+```
+
+```{r, results='asis', include=to_include1}
+cat("
+\n## Summary Table of the registration metrics\n
+")
+```
+```{r, include=to_include1}
+summary_dt(input_csv_files, vis_type)
 ```
 
 
-## Images {.tabset}
 
-### Tissue masks {.tabset}
+```{r}
+to_include_masks <- ("masks" %in% snakemake@params[["QC_metrics"]]) & to_include1
+to_include_landmarks <- ("landmarks" %in% snakemake@params[["QC_metrics"]]) & to_include1
+to_include_regions <- ("regions" %in% snakemake@params[["QC_metrics"]]) & to_include1
+to_include_images <- ("images" %in% snakemake@params[["QC_metrics"]]) & to_include1
+to_include <- to_include_masks | to_include_landmarks | to_include_regions | to_include_images
+```
+
+```{r, results='asis', include=to_include}
+cat("
+\n## Images {.tabset}\n
+")
+```
+
+```{r, results='asis', include=to_include_masks}
+cat(sprintf("
+\n### Tissue masks {.tabset}\n
 
 Shown below are the masks of the tissue masks, overlayed on top of each other. Extraction of the tissue masks is not always exact (especially for the postIMS images), so the results might be unreliable.
 Color legend for the below images:
@@ -1014,66 +1231,85 @@ Color legend for the below images:
 | Color | Description |
 |-------|-------------|
 | Black | Neither     |
-| Dark gray  | `r imgtype1` only |
-| Light gray  | `r imgtype2` only |
+| Dark gray  | %s only |
+| Light gray  | %s only |
 | White | Both        |
 
-```{r}
+", imgtype1, imgtype2))
+```
+
+```{r, include=to_include_masks}
 filenames <- preIMCmask_to_preIMSmask_png
 img_height <- 700
 ```
-```{r plot_images_preIMC_to_preIMS_mask, ref.label='plot_images', results='asis'}
+```{r plot_images_preIMC_to_preIMS_mask, ref.label='plot_images', results='asis', include=to_include_masks}
 ```
 
-### Images of Landmarks {.tabset}
+```{r, results='asis', include=to_include_landmarks}
+cat(sprintf("
+\n### Images of Landmarks {.tabset}\n
 
-Below are shown the landmarks from the `r imgtype1` image (left) and the `r imgtype2` image (right) after registration. The landmarks are shown as errors where the start of the arrow is on the respective image and the end is the corresponding landmark in the other image. The length of the arrows are therefore the distance between individual landmarks. 
+Below are shown the landmarks from the %s image (left) and the %s image (right) after registration. The landmarks are shown as errors where the start of the arrow is on the respective image and the end is the corresponding landmark in the other image. The length of the arrows are therefore the distance between individual landmarks. 
 
 |left | right|
 |:----|:-----|
-|`r imgtype1` | `r imgtype2` |
+|%s | %s |
 
+", imgtype1, imgtype2, imgtype1, imgtype2))
+```
 
-```{r}
+```{r, include=to_include_landmarks}
 filenames1 <- landmarks_preIMC_transformed_on_preIMS_png
 filenames2 <- landmarks_preIMS_png
 ```
-```{r plot_2_images_preIMC_to_preIMS_landmarks, ref.label='plot_2_images', results='asis', fig.width=8, fig.height=8}
+```{r plot_2_images_preIMC_to_preIMS_landmarks, ref.label='plot_2_images', results='asis', fig.width=8, fig.height=8, include=to_include_landmarks}
 ```
 
-### Images of Regions {.tabset}
+```{r, results='asis', include=to_include_regions}
+cat(sprintf("
+\n### Images of Regions {.tabset}\n
 
-Below are shown the regions from the `r imgtype1` image (left) and the `r imgtype2` image (right) after registration. 
+Below are shown the regions from the %s image (left) and the %s image (right) after registration. 
 
 | Color | Description |
 |-------|-------------|
 | Black | Neither     |
-| Dark gray  | `r imgtype1` only |
-| Light gray  | `r imgtype2` only |
+| Dark gray  | %s only |
+| Light gray  | %s only |
 | White | Both        |
 
+", imgtype1, imgtype2, imgtype1, imgtype2))
+```
 
-```{r}
+```{r, include=to_include_regions}
 filenames <- regions_preIMC_transformed_on_preIMS_png
 img_height <- 700
 ```
-```{r plot_images_preIMC_to_preIMS_regions, ref.label='plot_images', results='asis'}
+```{r plot_images_preIMC_to_preIMS_regions, ref.label='plot_images', results='asis', include=to_include_regions}
 ```
 
-### Overlayed {.tabset}
+```{r, results='asis', include=to_include_images}
+cat("
+\n### Overlayed {.tabset}\n
+")
+```
 
-```{r}
+```{r, include=to_include_images}
 filenames <- gif_preIMC_preIMS
 img_height <- 500
 ```
-```{r plot_images_preIMC_to_preIMS_gif, ref.label='plot_images', results='asis'}
+```{r plot_images_preIMC_to_preIMS_gif, ref.label='plot_images', results='asis', include=to_include_images}
 ```
 
+```{r}
+to_include1 <- "postIMC_to_preIMC" %in% snakemake@params[["QC_steps"]] 
+```
 
+```{r, results='asis', include=to_include1}
+cat("
+\n# postIMC to preIMC\n
 
-# postIMC to preIMC
-
-## Summary plots of the registration metrics {.tabset}
+\n## Summary plots of the registration metrics {.tabset}\n
 
 | Position | Measure | x-axis | y-axis | color  | 
 |:---------|:--------|:-------|:-------|:-------|
@@ -1081,19 +1317,45 @@ img_height <- 500
 | Middle   | Landmarks | Summarized distance between landmarks | Number of landmarks | |
 | Right    | Regions | Summarized distance between regions | Dice coefficients | Number of regions |
 
+")
+```
 
-```{r}
+```{r, include=to_include1}
 vis_type <- "postIMC_to_preIMC"
 imgtype1 <- stringr::str_split(vis_type, "_to_")[[1]][1]
 imgtype2 <- stringr::str_split(vis_type, "_to_")[[1]][2]
 ```
-```{r pairs_plots_postIMC_to_preIMC, ref.label='pairs_plots', results='asis', fig.width=15, fig.height=7}
+```{r pairs_plots_postIMC_to_preIMC, ref.label='pairs_plots', results='asis', fig.width=15, fig.height=7, include=to_include1}
+```
+
+```{r, results='asis', include=to_include1}
+cat("
+\n## Summary Table of the registration metrics\n
+")
+```
+```{r, include=to_include1}
+summary_dt(input_csv_files, vis_type)
 ```
 
 
-## Images {.tabset}
 
-### Tissue masks {.tabset}
+```{r}
+to_include_masks <- ("masks" %in% snakemake@params[["QC_metrics"]]) & to_include1
+to_include_landmarks <- ("landmarks" %in% snakemake@params[["QC_metrics"]]) & to_include1
+to_include_regions <- ("regions" %in% snakemake@params[["QC_metrics"]]) & to_include1
+to_include_images <- ("images" %in% snakemake@params[["QC_metrics"]]) & to_include1
+to_include <- to_include_masks | to_include_landmarks | to_include_regions | to_include_images
+```
+
+```{r, results='asis', include=to_include}
+cat("
+\n## Images {.tabset}\n
+")
+```
+
+```{r, results='asis', include=to_include_masks}
+cat(sprintf("
+\n### Tissue masks {.tabset}\n
 
 Shown below are the masks of the tissue masks, overlayed on top of each other. Extraction of the tissue masks is not always exact (especially for the postIMS images), so the results might be unreliable.
 Color legend for the below images:
@@ -1101,60 +1363,75 @@ Color legend for the below images:
 | Color | Description |
 |-------|-------------|
 | Black | Neither     |
-| Dark gray  | `r imgtype1` only |
-| Light gray  | `r imgtype2` only |
+| Dark gray  | %s only |
+| Light gray  | %s only |
 | White | Both        |
 
-```{r}
+", imgtype1, imgtype2))
+```
+
+```{r, include=to_include_masks}
 filenames <- postIMCmask_to_preIMCmask_png
 img_height <- 700
 ```
-```{r plot_images_postIMC_to_preIMC_mask, ref.label='plot_images', results='asis'}
+```{r plot_images_postIMC_to_preIMC_mask, ref.label='plot_images', results='asis', include=to_include_masks}
 ```
 
-### Images of Landmarks {.tabset}
+```{r, results='asis', include=to_include_landmarks}
+cat(sprintf("
+\n### Images of Landmarks {.tabset}\n
 
-Below are shown the landmarks from the `r imgtype1` image (left) and the `r imgtype2` image (right) after registration. The landmarks are shown as errors where the start of the arrow is on the respective image and the end is the corresponding landmark in the other image. The length of the arrows are therefore the distance between individual landmarks. 
+Below are shown the landmarks from the %s image (left) and the %s image (right) after registration. The landmarks are shown as errors where the start of the arrow is on the respective image and the end is the corresponding landmark in the other image. The length of the arrows are therefore the distance between individual landmarks. 
 
 |left | right|
 |:----|:-----|
-|`r imgtype1` | `r imgtype2` |
+|%s | %s |
 
+", imgtype1, imgtype2, imgtype1, imgtype2))
+```
 
-```{r}
+```{r, include=to_include_landmarks}
 filenames1 <- landmarks_postIMC_transformed_on_preIMC_png
 filenames2 <- landmarks_preIMC_png
 ```
-```{r plot_2_images_postIMC_to_preIMC_landmarks, ref.label='plot_2_images', results='asis', fig.width=8, fig.height=8}
+```{r plot_2_images_postIMC_to_preIMC_landmarks, ref.label='plot_2_images', results='asis', fig.width=8, fig.height=8, include=to_include_landmarks}
 ```
 
-### Images of Regions {.tabset}
+```{r, results='asis', include=to_include_regions}
+cat(sprintf("
+\n### Images of Regions {.tabset}\n
 
-Below are shown the regions from the `r imgtype1` image (left) and the `r imgtype2` image (right) after registration. 
+Below are shown the regions from the %s image (left) and the %s image (right) after registration. 
 
 | Color | Description |
 |-------|-------------|
 | Black | Neither     |
-| Dark gray  | `r imgtype1` only |
-| Light gray  | `r imgtype2` only |
+| Dark gray  | %s only |
+| Light gray  | %s only |
 | White | Both        |
 
+", imgtype1, imgtype2, imgtype1, imgtype2))
+```
 
-```{r}
+```{r, include=to_include_regions}
 filenames <- regions_postIMC_transformed_on_preIMC_png
 img_height <- 700
 ```
-```{r plot_images_postIMC_to_preIMC_regions, ref.label='plot_images', results='asis'}
+```{r plot_images_postIMC_to_preIMC_regions, ref.label='plot_images', results='asis', include=to_include_regions}
 ```
 
 
-### Overlayed {.tabset}
+```{r, results='asis', include=to_include_images}
+cat("
+\n### Overlayed {.tabset}\n
+")
+```
 
-```{r}
+```{r, include=to_include_images}
 filenames <- gif_postIMC_preIMC
 img_height <- 500
 ```
-```{r plot_images_postIMC_to_preIMC_gif, ref.label='plot_images', results='asis'}
+```{r plot_images_postIMC_to_preIMC_gif, ref.label='plot_images', results='asis', include=to_include_images}
 ```
 
 

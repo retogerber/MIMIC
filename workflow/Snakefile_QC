@@ -932,9 +932,19 @@ rule image_registration_evaluation_IMS_to_postIMS:
         "scripts/QC/image_registration_evaluation_microlink.py"
 
 
+
+def return_file_or_generic(file, bool, generic = config["generic_input"]):
+    if bool:
+        return file
+    else:
+        return generic
+
 rule combine_image_registration_evaluation_results:
+    params:
+        generic_input=config["generic_input"],
     input:
-        registration_metrics=lambda wildcards: expand(
+        registration_metrics=lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/{sample}_reg_metrics.csv",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -944,7 +954,10 @@ rule combine_image_registration_evaluation_results:
                 return_all=True,
             ),
         ),
-        IMS_to_postIMS_error=lambda wildcards: expand(
+        "masks" in config["QC_metrics"]
+        ),
+        IMS_to_postIMS_error=lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics.json",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -954,7 +967,10 @@ rule combine_image_registration_evaluation_results:
                 return_all=True,
             ),
         ),
-        postIMC_to_preIMC_error=lambda wildcards: expand(
+        "landmarks" in config["QC_metrics"] and "IMS_to_postIMS" in config["QC_steps"]
+        ),
+        postIMC_to_preIMC_error=lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/{sample}_error_metrics_postIMC_on_preIMC.json",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -964,7 +980,10 @@ rule combine_image_registration_evaluation_results:
                 return_all=True,
             ),
         ),
-        preIMC_to_preIMS_error=lambda wildcards: expand(
+        "landmarks" in config["QC_metrics"] and "postIMC_to_preIMC" in config["QC_steps"]
+        ),
+        preIMC_to_preIMS_error=lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/{sample}_error_metrics_preIMC_on_preIMS.json",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -974,7 +993,10 @@ rule combine_image_registration_evaluation_results:
                 return_all=True,
             ),
         ),
-        preIMS_to_postIMS_error=lambda wildcards: expand(
+        "landmarks" in config["QC_metrics"] and "preIMC_to_preIMS" in config["QC_steps"]
+        ),
+        preIMS_to_postIMS_error=lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/{sample}_error_metrics_preIMS_on_postIMS.json",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -984,7 +1006,10 @@ rule combine_image_registration_evaluation_results:
                 return_all=True,
             ),
         ),
-        postIMC_to_postIMS_error=lambda wildcards: expand(
+        "landmarks" in config["QC_metrics"] and "preIMS_to_postIMS" in config["QC_steps"]
+        ),
+        postIMC_to_postIMS_error=lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/{sample}_error_metrics_postIMC_on_postIMS.json",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -994,7 +1019,10 @@ rule combine_image_registration_evaluation_results:
                 return_all=True,
             ),
         ),
-        preIMS_to_postIMS_sitk_error=lambda wildcards: expand(
+        "landmarks" in config["QC_metrics"] and "postIMC_to_postIMS" in config["QC_steps"]
+        ),
+        preIMS_to_postIMS_sitk_error=lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/{sample}_error_metrics_preIMS_on_postIMS_sitk.json",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1004,7 +1032,10 @@ rule combine_image_registration_evaluation_results:
                 return_all=True,
             ),
         ),
-        postIMC_to_preIMC_region_error=lambda wildcards: expand(
+        "sitk" in config["QC_metrics"] and "preIMS_to_postIMS" in config["QC_steps"]
+        ),
+        postIMC_to_preIMC_region_error=lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/{sample}_error_metrics_regions_postIMC_on_preIMC.json",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1014,7 +1045,10 @@ rule combine_image_registration_evaluation_results:
                 return_all=True,
             ),
         ),
-        preIMC_to_preIMS_region_error=lambda wildcards: expand(
+        "region" in config["QC_metrics"] and "postIMC_to_preIMC" in config["QC_steps"]
+        ),
+        preIMC_to_preIMS_region_error=lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/{sample}_error_metrics_regions_preIMC_on_preIMS.json",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1024,7 +1058,10 @@ rule combine_image_registration_evaluation_results:
                 return_all=True,
             ),
         ),
-        preIMS_to_postIMS_region_error=lambda wildcards: expand(
+        "region" in config["QC_metrics"] and "preIMC_to_preIMS" in config["QC_steps"]
+        ),
+        preIMS_to_postIMS_region_error=lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/{sample}_error_metrics_regions_preIMS_on_postIMS.json",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1034,7 +1071,10 @@ rule combine_image_registration_evaluation_results:
                 return_all=True,
             ),
         ),
-        postIMC_to_postIMS_region_error=lambda wildcards: expand(
+        "region" in config["QC_metrics"] and "preIMS_to_postIMS" in config["QC_steps"]
+        ),
+        postIMC_to_postIMS_region_error=lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/{sample}_error_metrics_regions_postIMC_on_postIMS.json",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1044,7 +1084,10 @@ rule combine_image_registration_evaluation_results:
                 return_all=True,
             ),
         ),
-        postIMC_to_postIMS_global_metrics=lambda wildcards: expand(
+        "region" in config["QC_metrics"] and "postIMC_to_postIMS" in config["QC_steps"]
+        ),
+        postIMC_to_postIMS_global_metrics=lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/{sample}_global_error_metrics_postIMC_on_postIMS.json",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1054,7 +1097,10 @@ rule combine_image_registration_evaluation_results:
                 return_all=True,
             ),
         ),
-        postIMC_to_preIMC_global_metrics=lambda wildcards: expand(
+        "intensities" in config["QC_metrics"] and "postIMC_to_postIMS" in config["QC_steps"]
+        ),
+        postIMC_to_preIMC_global_metrics=lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/{sample}_global_error_metrics_postIMC_on_preIMC.json",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1064,7 +1110,10 @@ rule combine_image_registration_evaluation_results:
                 return_all=True,
             ),
         ),
-        preIMC_to_preIMS_global_metrics=lambda wildcards: expand(
+        "intensities" in config["QC_metrics"] and "postIMC_to_preIMC" in config["QC_steps"]
+        ),
+        preIMC_to_preIMS_global_metrics=lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/{sample}_global_error_metrics_preIMC_on_preIMS.json",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1074,7 +1123,10 @@ rule combine_image_registration_evaluation_results:
                 return_all=True,
             ),
         ),
-        preIMS_to_postIMS_global_metrics=lambda wildcards: expand(
+        "intensities" in config["QC_metrics"] and "preIMC_to_preIMS" in config["QC_steps"]
+        ),
+        preIMS_to_postIMS_global_metrics=lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/{sample}_global_error_metrics_preIMS_on_postIMS.json",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1083,6 +1135,8 @@ rule combine_image_registration_evaluation_results:
                 read_sample_metadata(config["sample_metadata"]),
                 return_all=True,
             ),
+        ),
+        "intensities" in config["QC_metrics"] and "preIMS_to_postIMS" in config["QC_steps"]
         ),
     output:
         registration_metrics_combined="results/{project_name}/data/registration_metric/{project_name}_reg_metrics_combined.csv",
@@ -1332,10 +1386,15 @@ rule generate_registration_report:
     threads: 1
     resources:
         mem_mb=2000
+    params:
+        generic_input=config["generic_input"],
+        QC_metrics=lambda w: config["QC_metrics"],
+        QC_steps=lambda w: config["QC_steps"],
     input:
         registration_metrics_combined="results/{project_name}/data/registration_metric/{project_name}_reg_metrics_combined.csv",
         IMS_to_postIMS_svg = choose_IMS_to_postIMS_svg,
-        preIMSmask_to_postIMSmask_png = lambda wildcards: expand(
+        preIMSmask_to_postIMSmask_png = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_preIMSmask_to_postIMSmask.png", 
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1345,7 +1404,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        preIMCmask_to_preIMSmask_png = lambda wildcards: expand(
+        "masks" in config["QC_metrics"] and "preIMS_to_postIMS" in config["QC_steps"]
+        ),
+        preIMCmask_to_preIMSmask_png = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_preIMCmask_to_preIMSmask.png", 
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1355,7 +1417,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        postIMCmask_to_preIMCmask_png = lambda wildcards: expand(
+        "masks" in config["QC_metrics"] and "preIMC_to_preIMS" in config["QC_steps"]
+        ),
+        postIMCmask_to_preIMCmask_png = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_postIMCmask_to_preIMCmask.png", 
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1365,7 +1430,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        postIMCmask_to_postIMSmask_png = lambda wildcards: expand(
+        "masks" in config["QC_metrics"] and "postIMC_to_preIMC" in config["QC_steps"]
+        ),
+        postIMCmask_to_postIMSmask_png = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_postIMCmask_to_postIMSmask.png", 
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1375,7 +1443,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        landmarks_postIMC_transformed_on_preIMC_png = lambda wildcards: expand(
+        "masks" in config["QC_metrics"] and "postIMC_to_postIMS" in config["QC_steps"]
+        ),
+        landmarks_postIMC_transformed_on_preIMC_png = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_postIMC_transformed_on_preIMC_registration_comparison.png",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1385,7 +1456,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        landmarks_preIMC_png = lambda wildcards: expand(
+        "landmarks" in config["QC_metrics"] and "postIMC_to_preIMC" in config["QC_steps"]
+        ),
+        landmarks_preIMC_png = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_preIMC_registration_comparison.png",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1395,7 +1469,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        landmarks_preIMC_transformed_on_preIMS_png = lambda wildcards: expand(
+        "landmarks" in config["QC_metrics"] and "postIMC_to_preIMC" in config["QC_steps"]
+        ),
+        landmarks_preIMC_transformed_on_preIMS_png = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_preIMC_transformed_on_preIMS_registration_comparison.png",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1405,7 +1482,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        landmarks_preIMS_png = lambda wildcards: expand(
+        "landmarks" in config["QC_metrics"] and "preIMC_to_preIMS" in config["QC_steps"]
+        ),
+        landmarks_preIMS_png = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_preIMS_registration_comparison.png",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1415,7 +1495,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        landmarks_preIMS_transformed_on_postIMS_png = lambda wildcards: expand(
+        "landmarks" in config["QC_metrics"] and "preIMC_to_preIMS" in config["QC_steps"]
+        ),
+        landmarks_preIMS_transformed_on_postIMS_png = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_preIMS_transformed_on_postIMS_registration_comparison.png",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1425,7 +1508,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        landmarks_postIMS_png = lambda wildcards: expand(
+        "landmarks" in config["QC_metrics"] and "preIMS_to_postIMS" in config["QC_steps"]
+        ),
+        landmarks_postIMS_png = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_postIMS_registration_comparison.png",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1435,7 +1521,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        landmarks_postIMC_transformed_on_postIMS_png = lambda wildcards: expand(
+        "landmarks" in config["QC_metrics"] and "preIMS_to_postIMS" in config["QC_steps"]
+        ),
+        landmarks_postIMC_transformed_on_postIMS_png = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_postIMC_transformed_on_postIMS_registration_comparison.png",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1445,7 +1534,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        landmarks_postIMS_to_postIMC_png = lambda wildcards: expand(
+        "landmarks" in config["QC_metrics"] and "postIMC_to_postIMS" in config["QC_steps"]
+        ),
+        landmarks_postIMS_to_postIMC_png = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_postIMS_to_postIMC_registration_comparison.png",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1455,7 +1547,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        regions_postIMC_transformed_on_preIMC_png = lambda wildcards: expand(
+        "landmarks" in config["QC_metrics"] and "postIMC_to_postIMS" in config["QC_steps"]
+        ),
+        regions_postIMC_transformed_on_preIMC_png = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_postIMC_and_preIMC_landmark_regions.png",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1465,7 +1560,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        regions_preIMC_transformed_on_preIMS_png = lambda wildcards: expand(
+        "regions" in config["QC_metrics"] and "postIMC_to_preIMC" in config["QC_steps"]
+        ),
+        regions_preIMC_transformed_on_preIMS_png = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_preIMC_and_preIMS_landmark_regions.png",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1475,7 +1573,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        regions_preIMS_transformed_on_postIMS_png = lambda wildcards: expand(
+        "regions" in config["QC_metrics"] and "preIMC_to_preIMS" in config["QC_steps"]
+        ),
+        regions_preIMS_transformed_on_postIMS_png = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_preIMS_and_postIMS_landmark_regions.png",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1485,7 +1586,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        regions_postIMC_transformed_on_postIMS_png = lambda wildcards: expand(
+        "regions" in config["QC_metrics"] and "preIMS_to_postIMS" in config["QC_steps"]
+        ),
+        regions_postIMC_transformed_on_postIMS_png = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_postIMC_and_postIMS_landmark_regions.png",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1495,7 +1599,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        gif_postIMC_preIMC = lambda wildcards: expand(
+        "regions" in config["QC_metrics"] and "postIMC_to_postIMS" in config["QC_steps"]
+        ),
+        gif_postIMC_preIMC = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_postIMC_preIMC.gif",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1505,7 +1612,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        gif_preIMC_preIMS = lambda wildcards: expand(
+        "images" in config["QC_metrics"] and "postIMC_to_preIMC" in config["QC_steps"]
+        ),
+        gif_preIMC_preIMS = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_preIMC_preIMS.gif",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1515,7 +1625,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        gif_preIMS_postIMS = lambda wildcards: expand(
+        "images" in config["QC_metrics"] and "preIMC_to_preIMS" in config["QC_steps"]
+        ),
+        gif_preIMS_postIMS = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_preIMS_postIMS.gif",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1525,7 +1638,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        gif_postIMC_postIMS = lambda wildcards: expand(
+        "images" in config["QC_metrics"] and "preIMS_to_postIMS" in config["QC_steps"]
+        ),
+        gif_postIMC_postIMS = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{sample}_postIMC_postIMS.gif",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1535,7 +1651,10 @@ rule generate_registration_report:
                 return_all=True,
             ),
         ),
-        IMC_location_extraction_image = lambda wildcards: expand(
+        "images" in config["QC_metrics"] and "postIMC_to_postIMS" in config["QC_steps"]
+        ),
+        IMC_location_extraction_image = lambda wildcards: return_file_or_generic(
+            expand(
             "results/{{project_name}}/data/registration_metric/report/{{project_name}}_IMC_{core}.png",
             core=get_column_entry_from_metadata(
                 wildcards.project_name,
@@ -1544,6 +1663,8 @@ rule generate_registration_report:
                 read_sample_metadata(config["sample_metadata"]),
                 return_all=True,
             ),
+        ),
+        "images" in config["QC_metrics"] and "IMC_to_postIMC" in config["QC_steps"]
         ),
     output:
         html="results/{project_name}/data/registration_metric/report/{project_name}_registration_evaluation.html",

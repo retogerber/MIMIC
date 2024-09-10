@@ -14,12 +14,38 @@ sample_metadata: "config/sample_metadata.csv"
 # - QC: quality control of registration (will also run "regIMC", "regIMS" and "Microscopy")
 # - overlap: overlap of IMS pixels with IMC cells (whole pipeline except "QC")
 # - all: run complete pipeline
+# Warning: changing this after initial run might require complete rerun of the pipeline
 stages: ["regIMC", "IMS", "regIMS", "Microscopy", "QC", "overlap"]
 
 # channel names of IMC used for IMS overlap calculation
 # If empty list ( [] ) all channels are used
 # Otherwise selection of channels matching summary panel are used
-IMC_channels_for_aggr: []
-#IMC_channels_for_aggr: ["E-cadherin","ST6GAL1","Collagen-1","HepPar1","Seg1","Seg2","Seg3"]
+#IMC_channels_for_aggr: []
+IMC_channels_for_aggr: ["ST6GAL1","HepPar1"]
+
+
+# QC metrics to calculate
+# possible metrics are:
+# - landmarks: distance of landmarks
+# - regions: overlap of regions
+# - masks: dice scores and distance of centroids of TMA masks
+# - images: gifs of registered images
+# - sitk: global translations using sitk 
+# - intensities: intensities based metrics (SSIM, MSE, NMI, NRMSE)
+QC_metrics: ['landmarks', 'masks', 'images', 'sitk', 'intensities']
+#QC_metrics: ['landmarks', 'regions', 'masks', 'images', 'sitk', 'intensities']
+
+# QC steps to calculate
+# possible steps are:
+# - IMC_to_postIMC: registration of IMC to postIMC
+# - IMS_to_postIMS: registration of IMS to postIMS
+# - postIMC_to_preIMC: registration of postIMC to preIMC
+# - preIMC_to_preIMS: registration of preIMC to preIMS
+# - preIMS_to_postIMS: registration of preIMS to postIMS
+# - postIMC_to_postIMS: registration of postIMC to postIMS
+QC_steps: ['IMC_to_postIMC', 'IMS_to_postIMS', 'postIMC_to_preIMC', 'preIMC_to_preIMS', 'preIMS_to_postIMS', 'postIMC_to_postIMS']
+
+# generic file as a placeholder for unused input
+generic_input: "workflow/sample_metadata.schema.yaml"
 
 
