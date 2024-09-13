@@ -66,6 +66,14 @@ properties:
     maximum: 270
     multipleOf: 90
     description: rotation angle of IMC relative to postIMC microscopy image
+  postIMSmask_extraction_constraint:
+    pattern: (min_preIMS)|(max_preIMS)|(none)
+    default: none
+    description: constraint for postIMS mask extraction
+  postIMSmask_extraction_constraint_parameter:
+    type: number
+    default: 0
+    description: parameter for postIMS mask extraction constraint, e.g. 5 means 5 um outside of preIMS mask if postIMSmask_extraction_constraint==min_preIMS, 5 um inside of preIMS mask if postIMSmask_extraction_constraint==max_preIMS
   IMS_to_postIMS_n_splits:
     type: number
     default: 19

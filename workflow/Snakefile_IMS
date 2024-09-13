@@ -26,6 +26,18 @@ rule extract_core_mask_from_postIMS:
             read_sample_metadata(config["sample_metadata"]),
         ),
         image_utils_file="workflow/scripts/utils/image_utils.py",
+        postIMSmask_extraction_constraint=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "postIMSmask_extraction_constraint",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        postIMSmask_extraction_constraint_parameter=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "postIMSmask_extraction_constraint_parameter",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
     input:
         sam_weights="results/Misc/sam_vit_h_4b8939.pth",
         IMCmask=lambda wildcards: expand(

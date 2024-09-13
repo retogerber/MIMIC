@@ -17,11 +17,13 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
 
     snakemake.params["IMS_pixelsize"] = 30
     snakemake.params["IMS_shrink_factor"] = 0.8
-    snakemake.params["IMC_pixelsize"] = 0.22537
-    snakemake.input["sam_weights"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/Misc/sam_vit_h_4b8939.pth"
-    snakemake.input["postIMS_downscaled"] = ""
-    snakemake.input["preIMS_downscaled"] = ""
-    snakemake.input["IMCmask"] = ["/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_E9.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_A2.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_B5.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_B1.geojson"]
+    snakemake.params["microscopy_pixelsize"] = 0.22537
+    snakemake.params["postIMSmask_extraction_constraint"] = "min_preIMS"
+    snakemake.params["postIMSmask_extraction_constraint_parameter"] = 5
+    snakemake.input["sam_weights"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/Misc/sam_vit_h_4b8939.pth"
+    snakemake.input["postIMS_downscaled"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/cirrhosis_TMA/data/postIMS/cirrhosis_TMA_postIMS_reduced.ome.tiff"
+    snakemake.input["preIMS_downscaled"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/cirrhosis_TMA/data/preIMS/cirrhosis_TMA-preIMS_to_postIMS_registered.ome.tiff"
+    snakemake.input["IMCmask"] = ["/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMC_location/cirrhosis_TMA_IMC_mask_on_postIMS_E1.geojson","/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMC_location/cirrhosis_TMA_IMC_mask_on_postIMS_E2.geojson"]
     snakemake.output["postIMSmask_downscaled"] = ""
 
     if bool(getattr(sys, 'ps1', sys.flags.interactive)):
@@ -37,6 +39,8 @@ pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
 resolution = float(snakemake.params["microscopy_pixelsize"])
 # upscale in all directions from TMA location 
 expand_microns = stepsize*15
+postIMSmask_extraction_constraint = snakemake.params["postIMSmask_extraction_constraint"]
+postIMSmask_extraction_constraint_parameter = snakemake.params["postIMSmask_extraction_constraint_parameter"]
 
 # inputs
 postIMS_file = snakemake.input["postIMS_downscaled"]
@@ -52,6 +56,7 @@ MODEL_TYPE = "vit_h"
 
 # outputs
 postIMSr_file = snakemake.output["postIMSmask_downscaled"]
+preIMSr_file = snakemake.output["postIMSmask_downscaled"].replace("postIMS_reduced_mask.ome.tiff","preIMS_reduced_mask.ome.tiff").replace("data/postIMS/","data/preIMS/")
 
 
 logging.info("get IMC locations")
@@ -132,7 +137,7 @@ for i,bb1 in enumerate(imcbboxls):
     corebboxls.append(bbnn)
     preIMSstitch[bbn[0]:bbn[2],bbn[1]:bbn[3]] = np.max(np.stack([preIMSstitch[bbn[0]:bbn[2],bbn[1]:bbn[3]],img_mask], axis=0),axis=0)
 
-
+saveimage_tile(preIMSstitch, preIMSr_file, 1)
 # def extract_mask(img: np.ndarray, session, rescale: float):
 #     """
 #     extract postIMS tissue location using rembg
@@ -167,13 +172,14 @@ for i,bb1 in enumerate(imcbboxls):
 logging.info("Remove background individually for each IMC location with rembg")
 postIMS_shape = (np.array(get_image_shape(postIMS_file)[:2])*resolution).astype(int)
 postIMSstitch = np.zeros(postIMS_shape)
+preIMSstitch_red = cv2.resize(preIMSstitch, (postIMSstitch.shape[1],postIMSstitch.shape[0]), interpolation=cv2.INTER_NEAREST)
 rembg_mask_areas = []
 for i in range(len(corebboxls)):
     xmin = max(0, int(corebboxls[i][0] - expand_microns))
     ymin = max(0, int(corebboxls[i][1] - expand_microns))
     xmax = min(postIMS_shape[0], int(corebboxls[i][2] + expand_microns))
     ymax = min(postIMS_shape[1], int(corebboxls[i][3] + expand_microns))
-    print(f"i: {i}, {os.path.basename(imc_mask_files[i])}, coords:[{xmin}:{xmax},{ymin}:{ymax}]")
+    logging.info(f"i: {i}, {os.path.basename(imc_mask_files[i])}, coords:[{xmin}:{xmax},{ymin}:{ymax}]")
     tmpimg = extract_mask(postIMS_file,(np.ceil(np.array([xmin,ymin,xmax,ymax])/resolution)).astype(int), rembg_session, resolution)[0,:,:]
     rembg_mask_areas.append(np.sum(tmpimg>0))
     wn, hn = postIMSstitch[xmin:xmax,ymin:ymax].shape
@@ -185,10 +191,12 @@ for i in range(len(corebboxls)):
         tmpimg = tmpimg[:wn,:hn]
     logging.info(f"\tshape 1: {postIMSstitch[xmin:xmax,ymin:ymax].shape}")
     logging.info(f"\tshape 2: {tmpimg.shape}")
+    logging.info(f"\tarea: {np.sum(tmpimg>0)}")
     postIMSstitch[xmin:xmax,ymin:ymax] = np.max(np.stack([postIMSstitch[xmin:xmax,ymin:ymax],tmpimg], axis=0),axis=0)
 
 # threshold
 postIMSrs = postIMSstitch>0
+saveimage_tile(postIMSrs, postIMSr_file.replace("reduced_mask","reduced_mask_rembg"), resolution)
 
 logging.info("Check mask")
 IMCrs_filled = list()
@@ -230,18 +238,23 @@ for i in inds:
     ])
     postIMSmasks, scores1 = sam_core(saminp, sam, pts)
     postIMSmasks = np.stack([preprocess_mask(msk,1) for msk in postIMSmasks ])
+    pts_in_mask = list()
+    for j in range(len(postIMSmasks)):
+        pts_in_mask.append(np.sum([postIMSmasks[j][p[0],p[1]] for p in pts]))
     tmpperimeters = np.array([skimage.measure.regionprops(im)[0].perimeter for im in postIMSmasks ])
-    tmpareas = np.array([np.sum(im) for im in postIMSmasks])
+    tmpareas = np.array([np.sum(im>0) for im in postIMSmasks])
     tmpcircularity = np.array([4*np.pi*a/p**2 for a,p in zip(tmpareas,tmpperimeters)])
     thr1=(np.max([postIMSmasks.shape[1], postIMSmasks.shape[2]])/2)**2*np.pi
     tmpinds = np.array(list(range(3)))
-    tmpinds = tmpinds[np.logical_and(tmpareas > imcarea*1.02, tmpareas < thr1)]
+    tmpinds = tmpinds[np.logical_and(np.logical_and(tmpareas > imcarea*1.02, tmpareas < thr1), np.array(pts_in_mask)>len(pts)-2)]
     logging.info(f"\t areas: {tmpareas}")
     logging.info(f"\t scores: {scores1}")
+    logging.info(f"\t number of points in mask: {pts_in_mask}")
     logging.info(f"\t tmpinds: {tmpinds}")
 
     if len(tmpinds) == 0:
-        logging.info(f"Could not find a mask for {os.path.basename(imc_mask_files[i])}")
+        logging.info(f"\tCould not find a mask for {os.path.basename(imc_mask_files[i])}")
+        logging.info(f"\tTry to find mask without points")
          # run SAM segmentation model
         postIMSmasks, scores1 = sam_core(saminp, sam)
         # postprocess
@@ -268,11 +281,28 @@ for i in inds:
         tmpimg = tmpimg[:wn,:hn]
     logging.info(f"\tshape 1: {postIMSstitch[xmin:xmax,ymin:ymax].shape}")
     logging.info(f"\tshape 2: {tmpimg.shape}")
+    logging.info(f"\tarea postIMSmask: {np.sum(tmpimg>0)}")
+    logging.info(f"\tarea preIMSmask: {np.sum(preIMSstitch_red[xmin:xmax,ymin:ymax]>0)}")
     postIMSstitch[xmin:xmax,ymin:ymax] = np.max(np.stack([postIMSstitch[xmin:xmax,ymin:ymax],tmpimg], axis=0),axis=0)
+    # cv2.imwrite("tmp.png",tmpimg.astype(np.uint8)*255)
 
-# TODO: add options to use preIMS only or maximum of preIMS and postIMS
-if False:
-    postIMSstitch = np.max(np.stack([postIMSstitch,preIMSstitch],axis=0),axis=0)
+saveimage_tile(postIMSstitch>0, postIMSr_file.replace("reduced_mask","reduced_mask_no_constraints"), resolution)
+
+if not postIMSmask_extraction_constraint is None:
+    logging.info("Apply mask extraction constraint")
+    if postIMSmask_extraction_constraint == "min_preIMS":
+        preIMSstitch_red = cv2.morphologyEx(preIMSstitch_red.astype(np.uint8), cv2.MORPH_DILATE, np.ones((int(postIMSmask_extraction_constraint_parameter),int(postIMSmask_extraction_constraint_parameter)),np.uint8))
+    if postIMSmask_extraction_constraint == "max_preIMS":
+        preIMSstitch_red = cv2.morphologyEx(preIMSstitch_red.astype(np.uint8), cv2.MORPH_ERODE, np.ones((int(postIMSmask_extraction_constraint_parameter),int(postIMSmask_extraction_constraint_parameter)),np.uint8))
+    logging.info(f"Number of pixels in preIMS mask: {np.sum(preIMSstitch_red>0)}")
+    logging.info(f"Number of pixels in postIMS mask before: {np.sum(postIMSstitch>0)}")
+    postIMSstitch = np.max(np.stack([postIMSstitch,preIMSstitch_red],axis=0),axis=0)
+    logging.info(f"Number of pixels in postIMS mask after: {np.sum(postIMSstitch>0)}")
+    postIMSstitch = cv2.morphologyEx(postIMSstitch.astype(np.uint8), cv2.MORPH_OPEN, np.ones((25,25),np.uint8))
+    logging.info(f"Number of pixels in postIMS mask after closing: {np.sum(postIMSstitch>0)}")
+
+# postIMSstitchdownscaled = cv2.resize(postIMSstitch.astype(np.uint8), (int(postIMSstitch.shape[1]*resolution),int(postIMSstitch.shape[0]*resolution)), interpolation=cv2.INTER_NEAREST)
+# cv2.imwrite("tmp.png",postIMSstitch.astype(np.uint8)*255)
 postIMSsamr = postIMSstitch>0
 
 logging.info("Check mask")
@@ -298,6 +328,7 @@ for i in range(len(imcbboxls)):
     logging.info(f"{sam_mask_areas[i]-rembg_mask_areas[i]}\t, {(sam_mask_areas[i]-rembg_mask_areas[i])/(0.5*(sam_mask_areas[i]+rembg_mask_areas[i])):.4f}\t, {os.path.basename(imc_mask_files[i])}")
 
 
+saveimage_tile(postIMSsamr, postIMSr_file.replace("reduced_mask","reduced_mask_no_convexhull"), resolution)
 logging.info(f"Get convex hull")
 lbs = skimage.measure.label(postIMSsamr)
 rps = skimage.measure.regionprops(lbs)
@@ -305,7 +336,9 @@ cvi = lbs*0
 for i in range(len(rps)):
     tbb = rps[i].bbox
     ti = skimage.morphology.convex_hull_image(lbs[tbb[0]:tbb[2],tbb[1]:tbb[3]]==rps[i].label)
+    logging.info(f"Number of pixels in postIMS mask before: {np.sum(cvi[tbb[0]:tbb[2],tbb[1]:tbb[3]]>0)}")
     cvi[tbb[0]:tbb[2],tbb[1]:tbb[3]] = np.logical_or(ti,cvi[tbb[0]:tbb[2],tbb[1]:tbb[3]])
+    logging.info(f"Number of pixels in postIMS mask after: {np.sum(cvi[tbb[0]:tbb[2],tbb[1]:tbb[3]]>0)}")
 logging.info("Save mask")
 
 # rescale
