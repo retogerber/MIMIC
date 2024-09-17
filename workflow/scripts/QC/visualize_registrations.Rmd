@@ -780,7 +780,7 @@ Values that are grayed out are missing.
 Overall some care should be taken when interpreting these results as the presented metrics are not always a good indicator of the quality of the registration. It is therefore advised to also look at the images and plots below, especially for edge cases and cases with missing values.
 
 
-```{r metrics_summary_plot, warning=FALSE, message=FALSE, fig.width=10,fig.height=5+0.5*length(unique(dfc$sample))}
+```{r metrics_summary_plot, warning=FALSE, message=FALSE, fig.width=10,fig.height=5+0.25*length(unique(dfc$sample))}
 xlabels <- stringr::str_extract(unique(dfc$metric), "(regions_quantile50_error|regions_quantile50_dice|quantile50_error)") |>
   stringr::str_replace("quantile50_", "") |>
   stringr::str_replace("^error$", "landmark_error")
@@ -825,7 +825,7 @@ The following heatmap is a summary of the results. The columns are the different
 
 This evaluation is rather strict meaning that if the 'overall' column is TRUE, the sample is likely to be registered well. However, if the 'overall' column is FALSE or NA, it does not necessarily mean that the sample is not registered well. Therefore it is adviced to check the FALSE and NA entries in the additional plots and images below. 
 
-```{r metrics_summary_plot_bin, fig.width=12, fig.height=3+0.5*length(unique(dfc$sample))}
+```{r metrics_summary_plot_bin, fig.width=12, fig.height=3+0.25*length(unique(dfc$sample))}
 data_long <- tidyr::pivot_longer(to_keep_df_aggr, c("IMS_to_postIMS", "postIMC_to_postIMS", "preIMS_to_postIMS", "preIMC_to_preIMS", "postIMC_to_preIMC", "overall"))
 data_long$name <- factor(data_long$name, c("IMS_to_postIMS", "preIMS_to_postIMS", "preIMC_to_preIMS", "postIMC_to_preIMC", "postIMC_to_postIMS", "overall"))
 

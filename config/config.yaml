@@ -32,8 +32,8 @@ IMC_channels_for_aggr: ["ST6GAL1","HepPar1"]
 # - images: gifs of registered images
 # - sitk: global translations using sitk 
 # - intensities: intensities based metrics (SSIM, MSE, NMI, NRMSE)
-QC_metrics: ['landmarks', 'masks', 'images', 'sitk', 'intensities']
-#QC_metrics: ['landmarks', 'regions', 'masks', 'images', 'sitk', 'intensities']
+#QC_metrics: ['landmarks', 'masks', 'images', 'sitk', 'intensities']
+QC_metrics: ['landmarks', 'regions', 'masks', 'images', 'sitk', 'intensities']
 
 # QC steps to calculate
 # possible steps are:

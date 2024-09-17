@@ -138,6 +138,34 @@ for i,bb1 in enumerate(imcbboxls):
     preIMSstitch[bbn[0]:bbn[2],bbn[1]:bbn[3]] = np.max(np.stack([preIMSstitch[bbn[0]:bbn[2],bbn[1]:bbn[3]],img_mask], axis=0),axis=0)
 
 saveimage_tile(preIMSstitch, preIMSr_file, 1)
+
+if postIMSmask_extraction_constraint == "preIMS":
+    logging.info("Only extract postIMS tissue location using preIMS mask")
+    logging.info("Downscale preIMS mask")
+    postIMS_shape = (np.array(get_image_shape(postIMS_file)[:2])*resolution).astype(int)
+    postIMSstitch = np.zeros(postIMS_shape)
+    preIMSstitch_red = cv2.resize(preIMSstitch, (postIMSstitch.shape[1],postIMSstitch.shape[0]), interpolation=cv2.INTER_NEAREST)
+    logging.info(f"Get convex hull")
+    lbs = skimage.measure.label(preIMSstitch_red)
+    rps = skimage.measure.regionprops(lbs)
+    cvi = lbs*0
+    for i in range(len(rps)):
+        tbb = rps[i].bbox
+        ti = skimage.morphology.convex_hull_image(lbs[tbb[0]:tbb[2],tbb[1]:tbb[3]]==rps[i].label)
+        logging.info(f"Number of pixels in postIMS mask before: {np.sum(ti>0)}")
+        cvi[tbb[0]:tbb[2],tbb[1]:tbb[3]] = np.logical_or(ti,cvi[tbb[0]:tbb[2],tbb[1]:tbb[3]])
+        logging.info(f"Number of pixels in postIMS mask after: {np.sum(cvi[tbb[0]:tbb[2],tbb[1]:tbb[3]]>0)}")
+
+    logging.info("Upscale mask")
+    # rescale
+    if resolution != 1:
+        wn, hn = get_image_shape(postIMS_file)[:2]
+        cvi = cv2.resize(cvi, (hn,wn), interpolation=cv2.INTER_NEAREST)
+    logging.info("Save mask")
+    saveimage_tile(cvi, postIMSr_file, resolution)
+    sys.exit(0)
+
+
 # def extract_mask(img: np.ndarray, session, rescale: float):
 #     """
 #     extract postIMS tissue location using rembg
@@ -246,7 +274,7 @@ for i in inds:
     tmpcircularity = np.array([4*np.pi*a/p**2 for a,p in zip(tmpareas,tmpperimeters)])
     thr1=(np.max([postIMSmasks.shape[1], postIMSmasks.shape[2]])/2)**2*np.pi
     tmpinds = np.array(list(range(3)))
-    tmpinds = tmpinds[np.logical_and(np.logical_and(tmpareas > imcarea*1.02, tmpareas < thr1), np.array(pts_in_mask)>len(pts)-2)]
+    tmpinds = tmpinds[np.logical_and(np.logical_and(tmpareas > imcarea*1.02, tmpareas < thr1), np.array(pts_in_mask)>=len(pts)-2)]
     logging.info(f"\t areas: {tmpareas}")
     logging.info(f"\t scores: {scores1}")
     logging.info(f"\t number of points in mask: {pts_in_mask}")
@@ -336,7 +364,7 @@ cvi = lbs*0
 for i in range(len(rps)):
     tbb = rps[i].bbox
     ti = skimage.morphology.convex_hull_image(lbs[tbb[0]:tbb[2],tbb[1]:tbb[3]]==rps[i].label)
-    logging.info(f"Number of pixels in postIMS mask before: {np.sum(cvi[tbb[0]:tbb[2],tbb[1]:tbb[3]]>0)}")
+    logging.info(f"Number of pixels in postIMS mask before: {np.sum(ti>0)}")
     cvi[tbb[0]:tbb[2],tbb[1]:tbb[3]] = np.logical_or(ti,cvi[tbb[0]:tbb[2],tbb[1]:tbb[3]])
     logging.info(f"Number of pixels in postIMS mask after: {np.sum(cvi[tbb[0]:tbb[2],tbb[1]:tbb[3]]>0)}")
 logging.info("Save mask")

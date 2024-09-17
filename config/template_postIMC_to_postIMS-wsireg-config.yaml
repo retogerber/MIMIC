@@ -68,20 +68,20 @@ reg_paths:
     tgt_modality_name: postIMS
     thru_modality: null
     reg_params:
-    - rigid
+    - affine
   reg_path_1:
     src_modality_name: preIMC
     tgt_modality_name: postIMS
     thru_modality: preIMS
     reg_params:
-    - rigid
+    - affine
     - nl
   reg_path_2:
     src_modality_name: postIMC
     tgt_modality_name: postIMS
     thru_modality: preIMC
     reg_params:
-    - rigid
+    - affine
 reg_graph_edges: null
 original_size_transforms: null
 attachment_shapes: null

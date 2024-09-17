@@ -63,9 +63,13 @@ assert(IMS_to_postIMS_n_splits in [3,5,7,9,11,13,15,17,19])
 IMS_to_postIMS_init_gridsearch = snakemake.params["IMS_to_postIMS_init_gridsearch"]
 logging.info(f"IMS_to_postIMS_init_gridsearch: {IMS_to_postIMS_init_gridsearch}")
 assert(IMS_to_postIMS_init_gridsearch in [0,1,2,3])
+postIMSmask_extraction_constraint = snakemake.params["postIMSmask_extraction_constraint"]
 
 imspixel_inscale = 4
-imspixel_outscale = 2
+if postIMSmask_extraction_constraint == "preIMS":
+    imspixel_outscale = 8
+else:
+    imspixel_outscale = 2
 
 threads = snakemake.threads
 

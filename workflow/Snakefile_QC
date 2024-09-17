@@ -337,7 +337,7 @@ rule image_registration_evaluation_extract_regions_SAM_postIMC:
         pixel_expansion=501,
         min_area=576, # 24**2
         max_area=262144, # 512**2
-        region_extraction_method="sam_prefilter",
+        region_extraction_method="sam",
     input:
         sam_weights="results/Misc/sam_vit_h_4b8939.pth",
         microscopy_image="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff",
@@ -1045,7 +1045,7 @@ rule combine_image_registration_evaluation_results:
                 return_all=True,
             ),
         ),
-        "region" in config["QC_metrics"] and "postIMC_to_preIMC" in config["QC_steps"]
+        "regions" in config["QC_metrics"] and "postIMC_to_preIMC" in config["QC_steps"]
         ),
         preIMC_to_preIMS_region_error=lambda wildcards: return_file_or_generic(
             expand(
@@ -1058,7 +1058,7 @@ rule combine_image_registration_evaluation_results:
                 return_all=True,
             ),
         ),
-        "region" in config["QC_metrics"] and "preIMC_to_preIMS" in config["QC_steps"]
+        "regions" in config["QC_metrics"] and "preIMC_to_preIMS" in config["QC_steps"]
         ),
         preIMS_to_postIMS_region_error=lambda wildcards: return_file_or_generic(
             expand(
@@ -1071,7 +1071,7 @@ rule combine_image_registration_evaluation_results:
                 return_all=True,
             ),
         ),
-        "region" in config["QC_metrics"] and "preIMS_to_postIMS" in config["QC_steps"]
+        "regions" in config["QC_metrics"] and "preIMS_to_postIMS" in config["QC_steps"]
         ),
         postIMC_to_postIMS_region_error=lambda wildcards: return_file_or_generic(
             expand(
@@ -1084,7 +1084,7 @@ rule combine_image_registration_evaluation_results:
                 return_all=True,
             ),
         ),
-        "region" in config["QC_metrics"] and "postIMC_to_postIMS" in config["QC_steps"]
+        "regions" in config["QC_metrics"] and "postIMC_to_postIMS" in config["QC_steps"]
         ),
         postIMC_to_postIMS_global_metrics=lambda wildcards: return_file_or_generic(
             expand(

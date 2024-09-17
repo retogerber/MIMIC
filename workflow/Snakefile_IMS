@@ -184,6 +184,12 @@ rule register_IMS_to_postIMS_single_core_1:
         ),
         image_utils_file="workflow/scripts/utils/image_utils.py",
         registration_utils_file="workflow/scripts/utils/registration_utils.py",
+        postIMSmask_extraction_constraint=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "postIMSmask_extraction_constraint",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
     input:
         postIMS_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
         postIMSmask_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced_mask.ome.tiff",

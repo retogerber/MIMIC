@@ -27,20 +27,15 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake.params["IMC_pixelsize"] = 0.22537
     snakemake.params["IMS_rotation_angle"] = 180
     snakemake.params['within_IMC_fine_registration'] = True
-    snakemake.params["min_index_length"] = 6
+    snakemake.params["min_index_length"] = 10
     snakemake.params["max_index_length"] = 30
-    snakemake.input["imzml"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_IMS.imzML"
-    snakemake.input["IMCmask"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_mask/NASH_HCC_TMA-2_012_transformed_on_postIMS.ome.tiff"
-    snakemake.input["postIMSmask_downscaled"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
-    snakemake.input["masks_transform"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_012_masks_transform.txt"
-    snakemake.input["gridsearch_transform"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_012_gridsearch_transform.txt"
-    snakemake.input["postIMS_ablation_centroids"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_012_postIMS_ablation_centroids.csv"
-    snakemake.input["metadata"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA-2_012_step1_metadata.json"
+    snakemake.input["imzml"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMS/cirrhosis_TMA_IMS.imzML"
+    snakemake.input["postIMS_downscaled"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/cirrhosis_TMA/data/postIMS/cirrosis_TMA_postIMS.ome.tiff"
+    snakemake.input["masks_transform"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/cirrhosis_TMA/data/registration_metric/Cirrhosis-TMA-5_New_Detector_015_masks_transform.txt"
+    snakemake.input["gridsearch_transform"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/cirrhosis_TMA/data/registration_metric/Cirrhosis-TMA-5_New_Detector_015_gridsearch_transform.txt"
+    snakemake.input["postIMS_ablation_centroids"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/cirrhosis_TMA/data/registration_metric/Cirrhosis-TMA-5_New_Detector_015_postIMS_ablation_centroids.csv"
+    snakemake.input["metadata"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/cirrhosis_TMA/data/registration_metric/Cirrhosis-TMA-5_New_Detector_015_step1_metadata.json"
 
-
-    snakemake.input["sam_weights"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/Misc/sam_vit_h_4b8939.pth"
-    snakemake.input["microscopy_image"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/test_split_pre_postIMC.ome.tiff"
-    snakemake.input["IMC_location"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_postIMC_A1.geojson"
     if bool(getattr(sys, 'ps1', sys.flags.interactive)):
         raise Exception("Running in interactive mode!!")
 # logging setup
@@ -134,7 +129,11 @@ tmpIMSpoly = concave_boundary_from_grid_holes(tmpimzrot, direction=2)
 if tmpIMSpoly.geom_type == "LineString":
     tmpIMSpoly = shapely.Polygon(tmpIMSpoly)
 IMSpoly = tmpIMSpoly.buffer(1.5, cap_style='square', join_style='mitre')
+if IMSpoly.geom_type == "MultiPolygon":
+    IMSpoly = sorted(IMSpoly.geoms, key=lambda g: g.area)[-1]
 IMSpoly_small = tmpIMSpoly.buffer(-1.5, cap_style='square', join_style='mitre')
+if IMSpoly_small.geom_type == "MultiPolygon":
+    IMSpoly_small = sorted(IMSpoly_small.geoms, key=lambda g: g.area)[-1]
 if tmpIMSpoly.geom_type == "Polygon":
     ordered_imz_border_all = np.array(tmpIMSpoly.exterior.coords.xy).T[:-1,:]
 else:
@@ -178,7 +177,11 @@ try:
         tch = tch11
 
     postIMSpoly_outer = tch.buffer(0.5, cap_style='square', join_style='mitre')
+    if postIMSpoly_outer.geom_type == "MultiPolygon":
+        postIMSpoly_outer = sorted(postIMSpoly_outer.geoms, key=lambda g: g.area)[-1]
     postIMSpoly_inner = tch.buffer(-0.5, cap_style='square', join_style='mitre')
+    if postIMSpoly_inner.geom_type == "MultiPolygon":
+        postIMSpoly_inner = sorted(postIMSpoly_inner.geoms, key=lambda g: g.area)[-1]
     if tch.geom_type == "Polygon":
         ordered_centsred_border_all = np.array(tch.exterior.coords.xy).T[:-1,:]
     else:
@@ -186,7 +189,11 @@ try:
 except Exception as error:
     logging.info(f"Error in concave_boundary_from_grid_holes: {error}")
     postIMSpoly_outer = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.01).buffer(0.5, cap_style='square', join_style='mitre')
+    if postIMSpoly_outer.geom_type == "MultiPolygon":
+        postIMSpoly_outer = sorted(postIMSpoly_outer.geoms, key=lambda g: g.area)[-1]
     postIMSpoly_inner = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.01).buffer(-0.5, cap_style='square', join_style='mitre')
+    if postIMSpoly_inner.geom_type == "MultiPolygon":
+        postIMSpoly_inner = sorted(postIMSpoly_inner.geoms, key=lambda g: g.area)[-1]
     postIMSpoly = shapely.concave_hull(shapely.geometry.MultiPoint(centsred), ratio=0.01)
     ordered_centsred_border_all = np.array(postIMSpoly.exterior.coords.xy).T[:-1,:]
 
@@ -282,6 +289,9 @@ for k in range(len(nn_combinations)):
     distances_ls = list(tmp_distances)
     # filter by distance
     indices_tmp_ls = [indices_tmp_ls[i][distances_ls[i]<1.75] for i in range(len(indices_tmp_ls))]
+    # remove empty lists
+    inds_to_keep = np.arange(len(indices_tmp_ls))[np.array([len(p) for p in indices_tmp_ls])>0]
+    indices_tmp_ls = [indices_tmp_ls[p] for p in inds_to_keep]
     # filter by matching border point
     indices_tmp_ls = [indices_tmp_ls[i][(kdt_ordered_imz_border_all.query(tmpimzrot[indices_tmp_ls[i]], k=1, return_distance=True)[0]==0).flatten()] for i in range(len(indices_tmp_ls))]
 
@@ -538,6 +548,8 @@ if points_found:
         # plt.show()
 
         IMSpolytrans = tmpIMSpolytrans.buffer(0.15)
+        if IMSpolytrans.geom_type == "MultiPolygon":
+            IMSpolytrans = sorted(IMSpolytrans.geoms, key=lambda g: g.area)[-1]
         shapely.prepare(IMSpolytrans)
         # shapely.plotting.plot_polygon(IMSpolytrans)
         # plt.show()
@@ -583,6 +595,8 @@ contours,_ = cv2.findContours(imcmaskch.astype(np.uint8),cv2.RETR_LIST, cv2.CHAI
 contours = np.squeeze(contours[0])
 poly = shapely.geometry.Polygon(contours)
 poly = poly.buffer(2)
+if poly.geom_type == "MultiPolygon":
+    poly = sorted(poly.geoms, key=lambda g: g.area)[-1]
 # check number of points in mask for postIMS
 tpls = [shapely.geometry.Point(centsred[i,:]/resolution*stepsize) for i in range(centsred.shape[0])]
 pcontsc = np.array([poly.contains(tpls[i]) for i in range(len(tpls))])

@@ -40,7 +40,7 @@ reg_paths:
     tgt_modality_name: preIMS
     thru_modality: null
     reg_params:
-    - rigid
+    - affine
     - nl
 reg_graph_edges: null
 original_size_transforms: null
