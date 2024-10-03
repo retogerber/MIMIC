@@ -1,6 +1,6 @@
 if (interactive()){
-  source(file.path("imc_to_ims_workflow", "workflow", "scripts", "combine_IMS_utils.R"))
-  source(file.path("imc_to_ims_workflow", "workflow", "scripts", "logging_utils.R"))
+  source(file.path("imc_to_ims_workflow", "workflow", "scripts", "Overlap", "combine_IMS_utils.R"))
+  source(file.path("imc_to_ims_workflow", "workflow", "scripts", "utils","logging_utils.R"))
 } else{
   source(file.path("workflow", "scripts", "Overlap", "combine_IMS_utils.R"))
   source(file.path("workflow", "scripts", "utils", "logging_utils.R"))
@@ -46,6 +46,14 @@ msi <- readImzML(
   folder=dirname(filename_imzml),
   mass.range = c(min(ref_mzvals)-1,max(ref_mzvals)+1))
 
+log_message("Calculate TIC")
+coords <- coord(msi)
+inds <- c(seq(1, nrow(coords), 1000), nrow(coords))
+pixelData(msi)$tic <- 0
+for (i in seq_along(inds[1:(length(inds)-1)])){
+  pixelData(msi)$tic[inds[i]:inds[i+1]] <- colSums(as.matrix(imageData(msi[,inds[i]:inds[i+1]])[[1]]))
+}
+
 log2_na <- function(x, xmin=0){
   xnew <- log2(round(x,2))
   xnew <- replace(xnew, is.infinite(xnew), xmin)
@@ -69,5 +77,9 @@ tmpmat <- as.matrix(iData(msi_processed))
 h5write(tmpmat, output_hdf5,"peaks")
 h5write(as.matrix(fData(msi_processed)), output_hdf5,"mzs")
 h5write(as.matrix(coord(msi_processed)), output_hdf5,"coord")
+h5write(pixelData(msi)$tic, output_hdf5, "tic")
+h5write(nrow(fData(msi)), output_hdf5, "tic_n_norm")
+
+
 
 log_message("Finished")

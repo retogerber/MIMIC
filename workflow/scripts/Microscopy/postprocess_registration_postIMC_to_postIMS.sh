@@ -132,8 +132,18 @@ fi
 
 # set nonlinear registration between preIMC and preIMS if the two files are the same
 if [ "${md5preIMC[0]}" == "${md5preIMS[0]}" ]; then
-    results/Misc/yq '.000-to-preIMS[0].TransformParameters = ["0","0","0"]' "$preIMC_to_postIMS_transform" > "$preIMC_to_postIMS_transform_out" 
-    results/Misc/yq '.001-to-preIMS[0].TransformParameters = ["0","0","0"]' "$postIMC_to_postIMS_transform" > "$postIMC_to_postIMS_transform_out" 
+        transform_type=$( jq '."000-to-preIMS"[0].Transform[0]' < $preIMC_to_postIMS_transform   | tr -d '"' )
+    if [ "$transform_type" == "AffineTransform" ]; then
+        results/Misc/yq '.000-to-preIMS[0].TransformParameters = ["1","0","0","1","0","0"]' "$preIMC_to_postIMS_transform" > "$preIMC_to_postIMS_transform_out"
+    else
+        results/Misc/yq '.000-to-preIMS[0].TransformParameters = ["0","0","0"]' "$preIMC_to_postIMS_transform" > "$preIMC_to_postIMS_transform_out"
+    fi
+    transform_type=$( jq '."001-to-preIMS"[0].Transform[0]' < $postIMC_to_postIMS_transform  | tr -d '"' )
+    if [ "$transform_type" == "AffineTransform" ]; then
+        results/Misc/yq '.001-to-preIMS[0].TransformParameters = ["1","0","0","1","0","0"]' "$postIMC_to_postIMS_transform" > "$postIMC_to_postIMS_transform_out"
+    else
+        results/Misc/yq '.001-to-preIMS[0].TransformParameters = ["0","0","0"]' "$postIMC_to_postIMS_transform" > "$postIMC_to_postIMS_transform_out"
+    fi
 else 
     ln -sr -T $preIMC_to_postIMS_transform $preIMC_to_postIMS_transform_out
     ln -sr -T $postIMC_to_postIMS_transform $postIMC_to_postIMS_transform_out

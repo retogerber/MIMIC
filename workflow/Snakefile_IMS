@@ -309,6 +309,7 @@ rule register_IMS_to_postIMS_single_core_2:
         IMS_to_postIMS_error_image="results/{project_name}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics_auto.ome.tiff",
         IMS_to_postIMS_error_image_svg="logs/register_IMS_to_postIMS_single_core_2/{project_name}_{sample}_combined_registration_all.svg",
         imsml_coords_fp="results/{project_name}/data/IMS/postIMS_to_IMS_{project_name}-{sample}-IMSML-coords.h5",
+        imsml_meta_fp="results/{project_name}/data/IMS/postIMS_to_IMS_{project_name}-{sample}-IMSML-meta.json",
     log:
         stdout="logs/register_IMS_to_postIMS_single_core_2/{project_name}_{sample}.stdout",
     benchmark:

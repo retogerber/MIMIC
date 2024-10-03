@@ -256,6 +256,8 @@ def find_approx_init_translation(imzcents, picents):
     ind = np.argpartition(max_dists, -topn)[:topn]
     combs_red = combs[ind,:]
     max_dists_red = list()
+    reg_params_ls = list()
+    keep_ls = list()
     for i in range(combs_red.shape[0]):
         kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
         distances, indices = kdt.query(picents+np.array(combs_red[i,:]), k=1, return_distance=True)
@@ -263,31 +265,53 @@ def find_approx_init_translation(imzcents, picents):
         # if (picents.shape[0]==1) and (imzcents.shape[0]==1):
         #     max_dists_red.append(np.max(distances))
         # else:
-        reg = pycpd.RigidRegistration(X=imzcents[indices,:], Y=picents, w=0)
+        reg = pycpd.RigidRegistration(X=imzcents[indices,:], Y=picents, w=0, s=1)
         TY, (s_reg, R_reg, t_reg) = reg.register()
         kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
         distances, indices = kdt.query(TY, k=1, return_distance=True)
         max_dists_red.append(np.max(distances))
+        reg_params_ls.append((s_reg, R_reg, t_reg))
+        keep_ls.append(s_reg > 0.9 and s_reg < 1.1 and np.all(np.abs(R_reg-np.eye(2))<0.1))
 
-    xy_init_shift = combs_red[np.array(max_dists_red) == np.min(max_dists_red),:][0,:]
-    return xy_init_shift, np.min(max_dists_red)
+    subset_inds = np.arange(combs_red.shape[0])[np.array(keep_ls)]
+    if subset_inds.shape[0]==0:
+        xy_init_shift = -np.array([imzcents[0,0]-picents[0,0]+global_bbox[0],imzcents[0,1]-picents[0,1]+global_bbox[1]])
+        return xy_init_shift, 0 , (1, np.eye(2), np.array([0,0]))
+
+    min_ind = subset_inds[np.argmin(np.array(max_dists_red)[subset_inds])]
+    logging.info(f"min_ind: {min_ind}")
+    (s_reg, R_reg, t_reg) = reg_params_ls[min_ind]
+    logging.info(f"combs_red shape: {combs_red.shape}")
+    logging.info(f"combs_red shape: {combs_red[min_ind,:].shape}")
+    logging.info(f"combs_red shape: {combs_red[min_ind,:]}")
+    xy_init_shift = combs_red[min_ind,:] + t_reg
+    return xy_init_shift, np.min(max_dists_red), (s_reg, R_reg, t_reg)
 
 logging.info(f"Inital Matching")
 logging.info(f"picents: {picents}")
 logging.info(f"imzcents: {imzcents}")
-xy_init_shift, max_dist = find_approx_init_translation(imzcents, picents)
+xy_init_shift, max_dist, (s_reg, R_reg, t_reg) = find_approx_init_translation(imzcents, picents)
+
+kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
+distances, indices = kdt.query(picents+np.array(xy_init_shift), k=1, return_distance=True)
+max_dist_test = np.max(distances)
 
 logging.info(f"\tInital translation: {xy_init_shift}")
 logging.info(f"\tMax distance: {max_dist}")
+logging.info(f"\tMax distance: {max_dist_test}")
+logging.info(f"\tRigid registration: {s_reg}, {R_reg}, {t_reg}")
 
 if (picents.shape[0]==1) and (imzcents.shape[0]==1):
     init_trans = np.round(xy_init_shift).astype(int)
 else:
     kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
     distances, indices = kdt.query(picents+xy_init_shift, k=1, return_distance=True)
+    logging.info(f"Initial translation: {xy_init_shift}")
+    logging.info(f"Initial distances: {distances}")
     indices = [ni[0] for ni in indices]
-    reg = pycpd.RigidRegistration(X=imzcents[indices,:], Y=picents, w=0)
+    reg = pycpd.RigidRegistration(X=imzcents[indices,:], Y=picents, w=0, s=1)
     TY, (s_reg, R_reg, t_reg) = reg.register()
+    logging.info(f"Rigid registration: {s_reg}, {R_reg}, {t_reg}")
     # actual initial transform for registration
     init_trans = np.round(t_reg+np.array([global_bbox[0],global_bbox[1]])).astype(int)
 
@@ -311,12 +335,25 @@ hn = int(imzimgres.shape[1]/tmp_downscale_factor)
 fixed_np = cv2.resize(imzimgres, (hn,wn), interpolation=cv2.INTER_NEAREST)
 fixed_np = fixed_np.astype(np.float32)
 
+logging.info(f"global_bbox: {global_bbox}")
 moving_np = readimage_crop(postIMSr_file, global_bbox)
+wn = int(moving_np.shape[0]/tmp_downscale_factor)
+hn = int(moving_np.shape[1]/tmp_downscale_factor)
+tmpoutimg = cv2.resize(moving_np, (hn,wn), interpolation=cv2.INTER_NEAREST)
+logging.info(f"counts: {np.unique(tmpoutimg, return_counts=True)}")
+tmpoutimg = cv2.normalize(tmpoutimg, 0, 255, cv2.NORM_MINMAX)
+logging.info(f"counts: {np.unique(tmpoutimg, return_counts=True)}")
+saveimage_tile(tmpoutimg, snakemake.output["IMS_to_postIMS_matches_image"].replace(".ome.tiff","_postIMS_pre.ome.tiff"), 1)
+
 moving_np[boolimg] = 0
 wn = int(moving_np.shape[0]/tmp_downscale_factor)
 hn = int(moving_np.shape[1]/tmp_downscale_factor)
 moving_np = cv2.resize(moving_np, (hn,wn), interpolation=cv2.INTER_NEAREST)
+tmpoutimg = cv2.normalize(moving_np, 0, 255, cv2.NORM_MINMAX)
 moving_np = moving_np.astype(np.float32)
+logging.info(f"counts: {np.unique(tmpoutimg, return_counts=True)}")
+saveimage_tile(tmpoutimg, snakemake.output["IMS_to_postIMS_matches_image"].replace(".ome.tiff","_postIMS_filt.ome.tiff"), 1)
+
 del boolimg
 
 # import matplotlib.pyplot as plt
@@ -332,7 +369,7 @@ logging.info(f"fixed image dimensions: ")
 # def register_postIMS_to_IMS(ims: np.ndarray, postIMS: np.ndarray):
 fixed = sitk.GetImageFromArray(fixed_np)
 moving = sitk.GetImageFromArray(moving_np)
-del fixed_np,moving_np
+# del fixed_np,moving_np
 
 # initial transformation
 init_transform = sitk.AffineTransform(2)
@@ -376,8 +413,29 @@ del tmp1, resampler
 logging.info("Save Image")
 # save matches image
 
-tmpoutimg = cv2.normalize((((postIMSro_trans>0).astype(int)-(fixed_np>0).astype(int))+1), 0, 255, cv2.NORM_MINMAX)
+tmpoutimg = (((postIMSro_trans>0).astype(int)-(fixed_np>0).astype(int))+1).astype(np.uint8)
+logging.info(f"counts: {np.unique(tmpoutimg, return_counts=True)}")
+tmpoutimg = cv2.normalize(tmpoutimg,tmpoutimg, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
+logging.info(f"counts: {np.unique(tmpoutimg, return_counts=True)}")
 saveimage_tile(tmpoutimg, snakemake.output["IMS_to_postIMS_matches_image"], 1)
+
+tmpoutimg = (postIMSro_trans>0).astype(np.uint8)
+logging.info(f"counts: {np.unique(tmpoutimg, return_counts=True)}")
+tmpoutimg = cv2.normalize(tmpoutimg,tmpoutimg, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
+logging.info(f"counts: {np.unique(tmpoutimg, return_counts=True)}")
+saveimage_tile(tmpoutimg, snakemake.output["IMS_to_postIMS_matches_image"].replace(".ome.tiff","_postIMS_resampled.ome.tiff"), 1)
+
+tmpoutimg = (moving_np>0).astype(np.uint8)
+logging.info(f"counts: {np.unique(tmpoutimg, return_counts=True)}")
+tmpoutimg = cv2.normalize(tmpoutimg,tmpoutimg, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
+logging.info(f"counts: {np.unique(tmpoutimg, return_counts=True)}")
+saveimage_tile(tmpoutimg, snakemake.output["IMS_to_postIMS_matches_image"].replace(".ome.tiff","_postIMS.ome.tiff"), 1)
+
+tmpoutimg = (fixed_np>0).astype(np.uint8)
+logging.info(f"counts: {np.unique(tmpoutimg, return_counts=True)}")
+tmpoutimg = cv2.normalize(tmpoutimg,tmpoutimg, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
+logging.info(f"counts: {np.unique(tmpoutimg, return_counts=True)}")
+saveimage_tile(tmpoutimg, snakemake.output["IMS_to_postIMS_matches_image"].replace(".ome.tiff","_IMS.ome.tiff"), 1)
 
 del fixed_np
 
