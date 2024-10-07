@@ -117,6 +117,7 @@ rule prepare_register_postIMC_to_postIMS:
         preIMSmask=lambda wildcards: decide_postIMSpreIMSmask(wildcards, "preIMS"),
         preIMC="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
         postIMC="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff",
+        table="results/{project_name}/data/TMA_location/use_which_postIMSpreIMS_geojsons.csv",
     output:
         wsireg_config="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-wsireg-config.yaml",
     log:
@@ -141,6 +142,7 @@ rule register_postIMC_to_postIMS:
         preIMC="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
         postIMC="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff",
         wsireg_config="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-wsireg-config.yaml",
+        table="results/{project_name}/data/TMA_location/use_which_postIMSpreIMS_geojsons.csv",
     output:
         preIMS_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMS_to_postIMS_transformations.json",
         preIMS_to_postIMS_image="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMS_to_postIMS_registered.ome.tiff",
