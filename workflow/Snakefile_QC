@@ -446,6 +446,7 @@ rule image_registration_evaluation_transform_regions_SAM_postIMC_to_preIMC:
         IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"postIMC"),
         contours_in="results/{project_name}/data/postIMC/{sample}_postIMC_landmark_regions.json",
         transform_file=choose_postIMC_to_postIMS_transform,
+        matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
     output:
         contours_out="results/{project_name}/data/postIMC/{sample}_postIMC_on_preIMC_landmark_regions.json",
     log:
@@ -490,6 +491,7 @@ use rule image_registration_evaluation_transform_regions_SAM_postIMC_to_preIMC a
         IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"preIMC"),
         contours_in="results/{project_name}/data/preIMC/{sample}_preIMC_landmark_regions.json",
         transform_file=choose_postIMC_to_postIMS_transform,
+        matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
     output:
         contours_out="results/{project_name}/data/preIMC/{sample}_preIMC_on_preIMS_landmark_regions.json",
     log:
@@ -527,6 +529,7 @@ use rule image_registration_evaluation_transform_regions_SAM_postIMC_to_preIMC a
         IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"preIMS"),
         contours_in="results/{project_name}/data/preIMS/{sample}_preIMS_landmark_regions.json",
         transform_file=choose_postIMC_to_postIMS_transform,
+        matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
     output:
         contours_out="results/{project_name}/data/preIMS/{sample}_preIMS_on_postIMS_landmark_regions.json",
     log:
@@ -566,6 +569,7 @@ use rule image_registration_evaluation_transform_regions_SAM_postIMC_to_preIMC a
         IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"postIMC"),
         contours_in="results/{project_name}/data/postIMC/{sample}_postIMC_landmark_regions.json",
         transform_file=choose_postIMC_to_postIMS_transform,
+        matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
     output:
         contours_out="results/{project_name}/data/postIMC/{sample}_postIMC_on_postIMS_landmark_regions.json",
     log:

@@ -131,6 +131,7 @@ use rule transform_IMC_location_to_preIMC as transform_IMC_location_to_preIMS wi
     input:
         IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_registered_IMC_mask_on_postIMC_{core}.geojson",
         postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
+        matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
     output:
         IMC_location_transformed="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_preIMS_{core}.geojson",
     log:
@@ -158,6 +159,7 @@ use rule transform_IMC_location_to_preIMC as transform_IMC_location_to_postIMS w
     input:
         IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_registered_IMC_mask_on_postIMC_{core}.geojson",
         postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
+        matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
     output:
         IMC_location_transformed="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMS_{core}.geojson",
     log:
@@ -186,7 +188,7 @@ rule aggregate_IMC_file:
         "scripts/IMC/prepare_imc_for_registration.py"
 
 
-rule match_preIMC_location_with_IMC_location:
+checkpoint match_preIMC_location_with_IMC_location:
     params:
         generic_input=config["generic_input"],
     threads: 1
@@ -331,6 +333,7 @@ rule transform_IMCaggr_to_postIMS:
         preIMC_orig_size_transform=preIMC_orig_size_transform_core_name_from_sample_name,
         preIMC_to_postIMS_transform=choose_preIMC_to_postIMS_transform,
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
+        matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         IMC="results/{project_name}/data/IMC/{sample}_aggr.ome.tiff",
     output:
         IMC_transformed="results/{project_name}/data/IMC/{sample}_aggr_transformed.ome.tiff",
@@ -370,6 +373,7 @@ rule transform_IMCmask_to_postIMS:
         preIMC_orig_size_transform=preIMC_orig_size_transform_core_name_from_sample_name,
         preIMC_to_postIMS_transform=choose_preIMC_to_postIMS_transform,
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
+        matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         IMC="results/{project_name}/data/IMC_mask/{sample}.tiff",
     output:
         IMC_transformed="results/{project_name}/data/IMC_mask/{sample}_transformed_on_postIMS.ome.tiff",

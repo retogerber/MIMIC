@@ -379,6 +379,7 @@ rule transform_postIMC_to_postIMS:
     input:
         postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
+        matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         postIMC="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff",
         IMC_location=lambda wildcards: f'results/{wildcards.project_name}/data/IMC_location/{wildcards.project_name}_registered_IMC_mask_on_postIMC_{get_column_entry_from_metadata_two_conditions(wildcards.sample,wildcards.project_name, "core_name", "sample_name","project_name", read_sample_metadata(config["sample_metadata"]))}.geojson',
     output:
@@ -421,6 +422,7 @@ rule transform_postIMC_to_preIMC:
     input:
         postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
+        matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         postIMC="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff",
         IMC_location=lambda wildcards: f'results/{wildcards.project_name}/data/IMC_location/{wildcards.project_name}_registered_IMC_mask_on_postIMC_{get_column_entry_from_metadata_two_conditions(wildcards.sample,wildcards.project_name, "core_name", "sample_name","project_name", read_sample_metadata(config["sample_metadata"]))}.geojson',
     output:
@@ -463,6 +465,7 @@ rule transform_preIMC_to_preIMS:
     input:
         postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
+        matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         postIMC="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
         IMC_location=lambda wildcards: f'results/{wildcards.project_name}/data/IMC_location/{wildcards.project_name}_IMC_mask_on_preIMC_{get_column_entry_from_metadata_two_conditions(wildcards.sample,wildcards.project_name, "core_name", "sample_name","project_name", read_sample_metadata(config["sample_metadata"]))}.geojson',
     output:
@@ -505,6 +508,7 @@ rule transform_preIMS_to_postIMS:
     input:
         postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
+        matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         postIMC="results/{project_name}/data/preIMS/{project_name}_preIMS.ome.tiff",
         IMC_location=lambda wildcards: f'results/{wildcards.project_name}/data/IMC_location/{wildcards.project_name}_IMC_mask_on_preIMS_{get_column_entry_from_metadata_two_conditions(wildcards.sample,wildcards.project_name, "core_name", "sample_name","project_name", read_sample_metadata(config["sample_metadata"]))}.geojson',
     output:
