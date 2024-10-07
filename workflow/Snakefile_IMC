@@ -196,7 +196,7 @@ checkpoint match_preIMC_location_with_IMC_location:
         table="results/{project_name}/data/preIMS_location/available_masks.csv",
         preIMC_location=lambda wildcards: return_file_or_generic(
             f"results/{wildcards.project_name}/data/preIMC_location_combined/{wildcards.project_name}_reg_mask_on_preIMC.geojson",
-            decide_use_direct_preIMC_to_postIMS_transform(wildcards)
+            not decide_use_direct_preIMC_to_postIMS_transform(wildcards)
         ),
         IMC_location=IMC_location_from_project_name,
     output:
