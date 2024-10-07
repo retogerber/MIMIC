@@ -274,17 +274,14 @@ def decide_postIMSpreIMSmask(wildcards, type):
     )
     assert postIMSpreIMSmask in ["none","bbox","segment"]
     table_file = checkpoints.create_postIMSpreIMS_mask_table.get(project_name=wildcards.project_name).output['table']
-    if not os.path.exists(table_file):
-        filename = f"results/{wildcards.project_name}/data/{type}/{wildcards.project_name}_{type}.ome.tiff"
+    df = pd.read_csv(table_file) 
+    geojson_exists=df.loc[df["type"] == type]["exists"].tolist()[0]!=0
+    if geojson_exists and postIMSpreIMSmask != "none":
+        filename=f"results/{wildcards.project_name}/data/{type}/{wildcards.project_name}_{type}_mask_for_reg_geojson.ome.tiff",
+    elif postIMSpreIMSmask == "segment" and not geojson_exists:
+        filename=f"results/{wildcards.project_name}/data/{type}/{wildcards.project_name}_{type}_mask_for_reg_nogeojson.ome.tiff",
     else:
-        df = pd.read_csv(table_file) 
-        geojson_exists=df.loc[df["type"] == type]["exists"].tolist()[0]!=0
-        if geojson_exists and postIMSpreIMSmask != "none":
-            filename=f"results/{wildcards.project_name}/data/{type}/{wildcards.project_name}_{type}_mask_for_reg_geojson.ome.tiff",
-        elif postIMSpreIMSmask == "segment" and not geojson_exists:
-            filename=f"results/{wildcards.project_name}/data/{type}/{wildcards.project_name}_{type}_mask_for_reg_nogeojson.ome.tiff",
-        else:
-            filename = f"results/{wildcards.project_name}/data/{type}/{wildcards.project_name}_{type}.ome.tiff"
+        filename = f"results/{wildcards.project_name}/data/{type}/{wildcards.project_name}_{type}.ome.tiff"
     return filename
 
 def return_file_or_generic(file, bool, generic = config["generic_input"]):
@@ -292,4 +289,3 @@ def return_file_or_generic(file, bool, generic = config["generic_input"]):
         return file
     else:
         return generic
-
