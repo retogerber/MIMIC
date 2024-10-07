@@ -55,6 +55,8 @@ logging.info(f"Input shape: {postIMS_shape}")
 if geojson_exists:
     logging.info("Get bounding box from geojson")
     TMA_geojson = json.load(open(TMA_location_file, "r"))
+    if isinstance(TMA_geojson, dict):
+        TMA_geojson = [TMA_geojson]
     bboxls = list()
     for i in range(len(TMA_geojson)):
         boundary_points = np.array(TMA_geojson[i]['geometry']['coordinates'])[0,:,:]

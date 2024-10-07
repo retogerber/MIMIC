@@ -21,9 +21,17 @@ logging_utils.logging_setup(snakemake.log['stdout'])
 logging_utils.log_snakemake_info(snakemake)
 setNThreads(snakemake.threads)
 
+# params
+generic_input = snakemake.params["generic_input"]
 # inputs
 preIMC_geojson_file=snakemake.input['preIMC_location']
 IMC_geojson_files=snakemake.input['IMC_location']
+
+if preIMC_geojson_file == generic_input:
+    header = "core,preIMC_location"
+    with open(snakemake.output['matching'], "w") as f:
+        f.write(header)
+    sys.exit(0)
 
 logging.info("Read preIMC geojson")
 preIMC_geojson = json.load(open(preIMC_geojson_file, "r"))

@@ -931,14 +931,6 @@ rule image_registration_evaluation_IMS_to_postIMS:
     script:
         "scripts/QC/image_registration_evaluation_microlink.py"
 
-
-
-def return_file_or_generic(file, bool, generic = config["generic_input"]):
-    if bool:
-        return file
-    else:
-        return generic
-
 rule combine_image_registration_evaluation_results:
     params:
         generic_input=config["generic_input"],

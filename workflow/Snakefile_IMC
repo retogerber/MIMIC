@@ -1,3 +1,4 @@
+import os
 
 rule split_IMC_location_geojson:
     params:
@@ -185,11 +186,16 @@ rule aggregate_IMC_file:
         "scripts/IMC/prepare_imc_for_registration.py"
 
 
-checkpoint match_preIMC_location_with_IMC_location:
+rule match_preIMC_location_with_IMC_location:
+    params:
+        generic_input=config["generic_input"],
     threads: 1
     input:
         table="results/{project_name}/data/preIMS_location/available_masks.csv",
-        preIMC_location="results/{project_name}/data/preIMC_location_combined/{project_name}_reg_mask_on_preIMC.geojson",
+        preIMC_location=lambda wildcards: return_file_or_generic(
+            f"results/{wildcards.project_name}/data/preIMC_location_combined/{wildcards.project_name}_reg_mask_on_preIMC.geojson",
+            os.stat(os.path.abspath(f"results/{wildcards.project_name}/data/preIMS_location/available_masks.csv")).st_size > 0
+        ),
         IMC_location=IMC_location_from_project_name,
     output:
         matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",

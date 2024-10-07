@@ -287,3 +287,9 @@ def decide_postIMSpreIMSmask(wildcards, type):
             filename = f"results/{wildcards.project_name}/data/{type}/{wildcards.project_name}_{type}.ome.tiff"
     return filename
 
+def return_file_or_generic(file, bool, generic = config["generic_input"]):
+    if bool:
+        return file
+    else:
+        return generic
+
