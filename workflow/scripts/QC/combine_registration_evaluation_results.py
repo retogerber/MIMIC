@@ -84,6 +84,8 @@ if input_jsons != generic_input:
         dfout = dfout.join(temp_dfout)
     else:
         dfout = temp_dfout
+        dfout_exists = True
+    logging.info(dfout.columns)
 
 if input_jsons2 != generic_input:
     logging.info("Read postIMC_to_preIMC json")
@@ -92,6 +94,8 @@ if input_jsons2 != generic_input:
         dfout = dfout.join(temp_dfout)
     else:
         dfout = temp_dfout
+        dfout_exists = True
+    logging.info(dfout.columns)
 
 if input_jsons3 != generic_input:
     logging.info("Read preIMC_to_preIMS json")
@@ -100,6 +104,8 @@ if input_jsons3 != generic_input:
         dfout = dfout.join(temp_dfout)
     else:
         dfout = temp_dfout
+        dfout_exists = True
+    logging.info(dfout.columns)
 
 if input_jsons4 != generic_input:
     logging.info("Read preIMS_to_postIMS json")
@@ -108,6 +114,8 @@ if input_jsons4 != generic_input:
         dfout = dfout.join(temp_dfout)
     else:
         dfout = temp_dfout
+        dfout_exists = True
+    logging.info(dfout.columns)
 
 if input_jsons41 != generic_input:
     logging.info("Read postIMC_to_postIMS json")
@@ -116,6 +124,8 @@ if input_jsons41 != generic_input:
         dfout = dfout.join(temp_dfout)
     else:
         dfout = temp_dfout
+        dfout_exists = True
+    logging.info(dfout.columns)
 
 if input_jsons5 != generic_input:
     logging.info("Read preIMS_to_postIMS sitk json")
@@ -124,6 +134,8 @@ if input_jsons5 != generic_input:
         dfout = dfout.join(temp_dfout)
     else:
         dfout = temp_dfout
+        dfout_exists = True
+    logging.info(dfout.columns)
 
 if input_jsons6 != generic_input:
     logging.info("Read postIMC_to_preIMC region json")
@@ -132,6 +144,8 @@ if input_jsons6 != generic_input:
         dfout = dfout.join(temp_dfout)
     else:
         dfout = temp_dfout
+        dfout_exists = True
+    logging.info(dfout.columns)
 
 if input_jsons7 != generic_input:
     logging.info("Read preIMC_to_preIMS region json")
@@ -140,6 +154,8 @@ if input_jsons7 != generic_input:
         dfout = dfout.join(temp_dfout)
     else:
         dfout = temp_dfout
+        dfout_exists = True
+    logging.info(dfout.columns)
 
 if input_jsons8 != generic_input:
     logging.info("Read preIMS_to_postIMS region json")
@@ -148,6 +164,8 @@ if input_jsons8 != generic_input:
         dfout = dfout.join(temp_dfout)
     else:
         dfout = temp_dfout
+        dfout_exists = True
+    logging.info(dfout.columns)
 
 if input_jsons9 != generic_input:
     logging.info("Read postIMC_to_postIMS region json")
@@ -156,6 +174,8 @@ if input_jsons9 != generic_input:
         dfout = dfout.join(temp_dfout)
     else:
         dfout = temp_dfout
+        dfout_exists = True
+    logging.info(dfout.columns)
 
 if input_jsons10 != generic_input:
     logging.info("Read postIMC_to_postIMS global metrics json")
@@ -164,6 +184,8 @@ if input_jsons10 != generic_input:
         dfout = dfout.join(temp_dfout)
     else:
         dfout = temp_dfout
+        dfout_exists = True
+    logging.info(dfout.columns)
 
 if input_jsons11 != generic_input:
     logging.info("Read postIMC_to_preIMC global metrics json")
@@ -172,6 +194,8 @@ if input_jsons11 != generic_input:
         dfout = dfout.join(temp_dfout)
     else:
         dfout = temp_dfout
+        dfout_exists = True
+    logging.info(dfout.columns)
 
 if input_jsons12 != generic_input:
     logging.info("Read preIMC_to_preIMS global metrics json")
@@ -180,6 +204,8 @@ if input_jsons12 != generic_input:
         dfout = dfout.join(temp_dfout)
     else:
         dfout = temp_dfout
+        dfout_exists = True
+    logging.info(dfout.columns)
 
 if input_jsons13 != generic_input:
     logging.info("Read preIMS_to_postIMS global metrics json")
@@ -188,6 +214,8 @@ if input_jsons13 != generic_input:
         dfout = dfout.join(temp_dfout)
     else:
         dfout = temp_dfout
+        dfout_exists = True
+    logging.info(dfout.columns)
 
 
 with pd.option_context('display.max_rows', None,

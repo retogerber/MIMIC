@@ -83,6 +83,7 @@ basedir <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_
 input_csv_files <- "/home/retger/Downloads/cirrhosis_TMA_reg_metrics_combined.csv"
 input_csv_files <- c("/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/registration_metric/test_combined_reg_metrics_combined.csv")
 input_csv_files <- "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA_reg_metrics_combined.csv"
+input_csv_files <- "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow_biopsies/results/id1007966/data/registration_metric/id1007966_reg_metrics_combined.csv"
 vis_type <- "IMS_to_postIMS"
 ```
 
@@ -561,7 +562,8 @@ if("IMS_to_postIMS" %in% snakemake@params[["QC_steps"]]){
   keep_IMS_to_postIMS <- df$IMS_Completeness > min_completenes & df$IMS_to_postIMS_quantile50_error < IMS_error_thr
   to_keep_df$keep_IMS_to_postIMS <- keep_IMS_to_postIMS
 } else{
-  to_keep_df$keep_IMS_to_postIMS <- rep(NA, length(df$sample))
+  keep_IMS_to_postIMS <- rep(NA, length(df$sample))
+  to_keep_df$keep_IMS_to_postIMS <- keep_IMS_to_postIMS
 }
 
 ## postIMC to postIMS
@@ -713,7 +715,7 @@ maxsc <- c(10, 100)
 df <- read.csv(input_csv_files[1])
 pot_columns1 <- c("sample", "IMS_to_postIMS_quantile50_error", "postIMC_to_preIMC_quantile50_error", "preIMC_to_preIMS_quantile50_error", "preIMS_to_postIMS_quantile50_error", "postIMC_to_postIMS_quantile50_error", "postIMC_to_preIMC_regions_quantile50_error", "postIMC_to_preIMC_regions_quantile50_dice", "preIMC_to_preIMS_regions_quantile50_error", "preIMC_to_preIMS_regions_quantile50_dice", "preIMS_to_postIMS_regions_quantile50_error", "preIMS_to_postIMS_regions_quantile50_dice", "postIMC_to_postIMS_regions_quantile50_error", "postIMC_to_postIMS_regions_quantile50_dice")
 pot_columns <- pot_columns1[pot_columns1 %in% colnames(df)]
-df1 <- df[, pot_columns]
+df1 <- df[, pot_columns, drop = FALSE]
 
 lookupdf <- data.frame(
   metric = c(
@@ -750,14 +752,27 @@ lookupdf <- data.frame(
 
 pot_columns2 <- c("sample", "IMS_to_postIMS_n_landmarks", "postIMC_to_preIMC_n_points_total", "preIMC_to_preIMS_n_points_total", "preIMS_to_postIMS_n_points_total", "postIMC_to_postIMS_n_points_total", "postIMC_to_preIMC_regions_n_points_total", "preIMC_to_preIMS_regions_n_points_total", "preIMS_to_postIMS_regions_n_points_total", "postIMC_to_postIMS_regions_n_points_total")
 pot_columns <- pot_columns2[pot_columns2 %in% colnames(df)]
-df2 <- df[, pot_columns]
+df2 <- df[, pot_columns, drop = FALSE]
 
+df1_non_empty <- nrow(df1)>0 & ncol(df1)>1
+df2_non_empty <- nrow(df2)>0 & ncol(df2)>1
+if (df1_non_empty){
+  df1l <- tidyr::pivot_longer(df1, -sample, names_to = "metric", values_to = "value")
+}
+if (df2_non_empty){
+  df2l <- tidyr::pivot_longer(df2, -sample, names_to = "confidence", values_to = "confidence_value")
+  df2l <- dplyr::left_join(df2l, lookupdf, by = c("confidence"), relationship = "many-to-many")
+}
+if (df1_non_empty & df2_non_empty){
+  dfc <- dplyr::left_join(df1l, df2l, by = c("sample", "metric"))
+} else if (df1_non_empty){
+  dfc <- df1l
+} else if (df2_non_empty){
+  dfc <- df2l
+} else{
+  dfc <- data.frame()
+}
 
-df1l <- tidyr::pivot_longer(df1, -sample, names_to = "metric", values_to = "value")
-df2l <- tidyr::pivot_longer(df2, -sample, names_to = "confidence", values_to = "confidence_value")
-df2l <- dplyr::left_join(df2l, lookupdf, by = c("confidence"), relationship = "many-to-many")
-
-dfc <- dplyr::left_join(df1l, df2l, by = c("sample", "metric"))
 dfc$metric_type <- ifelse(stringr::str_detect(dfc$metric, "dice"), "dice", "distance")
 dfc$type <- stringr::str_replace(dfc$metric, "(_regions_quantile50_error|_regions_quantile50_dice|_quantile50_error)", "") |>
   stringr::str_replace_all("_", "\n")
@@ -855,7 +870,7 @@ Color legend for the below images:
 | Blue  | Ablation marks |
 | Green | IMS pixel    |
 
-```{r}
+```{r, eval=to_include}
 tthr <- median(df$IMS_to_postIMS_quantile50_error) + mad(df$IMS_to_postIMS_quantile50_error)
 df$IMS_to_postIMS_show_image <- df$IMS_to_postIMS_quantile50_error > tthr
 
@@ -870,19 +885,19 @@ sample_names_cp <- sample_names
 sample_names <- dplyr::filter(tdf, IMS_to_postIMS_show_image)$sample
 img_height <- 1000
 ```
-```{r plot_images_IMS_to_postIMS, ref.label='plot_images', results='asis'}
+```{r plot_images_IMS_to_postIMS, ref.label='plot_images', results='asis', eval=to_include}
 ```
-```{r}
+```{r, eval=to_include}
 sample_names <- sample_names_cp
 ```
 ## Distances ablation marks to IMS pixels {.tabset}
 
 The plot below shows the distances (mean, median, etc.) on the x-axis versus the completeness (number of detected ablation marks divided by the total number of IMS pixels) on the y-axis.
 
-```{r}
+```{r, eval=to_include}
 vis_type <- "IMS_to_postIMS"
 ```
-```{r pairs_plots_IMS_to_postIMS, ref.label='pairs_plots', results='asis', fig.width=7, fig.height=7}
+```{r pairs_plots_IMS_to_postIMS, ref.label='pairs_plots', results='asis', fig.width=7, fig.height=7, eval=to_include}
 ```
 
 ```{r}
@@ -1162,7 +1177,7 @@ The plot below shows the translations (x and y) based on the grid subtracted pos
 ")
 ```
 
-```{r, fig.width=10, fig.height=5, include=to_include_sitk}
+```{r, fig.width=10, fig.height=5, include=to_include_sitk, eval=to_include_sitk}
 fig <- sitk_error_plot(input_csv_files, "preIMS_to_postIMS")
 fig
 ```

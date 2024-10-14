@@ -35,6 +35,8 @@ if preIMC_geojson_file == generic_input:
 
 logging.info("Read preIMC geojson")
 preIMC_geojson = json.load(open(preIMC_geojson_file, "r"))
+if isinstance(preIMC_geojson, dict):
+    preIMC_geojson = [preIMC_geojson]
 
 logging.info("Read IMC geojson")
 IMC_geojson = [ json.load(open(e, "r")) for e in IMC_geojson_files ]

@@ -280,7 +280,8 @@ create_imsc <- function(imspeaks_filename, imscoords_filename,
   #     combined_df <- dplyr::mutate(combined_df, region_id = !!dplyr::sym(sample_id_colname))
   # }
   combined_df_split <- base::split(combined_df, combined_df$region_id)
-  
+  filterregions <- sapply(combined_df_split, function(df) any(!is.na(df$cell_idx)))
+  combined_df_split <- combined_df_split[filterregions]
 
   # test and correct for switched axis
   has_flipped_axis <- sapply(combined_df_split, has_flipped_axis_ims)
@@ -364,8 +365,8 @@ create_imsc <- function(imspeaks_filename, imscoords_filename,
 #' imcims_df <- create_imsc(spe_filename, imspeaks_filename, imscoords_filename, celloverlap_filename, cellcentroids_filename, 30)
 #' is_associated_ims_cell_positions(imcims_df)
 #' is_associated_ims_cell_positions(imcims_df, type = "dist", IMS_pixel_size = 30)
-is_associated_ims_cell_positions <- function(x, type = c("cor", "dist"), threshold = 0.9,
-                                             IMS_pixel_size = NULL, ims_cols = c("ims_x", "ims_y"), cell_cols = c("Pos_X_on_IMS", "Pos_Y_on_IMS")) {
+is_associated_ims_cell_positions <- function(x, type = c("cor", "dist"), threshold = 0.975,
+  IMS_pixel_size = NULL, ims_cols = c("ims_x", "ims_y"), cell_cols = c("Pos_X_on_IMS", "Pos_Y_on_IMS"), return_val=FALSE) {
   type <- match.arg(type)
   if (type == "dist") {
     stopifnot(!is.null(IMS_pixel_size))
@@ -384,7 +385,11 @@ is_associated_ims_cell_positions <- function(x, type = c("cor", "dist"), thresho
       })
     }
     mean_cor <- mean(cors)
-    return(mean_cor >= threshold)
+    if (return_val) {
+      return(mean_cor)
+    } else{
+      return(mean_cor >= threshold)
+    }
   } else {
     large_difference_of_positions <- x |>
       dplyr::filter(!is.na(!!dplyr::sym(cell_cols[1]))) |>
@@ -423,9 +428,12 @@ is_associated_ims_cell_positions <- function(x, type = c("cor", "dist"), thresho
 #' imcims_df <- create_imsc(spe_filename, imspeaks_filename, imscoords_filename, celloverlap_filename, cellcentroids_filename, 30)
 #' has_flipped_axis_ims(imcims_df)
 #' has_flipped_axis_ims(imcims_df, type = "dist", IMS_pixel_size = 30)
-has_flipped_axis_ims <- function(x, type = c("cor", "dist"), threshold = 0.9, IMS_pixel_size = NULL, ims_cols = c("ims_x", "ims_y"), cell_cols = c("Pos_X_on_IMS", "Pos_Y_on_IMS")) {
+has_flipped_axis_ims <- function(x, type = c("cor", "dist"), threshold = 0.975, IMS_pixel_size = NULL, ims_cols = c("ims_x", "ims_y"), cell_cols = c("Pos_X_on_IMS", "Pos_Y_on_IMS")) {
   normal_case <- is_associated_ims_cell_positions(x, type, threshold, IMS_pixel_size, ims_cols, cell_cols)
   flipped_case <- is_associated_ims_cell_positions(x, type, threshold, IMS_pixel_size, rev(ims_cols), cell_cols)
+
+  # normal_case_cor <- is_associated_ims_cell_positions(x, type, threshold, IMS_pixel_size, ims_cols, cell_cols, return_val=TRUE)
+  # flipped_case_cor <- is_associated_ims_cell_positions(x, type, threshold, IMS_pixel_size, rev(ims_cols), cell_cols, return_val=TRUE)
   if (normal_case & !flipped_case) {
     return(FALSE)
   } else if (!normal_case & flipped_case) {
@@ -455,7 +463,7 @@ has_flipped_axis_ims <- function(x, type = c("cor", "dist"), threshold = 0.9, IM
 #' cellcentroids_filename <- here::here("inst", "extdata", "test_combined_Cirrhosis-TMA-5_New_Detector_001_cell_centroids.csv")
 #' imcims_df <- create_imsc(spe_filename, imspeaks_filename, imscoords_filename, celloverlap_filename, cellcentroids_filename, 30)
 #' imcims_df <- switch_ims_axis(imcims_df)
-switch_ims_axis <- function(x, type = c("cor", "dist"), threshold = 0.9, IMS_pixel_size = NULL,
+switch_ims_axis <- function(x, type = c("cor", "dist"), threshold = 0.975, IMS_pixel_size = NULL,
                             ims_cols = c("ims_x", "ims_y"), cell_cols = c("Pos_X_on_IMS", "Pos_Y_on_IMS"),
                             message = TRUE) {
   is_flipped <- has_flipped_axis_ims(x, type, threshold, IMS_pixel_size, ims_cols, cell_cols)

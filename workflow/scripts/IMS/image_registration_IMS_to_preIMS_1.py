@@ -1,5 +1,7 @@
 import sys,os
 sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0], "..","..","workflow","scripts","utils")))
+# sys.path.insert(1, os.path.abspath(os.path.join(os.getcwd(), "workflow","scripts","utils")))
+# sys.path.remove('/home/retger/.local/lib/python3.10/site-packages')
 import cv2
 import SimpleITK as sitk
 import pandas as pd
@@ -20,10 +22,10 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake.params["IMS_shrink_factor"] = 0.8
     snakemake.params["IMC_pixelsize"] = 0.22537
     snakemake.params["IMS_rotation_angle"] = 180
-    snakemake.params["sample_core_names"] = "NASH_HCC_TMA-2_002|-_-|E9|-|-|NASH_HCC_TMA-2_004|-_-|A2|-|-|NASH_HCC_TMA-2_011|-_-|B5|-|-|NASH_HCC_TMA-2_032|-_-|B1"
-    snakemake.input["postIMSmask_downscaled"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS_reduced_mask.ome.tiff"
-    snakemake.input["imzml"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMS/NASH_HCC_TMA_IMS.imzML"
-    snakemake.input["IMCmask"] = ["/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_E9.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_A2.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_B5.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_B1.geojson"]
+    snakemake.params["sample_core_names"] = "id1007966_001|-_-|A1|-|-|id1007966_002|-_-|A2"
+    snakemake.input["postIMSmask_downscaled"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow_biopsies/results/id1007966/data/postIMS/id1007966_postIMS_reduced_mask.ome.tiff"
+    snakemake.input["imzml"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow_biopsies/results/id1007966/data/IMS/1007966-3_AAXL_01022022.imzML"
+    snakemake.input["IMCmask"] = ["/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow_biopsies/results/id1007966/data/IMC_location/id1007966_IMC_mask_on_postIMS_A1.geojson", "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow_biopsies/results/id1007966/data/IMC_location/id1007966_IMC_mask_on_postIMS_A2.geojson"]
     if bool(getattr(sys, 'ps1', sys.flags.interactive)):
         raise Exception("Running in interactive mode!!")
 # logging setup
@@ -187,6 +189,37 @@ for lab in labs_to_remove:
 imzuqregs = np.unique(imzregions)[1:]
 logging.info(f"Unique regions: {imzuqregs}")
 
+if len(np.unique(np.array(postIMSregions))) == 1 and len(np.unique(np.array(imzuqregs))) == 1:
+    logging.info("postIMS and IMS contain only one region, save data")
+    df1 = pd.DataFrame({
+        "imzregion": [imzuqregs[0]],
+        "postIMSregion": [postIMSregions[0]]
+    }).set_index("postIMSregion")
+
+
+    postIMSxmins=[b[0] for b in postIMS_pre_bbox]
+    postIMSymins=[b[1] for b in postIMS_pre_bbox]
+    postIMSxmaxs=[b[2] for b in postIMS_pre_bbox]
+    postIMSymaxs=[b[3] for b in postIMS_pre_bbox]
+    
+    df2 = pd.DataFrame({
+        "postIMSregion": postIMSregions,
+        "core_name": core_names,
+        "postIMS_xmin": postIMSxmins,
+        "postIMS_ymin": postIMSymins,
+        "postIMS_xmax": postIMSxmaxs,
+        "postIMS_ymax": postIMSymaxs,
+        "project_name": imc_projects,
+        "sample_name": sample_names.tolist()
+    }).set_index("postIMSregion")
+
+    dfout = df2.join(df1, on=["postIMSregion"])
+    dfout.to_csv(output_table)
+
+    open(snakemake.output["IMS_to_postIMS_matches_image"], 'a').close()
+    logging.info("Finished")
+    sys.exit(0)
+
 
 logging.info("Scale IMZ image")
 # rescale to postIMS resolution
@@ -221,6 +254,15 @@ _,_,imzstats,imzcents = cv2.connectedComponentsWithStatsWithAlgorithm(imzimgres,
 # remove background, extract area
 imzarea = imzstats[1:,4]
 
+imzxs = imzstats[:,1]
+imzys = imzstats[:,0]
+imzheights = imzstats[:,2]
+imzwidths = imzstats[:,3]
+
+imz_bbox = list()
+for r in range(1,imzstats.shape[0]):
+    imz_bbox.append([imzxs[r],imzys[r],imzxs[r]+imzwidths[r], imzys[r]+imzheights[r]])
+
 # remove very small test regions
 too_small = imzarea < np.mean(imzarea) - 5*np.std(imzarea)
 imzcents=np.flip(imzcents[1:,:],axis=1)[~too_small,:]
@@ -237,7 +279,22 @@ logging.info(f"\tCentroids of IMZ: {imzcents}")
 def find_approx_init_translation(imzcents, picents):
     if (picents.shape[0]==1) and (imzcents.shape[0]==1):
         xy_init_shift = -np.array([imzcents[0,0]-picents[0,0]+global_bbox[0],imzcents[0,1]-picents[0,1]+global_bbox[1]])
-        return xy_init_shift, xy_init_shift
+        return xy_init_shift, xy_init_shift, (1, np.eye(2), np.array([0,0]))
+    
+
+    # one postIMS region, multiple ims regions
+    if np.unique(picents, axis=0).shape[0] == 1:
+        tmpostIMSregincut = postIMSregin[postIMS_pre_bbox[0][0]:postIMS_pre_bbox[0][2],postIMS_pre_bbox[0][1]:postIMS_pre_bbox[0][3]]
+        tmpimzimgrescut = [imzimgres[bb[0]:bb[2],bb[1]:bb[3]] for bb in imz_bbox]
+
+        dists = list()
+        for i in range(len(tmpimzimgrescut)):
+            d1 = cv2.matchShapes(tmpostIMSregincut,tmpimzimgrescut[i],cv2.CONTOURS_MATCH_I2,0)
+            dists.append(d1)
+        min_ind = np.argmin(dists)
+
+        xy_init_shift = -np.array([imzcents[min_ind,0]-picents[0,0]+global_bbox[0],imzcents[min_ind,1]-picents[0,1]+global_bbox[1]])
+        return xy_init_shift, xy_init_shift, (1, np.eye(2), np.array([0,0]))
 
     max_dists = list()
     xrange = np.abs(imzimgres.shape[0]-postIMSregin.shape[0])
@@ -302,6 +359,8 @@ logging.info(f"\tMax distance: {max_dist_test}")
 logging.info(f"\tRigid registration: {s_reg}, {R_reg}, {t_reg}")
 
 if (picents.shape[0]==1) and (imzcents.shape[0]==1):
+    init_trans = np.round(xy_init_shift).astype(int)
+elif np.unique(picents, axis=0).shape[0] == 1:
     init_trans = np.round(xy_init_shift).astype(int)
 else:
     kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')

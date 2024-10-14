@@ -42,5 +42,9 @@ fi
 
 cn="${core_name%\"}"
 cn="${cn#\"}"
+echo $core_name
+echo $cn
+cat $file
+
 # extract element and multiply with scale
-jq --arg cn "$cn" --argjson scale "$scale" '.[] | select(.properties.name==$cn) | .geometry.coordinates[][][]*=$scale'  $file > "${output}"
+jq --arg cn "$cn" --argjson scale "$scale" 'if type == "array" then .[] else . end | select(.properties.name==$cn) | .geometry.coordinates[][][]*=$scale'  $file > "${output}"
