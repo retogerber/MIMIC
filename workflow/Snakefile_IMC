@@ -112,7 +112,6 @@ rule create_IMC_to_postIMC_ITK_transform:
     script:
         "scripts/IMC/create_IMC_to_postIMC_transformation.py"
 
-
 rule transform_IMC_location_to_preIMC:
     params:
         input_spacing=lambda wildcards: get_column_entry_from_metadata(

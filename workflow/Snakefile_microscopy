@@ -9,6 +9,42 @@ rule download_yq:
     shell:
         "cd results/Misc && wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O > ../../{log.stdout} 2> ../../{log.stderr} yq && chmod +x yq >> ../../{log.stdout} 2>> ../../{log.stderr}"
 
+for uq_project_name in unique_project_names:
+    rule:
+        name: f"extract_TMA_mask_and_bbox_from_postIMC_{uq_project_name}",
+        params:
+            microscopy_pixelsize=get_column_entry_from_metadata(
+                uq_project_name,
+                "microscopy_pixel_size",
+                "project_name",
+                read_sample_metadata(config["sample_metadata"]),
+            ),
+            IMC_location_pixelsize=get_column_entry_from_metadata(
+                uq_project_name,
+                "microscopy_pixel_size",
+                "project_name",
+                read_sample_metadata(config["sample_metadata"]),
+            ),
+            max_TMA_diameter = 2500,
+        threads: 16
+        input:
+            postIMC=expand("results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff", project_name=uq_project_name),
+            IMC_location=expand('results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC_{core}.geojson', project_name=uq_project_name, core=get_column_entry_from_metadata(uq_project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)),
+        output:
+            postIMC_mask=expand("results/{project_name}/data/postIMC/{project_name}_postIMC_mask.ome.tiff", project_name=uq_project_name),
+            TMA_location= expand('results/{project_name}/data/TMA_location/{project_name}_TMA_location_on_postIMC_{core}.geojson', core = core_names_per_project[uq_project_name], project_name=uq_project_name),
+        log:
+            stdout=f"logs/extract_TMA_mask_and_bbox_from_postIMC/{uq_project_name}.stdout",
+            stderr=f"logs/extract_TMA_mask_and_bbox_from_postIMC/{uq_project_name}.stderr",
+        benchmark:
+            f"benchmarks/extract_TMA_mask_and_bbox_from_postIMC/{uq_project_name}.txt",
+        # conda:
+        #    "env/image_registration_wsireg.yaml"
+        container:
+            config["container"]
+        script:
+            "scripts/Microscopy/TMA_bbox_from_image.py"
+
 
 rule extract_microscopy_mask_from_registration_postIMS_nogeojson:
     params:
