@@ -77,6 +77,42 @@ rule register_IMC_location_on_postIMC:
     script:
         "scripts/IMC/IMC_location_from_postIMC.py"
 
+rule create_IMC_to_postIMC_ITK_transform:
+    params:
+        input_spacing_postIMC=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        input_spacing_IMC=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMC_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        IMC_rotation_angle=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMC_rotation_angle",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+    input:
+        IMC = lambda wildcards: f"results/{wildcards.project_name}/data/IMC/{get_column_entry_from_metadata_two_conditions(wildcards.core, wildcards.project_name, 'sample_name', 'core_name', 'project_name', read_sample_metadata(config['sample_metadata']))}.tiff",
+        IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_registered_IMC_mask_on_postIMC_{core}.geojson",
+        postIMC="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff",
+    output:
+        IMC_to_postIMC_transform = "results/{project_name}/registrations/IMC_to_postIMC/{project_name}_{core}/{project_name}_{core}-IMC_to_postIMC_transformations.json"
+    log:
+        stdout="logs/create_IMC_to_postIMC_ITK_transform/{project_name}_{core}.stdout",
+    benchmark:
+        "benchmarks/create_IMC_to_postIMC_ITK_transform/{project_name}_{core}.txt",
+    container:
+        config["container"]
+    script:
+        "scripts/IMC/create_IMC_to_postIMC_transformation.py"
+
+
 rule transform_IMC_location_to_preIMC:
     params:
         input_spacing=lambda wildcards: get_column_entry_from_metadata(
