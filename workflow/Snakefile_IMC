@@ -112,96 +112,57 @@ rule create_IMC_to_postIMC_ITK_transform:
     script:
         "scripts/IMC/create_IMC_to_postIMC_transformation.py"
 
-rule transform_IMC_location_to_preIMC:
-    params:
-        input_spacing=lambda wildcards: get_column_entry_from_metadata(
-            wildcards.project_name,
-            "microscopy_pixel_size",
-            "project_name",
-            read_sample_metadata(config["sample_metadata"]),
-        ),
-        output_spacing=lambda wildcards: get_column_entry_from_metadata(
-            wildcards.project_name,
-            "microscopy_pixel_size",
-            "project_name",
-            read_sample_metadata(config["sample_metadata"]),
-        ),
-        transform_target="preIMC"
-    threads: 8
-    resources:
-        mem_mb=30000,
-    input:
-        IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_registered_IMC_mask_on_postIMC_{core}.geojson",
-        postIMC_to_postIMS_transform="results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_transformations_mod.json",
-    output:
-        IMC_location_transformed="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_preIMC_{core}.geojson",
-    log:
-        stdout="logs/transform_IMC_location_to_preIMC/{project_name}_{core}.stdout"
-    benchmark:
-        "benchmarks/transform_IMC_location_to_preIMC/{project_name}_{core}.txt",
-    # conda:
-    #    "env/image_registration_wsireg.yaml"
-    container:
-        config["container"]
-    script:
-        "scripts/IMC/transform_IMC_location.py"
+for transform_target in ["preIMC","preIMS","postIMS"]:
+    rule: 
+        name: f"transform_IMC_location_to_{transform_target}" 
+        params:
+            input_spacing=lambda wildcards: get_column_entry_from_metadata(
+                wildcards.project_name,
+                "microscopy_pixel_size",
+                "project_name",
+                read_sample_metadata(config["sample_metadata"]),
+            ),
+            output_spacing=lambda wildcards: get_column_entry_from_metadata(
+                wildcards.project_name,
+                "microscopy_pixel_size",
+                "project_name",
+                read_sample_metadata(config["sample_metadata"]),
+            ),
+            transform_target=transform_target,
+        threads: 8
+        resources:
+            mem_mb=lambda wc, input: 10000 if is_linear_transform(input.postIMC_to_postIMS_transform) else 100000,
+        input:
+            IMC_location_on_postIMC=lambda wildcards: [f"results/{wildcards.project_name}/data/IMC_location/{wildcards.project_name}_registered_IMC_mask_on_postIMC_{core}.geojson" for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
+            postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_ls(wildcards.project_name, get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True), "preIMC"),
+            matching=return_file_or_generic("results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv", transform_target != "preIMC"),
+        output:
+            IMC_location_transformed=expand("results/{{project_name}}/data/IMC_location/{{project_name}}_IMC_mask_on_{transform_target}_combined.geojson", transform_target=transform_target),
+        log:
+            stdout=f"logs/transform_IMC_location_to_{transform_target}/{{project_name}}.stdout"
+        benchmark:
+            f"benchmarks/transform_IMC_location_to_{transform_target}/{{project_name}}.txt",
+        container:
+            config["container"]
+        script:
+            "scripts/IMC/transform_IMC_location.py"
 
-use rule transform_IMC_location_to_preIMC as transform_IMC_location_to_preIMS with:
-    params:
-        input_spacing=lambda wildcards: get_column_entry_from_metadata(
-            wildcards.project_name,
-            "microscopy_pixel_size",
-            "project_name",
-            read_sample_metadata(config["sample_metadata"]),
-        ),
-        output_spacing=lambda wildcards: get_column_entry_from_metadata(
-            wildcards.project_name,
-            "microscopy_pixel_size",
-            "project_name",
-            read_sample_metadata(config["sample_metadata"]),
-        ),
-        transform_target="preIMS",
-    resources:
-        mem_mb=lambda wc, input: 10000 if is_linear_transform(input.postIMC_to_postIMS_transform) else 100000,
-    input:
-        IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_registered_IMC_mask_on_postIMC_{core}.geojson",
-        postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
-        matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
-    output:
-        IMC_location_transformed="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_preIMS_{core}.geojson",
-    log:
-        stdout="logs/transform_IMC_location_to_preIMS/{project_name}_{core}.stdout",
-    benchmark:
-        "benchmarks/transform_IMC_location_to_preIMS/{project_name}_{core}.txt",
+for transform_target in ["preIMC","preIMS","postIMS"]:
+    rule: 
+        name: f"extract_single_transformed_to_{transform_target}_IMC_location"
+        input:
+            IMC_location_transformed=expand("results/{{project_name}}/data/IMC_location/{{project_name}}_IMC_mask_on_{transform_target}_combined.geojson", transform_target=transform_target),
+        output:
+            IMC_location_transformed_single=expand("results/{{project_name}}/data/IMC_location/{{project_name}}_IMC_mask_on_{transform_target}_{{core}}.geojson", transform_target=transform_target),
+        log:
+            stdout=f"logs/transform_IMC_location_to_{transform_target}_single/{{project_name}}_{{core}}.stdout"
+        benchmark:
+            f"benchmarks/transform_IMC_location_to_{transform_target}_single/{{project_name}}_{{core}}.txt",
+        container:
+            config["container"]
+        script:
+            "scripts/IMC/transform_IMC_location_single.py"
 
-use rule transform_IMC_location_to_preIMC as transform_IMC_location_to_postIMS with:
-    params:
-        input_spacing=lambda wildcards: get_column_entry_from_metadata(
-            wildcards.project_name,
-            "microscopy_pixel_size",
-            "project_name",
-            read_sample_metadata(config["sample_metadata"]),
-        ),
-        output_spacing=lambda wildcards: get_column_entry_from_metadata(
-            wildcards.project_name,
-            "microscopy_pixel_size",
-            "project_name",
-            read_sample_metadata(config["sample_metadata"]),
-        ),
-        transform_target="postIMS",
-    resources:
-        mem_mb=lambda wc, input: 10000 if is_linear_transform(input.postIMC_to_postIMS_transform) else 100000,
-    input:
-        IMC_location_on_postIMC="results/{project_name}/data/IMC_location/{project_name}_registered_IMC_mask_on_postIMC_{core}.geojson",
-        postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
-        matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
-    output:
-        IMC_location_transformed="results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMS_{core}.geojson",
-    log:
-        stdout="logs/transform_IMC_location_to_postIMS/{project_name}_{core}.stdout",
-    benchmark:
-        "benchmarks/transform_IMC_location_to_postIMS/{project_name}_{core}.txt",
- 
 
 rule aggregate_IMC_file:
     params:

@@ -93,49 +93,80 @@ def preIMC_orig_size_transform_core_name_from_sample_name(wildcards):
 
 
 def decide_use_direct_preIMC_to_postIMS_transform(wildcards):
-    table_file = checkpoints.create_preIMS_mask_table.get(project_name=wildcards.project_name).output['table']
+    if isinstance(wildcards, dict):
+        project_name = wildcards["project_name"]
+    else:
+        project_name = wildcards.project_name
+    table_file = checkpoints.create_preIMS_mask_table.get(project_name=project_name).output['table']
     if os.stat(table_file).st_size == 0:
         return True
     else:
         return False
 
 def choose_preIMC_to_postIMS_transform(wildcards):
+    if isinstance(wildcards, dict):
+        project_name = wildcards["project_name"]
+        if 'core' in wildcards.keys():
+            core = wildcards["core"]
+        if 'sample' in wildcards.keys():
+            sample = wildcards["sample"]
+    else:
+        project_name = wildcards.project_name
+        if 'core' in wildcards.keys():
+            core = wildcards.core
+        if 'sample' in wildcards.keys():
+            sample = wildcards.sample
     use_direct = decide_use_direct_preIMC_to_postIMS_transform(wildcards)
     if use_direct:
-        outfile = f'results/{wildcards.project_name}/registrations/postIMC_to_postIMS/{wildcards.project_name}-preIMC_to_postIMS_transformations_mod.json'
+        outfile = f'results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-preIMC_to_postIMS_transformations_mod.json'
         return outfile
     else:
-        match_preIMC_location_with_IMC_location_file = checkpoints.match_preIMC_location_with_IMC_location.get(project_name=wildcards.project_name).output['matching']
+        match_preIMC_location_with_IMC_location_file = checkpoints.match_preIMC_location_with_IMC_location.get(project_name=project_name).output['matching']
         with match_preIMC_location_with_IMC_location_file.open() as f:
             df = pd.read_csv(f) 
-            if 'core' in wildcards.keys():
-                core = wildcards.core
-            else:
-                core = get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "core_name", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
+            if not 'core' in wildcards.keys():
+                core = get_column_entry_from_metadata_two_conditions(sample, project_name, "core_name", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
             part=df.loc[df["core"] == core]["preIMC_location"].tolist()[0]
-            outfile = f'results/{wildcards.project_name}/registrations/preIMC_to_preIMS/{part}/{wildcards.project_name}_{part}-preIMC_to_postIMS_transformations_mod.json'
+            outfile = f'results/{project_name}/registrations/preIMC_to_preIMS/{part}/{project_name}_{part}-preIMC_to_postIMS_transformations_mod.json'
             return outfile
 
 
 
 def choose_postIMC_to_postIMS_transform(wildcards):
+    if isinstance(wildcards, dict):
+        project_name = wildcards["project_name"]
+        if 'core' in wildcards.keys():
+            core = wildcards["core"]
+        if 'sample' in wildcards.keys():
+            sample = wildcards["sample"]
+    else:
+        project_name = wildcards.project_name
+        if 'core' in wildcards.keys():
+            core = wildcards.core
+        if 'sample' in wildcards.keys():
+            sample = wildcards.sample
     use_direct = decide_use_direct_preIMC_to_postIMS_transform(wildcards)
     if use_direct:
-        outfile = f'results/{wildcards.project_name}/registrations/postIMC_to_postIMS/{wildcards.project_name}-postIMC_to_postIMS_transformations_mod.json'
+        outfile = f'results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_transformations_mod.json'
         return outfile
     else:
-        match_preIMC_location_with_IMC_location_file = checkpoints.match_preIMC_location_with_IMC_location.get(project_name=wildcards.project_name).output['matching']
+        match_preIMC_location_with_IMC_location_file = checkpoints.match_preIMC_location_with_IMC_location.get(project_name=project_name).output['matching']
         with match_preIMC_location_with_IMC_location_file.open() as f:
             df = pd.read_csv(f) 
-            if 'core' in wildcards.keys():
-                core = wildcards.core
-            else:
-                core = get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "core_name", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
+            if not 'core' in wildcards.keys():
+                core = get_column_entry_from_metadata_two_conditions(sample, project_name, "core_name", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
             part=df.loc[df["core"] == core]["preIMC_location"].tolist()[0]
-            outfile = f'results/{wildcards.project_name}/registrations/postIMC_to_postIMS/{part}/{wildcards.project_name}_{part}-postIMC_to_postIMS_transformations_mod.json'
+            outfile = f'results/{project_name}/registrations/postIMC_to_postIMS/{part}/{project_name}_{part}-postIMC_to_postIMS_transformations_mod.json'
             return outfile
 
-
+def choose_postIMC_to_postIMS_transform_ls(project_name, core_names, transform_target=None):
+    transform_files = list()
+    for core_name in core_names:
+        if transform_target == "preIMC":
+            transform_files.append(f"results/{project_name}/registrations/postIMC_to_postIMS/{project_name}-postIMC_to_postIMS_transformations_mod.json")
+        else:
+            transform_files.append(choose_postIMC_to_postIMS_transform({"project_name": project_name, "core": core_name}))
+    return transform_files
 #def choose_imsml_coordsfile(wildcards):
 #        filename = get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
 #        filename = str(filename).strip()
@@ -250,7 +281,7 @@ def n_threads_for_register_IMS_to_postIMS_single_core_1(wildcards, sample_metada
     return int(min([n_threads_max,max([IMS_to_postIMS_n_splits/2,4])]))
 
 
-def is_linear_transform(transform):
+def is_linear_transform_single(transform):
     try:
         tr =json.load(open(transform))
         trls = list()
@@ -263,6 +294,12 @@ def is_linear_transform(transform):
             return True
     except:
         return False
+
+def is_linear_transform(transform):
+    if isinstance(transform, list):
+        return any([is_linear_transform_single(t) for t in transform])
+    else:
+        return is_linear_transform_single(transform)
 
 def decide_postIMSpreIMSmask(wildcards, type):
     assert type in ["preIMS","postIMS"]
