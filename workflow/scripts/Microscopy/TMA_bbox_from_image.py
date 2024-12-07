@@ -135,10 +135,10 @@ for imcmaskfile, bb, bbout in zip(imc_mask_files, corebboxls, TMA_locations_out)
     boundary_points = np.array(IMC_geojson['geometry']['coordinates'])[0,:,:]
     # corner points from bbox bb
     bpts = np.array([
-        [bb[0],bb[1]],
-        [bb[2],bb[1]],
-        [bb[2],bb[3]],
-        [bb[0],bb[3]]
+        [bb[1],bb[0]],
+        [bb[1],bb[2]],
+        [bb[3],bb[2]],
+        [bb[3],bb[0]]
     ])
     IMC_geojson['geometry']['coordinates'][0] = bpts.tolist()
     if not os.path.exists(os.path.dirname(bbout)):

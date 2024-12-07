@@ -158,15 +158,21 @@ for i in range(len(IMC_geojson_file_ls)):
     rs = RegShapes(IMC_geojson_file_ls[i], source_res=input_spacing, target_res=output_spacing)
     rs.transform_shapes(rtsngeo_ls[i])
 
+    logging.info(f"shape data: {rs.shape_data}")
+    logging.info(f"transformed shape data: {rs.transformed_shape_data}")
+
     tmpout = rs.transformed_shape_data[0]['array']
+    logging.info(f"x: min: {np.min(tmpout[:,0])}, max: {np.max(tmpout[:,0])}")
+    logging.info(f"y: min: {np.min(tmpout[:,1])}, max: {np.max(tmpout[:,1])}")
+    logging.info(f"expected size: {rtsngeo_ls[i].output_size}")
     xmin = np.min(tmpout[:,0])
-    assert(xmin>0)
+    assert(xmin>=0)
     xmax = np.max(tmpout[:,0])
-    assert(xmax<=rtsngeo.output_size[0])
+    assert(xmax<=rtsngeo_ls[i].output_size[0])
     ymin = np.min(tmpout[:,1])
-    assert(ymin>0)
+    assert(ymin>=0)
     ymax = np.max(tmpout[:,1])
-    assert(ymax<=rtsngeo.output_size[1])
+    assert(ymax<=rtsngeo_ls[i].output_size[1])
 
     # rs.save_shape_data(IMC_geojson_transformed_file_ls[i])
     geojson_out_dict[rs.shape_data_gj[0]["properties"]["name"]] = wsireg.reg_shapes.reg_shapes.insert_transformed_pts_gj(

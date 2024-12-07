@@ -386,6 +386,59 @@ rule prepare_split_transform_postIMC_to_postIMS:
     script:
         "scripts/Microscopy/prepare_transform_postIMC_to_postIMS.py"
 
+for transform_target in ["preIMC","preIMS","postIMS"]:
+    rule: 
+        name: f"transform_TMA_location_to_{transform_target}" 
+        params:
+            input_spacing=lambda wildcards: get_column_entry_from_metadata(
+                wildcards.project_name,
+                "microscopy_pixel_size",
+                "project_name",
+                read_sample_metadata(config["sample_metadata"]),
+            ),
+            output_spacing=lambda wildcards: get_column_entry_from_metadata(
+                wildcards.project_name,
+                "microscopy_pixel_size",
+                "project_name",
+                read_sample_metadata(config["sample_metadata"]),
+            ),
+            transform_target=transform_target,
+        threads: 8
+        resources:
+            mem_mb=lambda wc, input: 10000 if is_linear_transform(input.postIMC_to_postIMS_transform) else 100000,
+        input:
+            IMC_location_on_postIMC=lambda wildcards: [f"results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMC_{core}.geojson" for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
+            postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_ls(wildcards.project_name, get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True), "preIMC"),
+            matching=return_file_or_generic("results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv", transform_target != "preIMC"),
+        output:
+            IMC_location_transformed=expand("results/{{project_name}}/data/TMA_location/{{project_name}}_TMA_location_on_{transform_target}_combined.geojson", transform_target=transform_target),
+        log:
+            stdout=f"logs/transform_TMA_location_to_{transform_target}/{{project_name}}.stdout"
+        benchmark:
+            f"benchmarks/transform_TMA_location_to_{transform_target}/{{project_name}}.txt",
+        container:
+            config["container"]
+        script:
+            "scripts/IMC/transform_IMC_location.py"
+
+for transform_target in ["preIMC","preIMS","postIMS"]:
+    rule: 
+        name: f"extract_single_transformed_to_{transform_target}_TMA_location"
+        input:
+            IMC_location_transformed=expand("results/{{project_name}}/data/TMA_location/{{project_name}}_TMA_location_on_{transform_target}_combined.geojson", transform_target=transform_target),
+        output:
+            IMC_location_transformed_single=expand("results/{{project_name}}/data/TMA_location/{{project_name}}_TMA_location_on_{transform_target}_{{core}}.geojson", transform_target=transform_target),
+        log:
+            stdout=f"logs/transform_TMA_location_to_{transform_target}_single/{{project_name}}_{{core}}.stdout"
+        benchmark:
+            f"benchmarks/transform_TMA_location_to_{transform_target}_single/{{project_name}}_{{core}}.txt",
+        container:
+            config["container"]
+        script:
+            "scripts/IMC/transform_IMC_location_single.py"
+
+
+
 
 rule transform_postIMC_to_postIMS:
     threads: 32
