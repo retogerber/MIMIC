@@ -1,6 +1,6 @@
 import sys,os
-sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0], "workflow","scripts","utils")))
-# sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0], "..","..","workflow","scripts","utils")))
+# sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0], "workflow","scripts","utils")))
+sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0], "..","..","workflow","scripts","utils")))
 import cv2
 from wsireg.writers.ome_tiff_writer import OmeTiffWriter
 from wsireg.reg_transforms.reg_transform_seq import RegTransformSeq

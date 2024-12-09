@@ -167,6 +167,13 @@ def choose_postIMC_to_postIMS_transform_ls(project_name, core_names, transform_t
         else:
             transform_files.append(choose_postIMC_to_postIMS_transform({"project_name": project_name, "core": core_name}))
     return transform_files
+
+
+def choose_postIMC_to_postIMS_transform_all(wildcards, transform_target=None):
+    project_name = wildcards.project_name
+    core_names = get_column_entry_from_metadata(project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)
+    return choose_postIMC_to_postIMS_transform_ls(project_name, core_names, transform_target)
+
 #def choose_imsml_coordsfile(wildcards):
 #        filename = get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
 #        filename = str(filename).strip()

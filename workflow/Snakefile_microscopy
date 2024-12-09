@@ -451,7 +451,7 @@ rule transform_postIMC_to_postIMS:
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
-        IMC_location_spacing=lambda wildcards: get_column_entry_from_metadata(
+        TMA_location_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
@@ -466,17 +466,19 @@ rule transform_postIMC_to_postIMS:
         transform_source="postIMC",
         transform_target="postIMS",
     input:
-        postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
+        postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_all(wildcards, "postIMS"),
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
         matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         postIMC="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff",
-        IMC_location=lambda wildcards: f'results/{wildcards.project_name}/data/IMC_location/{wildcards.project_name}_registered_IMC_mask_on_postIMC_{get_column_entry_from_metadata_two_conditions(wildcards.sample,wildcards.project_name, "core_name", "sample_name","project_name", read_sample_metadata(config["sample_metadata"]))}.geojson',
+        TMA_location_source=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMC_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
+        TMA_location_target=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMS_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
     output:
-        postIMC_transformed="results/{project_name}/data/postIMC/{sample}_transformed_on_postIMS.ome.tiff",
+        #postIMC_transformed="results/{project_name}/data/postIMC/{sample}_transformed_on_postIMS.ome.tiff",
+        postIMC_transformed="results/{project_name}/data/postIMC/{project_name}_postIMC_transformed_on_postIMS.ome.tiff",
     log:
-        stdout="logs/transform_postIMC_to_postIMS/{project_name}_{sample}.stdout",
+        stdout="logs/transform_postIMC_to_postIMS/{project_name}.stdout",
     benchmark:
-        "benchmarks/transform_postIMC_to_postIMS/{project_name}_{sample}.txt",
+        "benchmarks/transform_postIMC_to_postIMS/{project_name}.txt",
     container:
         config["container"]
     script:
@@ -509,17 +511,18 @@ rule transform_postIMC_to_preIMC:
         transform_source="postIMC",
         transform_target="preIMC",
     input:
-        postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
+        postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_all(wildcards, "postIMS"),
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
         matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         postIMC="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff",
-        IMC_location=lambda wildcards: f'results/{wildcards.project_name}/data/IMC_location/{wildcards.project_name}_registered_IMC_mask_on_postIMC_{get_column_entry_from_metadata_two_conditions(wildcards.sample,wildcards.project_name, "core_name", "sample_name","project_name", read_sample_metadata(config["sample_metadata"]))}.geojson',
+        TMA_location_source=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMC_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
+        TMA_location_target=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_preIMC_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
     output:
-        postIMC_transformed="results/{project_name}/data/postIMC/{sample}_transformed_on_preIMC.ome.tiff",
+        postIMC_transformed="results/{project_name}/data/postIMC/{project_name}_postIMC_transformed_on_preIMC.ome.tiff",
     log:
-        stdout="logs/transform_postIMC_to_preIMC/{project_name}_{sample}.stdout",
+        stdout="logs/transform_postIMC_to_preIMC/{project_name}.stdout",
     benchmark:
-        "benchmarks/transform_postIMC_to_preIMC/{project_name}_{sample}.txt",
+        "benchmarks/transform_postIMC_to_preIMC/{project_name}.txt",
     container:
         config["container"]
     script:
@@ -552,17 +555,18 @@ rule transform_preIMC_to_preIMS:
         transform_source="preIMC",
         transform_target="preIMS",
     input:
-        postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
+        postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_all(wildcards, "postIMS"),
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
         matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         postIMC="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
-        IMC_location=lambda wildcards: f'results/{wildcards.project_name}/data/IMC_location/{wildcards.project_name}_IMC_mask_on_preIMC_{get_column_entry_from_metadata_two_conditions(wildcards.sample,wildcards.project_name, "core_name", "sample_name","project_name", read_sample_metadata(config["sample_metadata"]))}.geojson',
+        TMA_location_source=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_preIMC_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
+        TMA_location_target=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_preIMS_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
     output:
-        postIMC_transformed="results/{project_name}/data/preIMC/{sample}_transformed_on_preIMS.ome.tiff",
+        postIMC_transformed="results/{project_name}/data/preIMC/{project_name}_preIMC_transformed_on_preIMS.ome.tiff",
     log:
-        stdout="logs/transform_preIMC_to_preIMS/{project_name}_{sample}.stdout",
+        stdout="logs/transform_preIMC_to_preIMS/{project_name}.stdout",
     benchmark:
-        "benchmarks/transform_preIMC_to_preIMS/{project_name}_{sample}.txt",
+        "benchmarks/transform_preIMC_to_preIMS/{project_name}.txt",
     container:
         config["container"]
     script:
@@ -595,17 +599,19 @@ rule transform_preIMS_to_postIMS:
         transform_source="preIMS",
         transform_target="postIMS",
     input:
-        postIMC_to_postIMS_transform=choose_postIMC_to_postIMS_transform,
+        postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_all(wildcards, "postIMS"),
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
         matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         postIMC="results/{project_name}/data/preIMS/{project_name}_preIMS.ome.tiff",
-        IMC_location=lambda wildcards: f'results/{wildcards.project_name}/data/IMC_location/{wildcards.project_name}_IMC_mask_on_preIMS_{get_column_entry_from_metadata_two_conditions(wildcards.sample,wildcards.project_name, "core_name", "sample_name","project_name", read_sample_metadata(config["sample_metadata"]))}.geojson',
+        TMA_location_source=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_preIMS_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
+        TMA_location_target=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMS_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
+ 
     output:
-        postIMC_transformed="results/{project_name}/data/preIMS/{sample}_transformed_on_postIMS.ome.tiff",
+        postIMC_transformed="results/{project_name}/data/preIMS/{project_name}_preIMS_transformed_on_postIMS.ome.tiff",
     log:
-        stdout="logs/transform_preIMC_to_preIMS/{project_name}_{sample}.stdout",
+        stdout="logs/transform_preIMC_to_preIMS/{project_name}.stdout",
     benchmark:
-        "benchmarks/transform_preIMC_to_preIMS/{project_name}_{sample}.txt",
+        "benchmarks/transform_preIMC_to_preIMS/{project_name}.txt",
     container:
         config["container"]
     script:
