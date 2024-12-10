@@ -9,7 +9,31 @@ from sklearn.neighbors import KDTree
 import rembg
 import segment_anything
 
-def readimage_crop(image: str, bbox: list[int]):
+
+def get_pyr_levels(image: str) -> list:
+    store = tifffile.imread(image, aszarr=True)
+    z = zarr.open(store, mode='r')
+    if isinstance(z, zarr.hierarchy.Group): 
+        zd = z.attrs['multiscales'][0]['datasets']
+        pyr_levels = [int(zde['path']) for zde in zd]
+    elif isinstance(z, zarr.core.Array): 
+        pyr_levels = [0]
+    return pyr_levels
+
+def check_pyr_level(z, pyr_level):
+    if 'multiscales' in z.attrs:
+        zd = z.attrs['multiscales'][0]['datasets']
+        matched_lvl = [str(lv['path'])==str(pyr_level) for lv in zd]
+        if any(matched_lvl):
+            pyrl = [i for i, x in enumerate(matched_lvl) if x][0]
+        else:
+            Exception("No multiscale group found in the zarr file.")
+    else:
+        Exception("No multiscale group found in the zarr file.")
+    return pyrl
+
+
+def readimage_crop(image: str, bbox: list[int], pyr_level=0):
     '''
     Read a cropped portion of an image.
 
@@ -28,16 +52,17 @@ def readimage_crop(image: str, bbox: list[int]):
     store = tifffile.imread(image, aszarr=True)
     z = zarr.open(store, mode='r')
     if isinstance(z, zarr.hierarchy.Group): 
-        if z[0].ndim == 3:
-            image_crop = z[0][bbox[0]:bbox[2],bbox[1]:bbox[3],:]
+        pyrl = check_pyr_level(z, pyr_level)
+        if z[pyrl].ndim == 3:
+            image_crop = z[pyrl][bbox[0]:bbox[2],bbox[1]:bbox[3],:]
         else:
-            image_crop = z[0][bbox[0]:bbox[2],bbox[1]:bbox[3]]
+            image_crop = z[pyrl][bbox[0]:bbox[2],bbox[1]:bbox[3]]
     elif isinstance(z, zarr.core.Array): 
         image_crop = z[bbox[0]:bbox[2],bbox[1]:bbox[3]]
     return image_crop
 
 
-def get_image_shape(image: str):
+def get_image_shape(image: str, pyr_level=0):
     '''
     Get the shape of an image.
 
@@ -52,13 +77,14 @@ def get_image_shape(image: str):
     store = tifffile.imread(image, aszarr=True)
     z = zarr.open(store, mode='r')
     if isinstance(z, zarr.hierarchy.Group): 
-        image_shape = z[0].shape
+        pyrl = check_pyr_level(z, pyr_level)
+        image_shape = z[pyrl].shape
     elif isinstance(z, zarr.core.Array): 
         image_shape = z.shape
     return image_shape
 
 
-def saveimage_tile(image: np.ndarray, filename: str, resolution: float):
+def saveimage_tile(image: np.ndarray, filename: str, resolution: float, dtype= np.uint8, is_rgb: bool = None):
     '''
     Save an image as a tiled OME-TIFF file.
 
@@ -74,10 +100,15 @@ def saveimage_tile(image: np.ndarray, filename: str, resolution: float):
     '''
     empty_transform = wsireg.parameter_maps.transformations.BASE_RIG_TFORM
     empty_transform['Spacing'] = (str(resolution),str(resolution))
-    empty_transform['Size'] = (image.shape[1], image.shape[0])
+    if not is_rgb is None and not is_rgb:
+        empty_transform['Size'] = (image.shape[2], image.shape[1])
+    else:
+        empty_transform['Size'] = (image.shape[1], image.shape[0])
     rt = wsireg.reg_transforms.reg_transform_seq.RegTransform(empty_transform)
     rts = wsireg.reg_transforms.reg_transform_seq.RegTransformSeq(rt,[0])
-    ri = wsireg.reg_images.loader.reg_image_loader(image.astype(np.uint8), resolution)
+    ri = wsireg.reg_images.loader.reg_image_loader(image.astype(dtype), resolution)
+    if not is_rgb is None:
+        ri._is_rgb = is_rgb
     writer = wsireg.writers.ome_tiff_writer.OmeTiffWriter(ri, reg_transform_seq=rts)
     img_basename = os.path.basename(filename).split(".")[0]
     img_dirname = os.path.dirname(filename)
@@ -184,7 +215,7 @@ def subtract_postIMS_grid(img: np.ndarray) -> np.ndarray:
     return img_notch
 
 
-def extract_mask(file: str, bb: list, session = None, rescale: int = 1, is_postIMS: bool = False, sam=None, pts: np.ndarray = None, multiple_rembgth: bool = False) -> np.ndarray:
+def extract_mask(file: str, bb: list, session = None, rescale: int = 1, is_postIMS: bool = False, sam=None, pts: np.ndarray = None, multiple_rembgth: bool = False, pyr_level=0) -> np.ndarray:
     '''
     Extract a tissue mask from an image file.
 
@@ -207,7 +238,7 @@ def extract_mask(file: str, bb: list, session = None, rescale: int = 1, is_postI
     '''
     if session == None and sam == None:
         session = rembg.new_session("isnet-general-use")
-    w = readimage_crop(file, bb)
+    w = readimage_crop(file, bb, pyr_level=pyr_level)
     w = convert_and_scale_image(w, rescale)
     if is_postIMS:
         w = subtract_postIMS_grid(w)

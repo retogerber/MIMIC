@@ -19,7 +19,7 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake.params["input_spacing"] = 0.22537
     snakemake.params["TMA_location_spacing"] = 0.22537
     snakemake.params["output_spacing"] = 0.22537
-    snakemake.params["transform_target"] = "postIMS"
+    snakemake.params["transform_target"] = "preIMC"
     snakemake.params["transform_source"] = "postIMC"
     # snakemake.input["postIMC_to_postIMS_transform"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/registrations/postIMC_to_postIMS/B5/NASH_HCC_TMA_B5-postIMC_to_postIMS_transformations_mod.json"
     snakemake.input["postIMC_to_postIMS_transform"] = [f"/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/registrations/postIMC_to_postIMS/{core}/test_split_pre_{core}-postIMC_to_postIMS_transformations_mod.json" for core in ["A1","B1"]]
@@ -27,8 +27,8 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake.input["postIMC"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/test_split_pre_postIMC.ome.tiff"
     # snakemake.input['IMC_location'] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMC_B5.geojson"
     snakemake.input["TMA_location_source"] = [f"/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/TMA_location/test_split_pre_TMA_location_on_postIMC_{core}.geojson" for core in ["A1","B1"]]
-    snakemake.input["TMA_location_target"] = [f"/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/TMA_location/test_split_pre_TMA_location_on_postIMS_{core}.geojson" for core in ["A1","B1"]]
-    snakemake.output["postIMC_transformed"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/test_split_pre_postIMC_on_postIMS.ome.tiff"
+    snakemake.input["TMA_location_target"] = [f"/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/TMA_location/test_split_pre_TMA_location_on_preIMC_{core}.geojson" for core in ["A1","B1"]]
+    snakemake.output["postIMC_transformed"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/test_split_pre_postIMC_on_preIMC.ome.tiff"
     if bool(getattr(sys, 'ps1', sys.flags.interactive)):
         raise Exception("Running in interactive mode!!")
 # logging setup
@@ -45,6 +45,8 @@ transform_source = snakemake.params["transform_source"]
 
 # inputs
 transform_file_postIMC_to_postIMS=snakemake.input["postIMC_to_postIMS_transform"]
+if isinstance(transform_file_postIMC_to_postIMS, str):
+    transform_file_postIMC_to_postIMS = [transform_file_postIMC_to_postIMS]
 img_file = snakemake.input["postIMC"]
 TMA_source_geojson_file=snakemake.input['TMA_location_source']
 if isinstance(TMA_source_geojson_file, str):
@@ -178,10 +180,6 @@ for i in range(len(rtlsls)):
     # add all transforms between source and target
     trls = [rtsn.composite_transform.GetNthTransform(j) for j in range(rtsn.composite_transform.GetNumberOfTransforms())]
     for j,trl in enumerate(trls):
-        print(j)
-        if trl.IsLinear():
-            print("linear")
-            # print(trl.GetParameters())
         composite.AddTransform(trl)
     # add translation to target
     composite.AddTransform(sitk.TranslationTransform(2, [float(bb_target_ls[i][1]*input_spacing), float(bb_target_ls[i][0]*input_spacing)]))

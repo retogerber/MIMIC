@@ -38,6 +38,8 @@ rule extract_core_mask_from_postIMS:
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
+        compute_rescale=4,
+        out_rescale=2,
     input:
         sam_weights="results/Misc/sam_vit_h_4b8939.pth",
         IMCmask=lambda wildcards: expand(
@@ -50,7 +52,7 @@ rule extract_core_mask_from_postIMS:
                 return_all=True,
             ),
         ),
-        postIMS_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced.ome.tiff",
+        postIMS_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
         preIMS_downscaled="results/{project_name}/data/preIMS/{project_name}-preIMS_to_postIMS_registered.ome.tiff",
     output:
         postIMSmask_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced_mask.ome.tiff",
@@ -58,8 +60,6 @@ rule extract_core_mask_from_postIMS:
         stdout="logs/extract_core_mask_from_postIMS/{project_name}.stdout",
     benchmark:
         "benchmarks/extract_core_mask_from_postIMS/{project_name}.txt",
-    # conda:
-    #    "env/image_registration_qc.yaml"
     container:
         config["container"]
     script:
@@ -77,7 +77,7 @@ rule register_IMS_to_postIMS:
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
-        IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+        microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
@@ -99,6 +99,7 @@ rule register_IMS_to_postIMS:
         ),
         sample_core_names=lambda wildcards: sample_core_names(wildcards),
         image_utils_file="workflow/scripts/utils/image_utils.py",
+        out_rescale=2,
     input:
         postIMSmask_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced_mask.ome.tiff",
         imzml=lambda wildcards: os.path.join(
@@ -146,7 +147,7 @@ rule register_IMS_to_postIMS_single_core_1:
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
-        IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+        microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
@@ -207,7 +208,6 @@ rule register_IMS_to_postIMS_single_core_1:
                 read_sample_metadata(config["sample_metadata"]),
             ),
         ),
-        IMCmask="results/{project_name}/data/IMC_mask/{sample}_transformed_on_postIMS.ome.tiff",
         IMS_to_postIMS_matches=lambda wildcards: f'results/{wildcards.project_name}/data/IMS/{wildcards.project_name}_{get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "imzml_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"])).replace(".imzML","")}_IMS_to_postIMS_matches.csv',
     output:
         masks_transform="results/{project_name}/data/registration_metric/{sample}_masks_transform.txt",
@@ -237,7 +237,7 @@ rule register_IMS_to_postIMS_single_core_2:
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
-        IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+        microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",

@@ -346,14 +346,62 @@ rule transform_IMCaggr_to_postIMS:
         "scripts/IMC/transform_IMC_to_postIMS.py"
 
 
-rule transform_IMCmask_to_postIMS:
+rule transform_IMCmask_to_postIMC:
     threads: 16
     resources:
-        mem_mb=lambda wc, input: 10000 if is_linear_transform(input.preIMC_to_postIMS_transform) else 75000,
+        mem_mb=lambda wc, input: 10000 if is_linear_transform(input.postIMC_to_postIMS_transform) else 75000,
     params:
         input_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "IMC_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        TMA_location_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        output_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        transform_target="postIMC",
+    input:
+        IMC=lambda wildcards: [f"results/{wildcards.project_name}/data/IMC_mask/{sample}.tiff" for sample in get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
+        IMC_to_postIMC_transform=lambda wildcards: [f'results/{wildcards.project_name}/registrations/IMC_to_postIMC/{wildcards.project_name}_{core}/{wildcards.project_name}_{core}-IMC_to_postIMC_transformations.json' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
+        postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_all(wildcards, "postIMC"),
+        table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
+        matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
+        TMA_location_target=lambda wildcards: expand('results/{{project_name}}/data/TMA_location/{{project_name}}_TMA_location_on_postIMC_{core}.geojson', core = get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)),
+        microscopy_target_image=expand("results/{{project_name}}/data/postIMC/{{project_name}}_postIMC.ome.tiff", transform_target=transform_target),
+    output:
+        IMC_transformed="results/{project_name}/data/IMC_mask/{project_name}_IMC_transformed_on_postIMC.ome.tiff",
+    log:
+        stdout="logs/transform_IMCmask_to_postIMC/{project_name}.stdout",
+        stderr="logs/transform_IMCmask_to_postIMC/{project_name}.stderr",
+    benchmark:
+        "benchmarks/transform_IMCmask_to_postIMC/{project_name}.txt",
+    container:
+        config["container"]
+    script:
+        "scripts/IMC/transform_IMC_to_postIMS.py"
+
+
+use rule transform_IMCmask_to_postIMC as transform_IMCmask_to_postIMS with:
+    params:
+        input_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMC_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        TMA_location_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
@@ -365,24 +413,17 @@ rule transform_IMCmask_to_postIMS:
         ),
         transform_target="postIMS",
     input:
-        IMC_to_preIMC_transform=IMC_to_preIMC_transform_pkl_core_name_from_sample_name,
-        preIMC_orig_size_transform=preIMC_orig_size_transform_core_name_from_sample_name,
-        preIMC_to_postIMS_transform=choose_preIMC_to_postIMS_transform,
+        IMC=lambda wildcards: [f"results/{wildcards.project_name}/data/IMC_mask/{sample}.tiff" for sample in get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
+        IMC_to_postIMC_transform=lambda wildcards: [f'results/{wildcards.project_name}/registrations/IMC_to_postIMC/{wildcards.project_name}_{core}/{wildcards.project_name}_{core}-IMC_to_postIMC_transformations.json' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
+        postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_all(wildcards, "postIMS"),
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
         matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
-        IMC="results/{project_name}/data/IMC_mask/{sample}.tiff",
+        TMA_location_target=lambda wildcards: expand('results/{{project_name}}/data/TMA_location/{{project_name}}_TMA_location_on_postIMS_{core}.geojson', core = get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)),
+        microscopy_target_image=expand("results/{{project_name}}/data/postIMS/{{project_name}}_postIMS.ome.tiff", transform_target=transform_target),
     output:
-        IMC_transformed="results/{project_name}/data/IMC_mask/{sample}_transformed_on_postIMS.ome.tiff",
+        IMC_transformed="results/{project_name}/data/IMC_mask/{project_name}_IMC_transformed_on_postIMS.ome.tiff",
     log:
-        stdout="logs/transform_IMCmask_to_postIMS/{project_name}_{sample}.stdout",
-        stderr="logs/transform_IMCmask_to_postIMS/{project_name}_{sample}.stderr",
+        stdout="logs/transform_IMCmask_to_postIMS/{project_name}.stdout",
+        stderr="logs/transform_IMCmask_to_postIMS/{project_name}.stderr",
     benchmark:
-        "benchmarks/transform_IMCmask_to_postIMS/{project_name}_{sample}.txt",
-    # conda:
-    #    "env/image_registration_wsireg.yaml"
-    container:
-        config["container"]
-    script:
-        "scripts/IMC/transform_IMC_to_postIMS.py"
-
-
+        "benchmarks/transform_IMCmask_to_postIMS/{project_name}.txt",

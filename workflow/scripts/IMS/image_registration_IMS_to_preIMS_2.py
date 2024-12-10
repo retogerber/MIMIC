@@ -4,6 +4,7 @@ import pandas as pd
 import cv2
 import SimpleITK as sitk
 import napari_imsmicrolink
+from ome_types import from_tiff
 import skimage
 import numpy as np
 import json
@@ -23,7 +24,7 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake = snakeMakeMock()
     snakemake.params["IMS_pixelsize"] = 30
     snakemake.params["IMS_shrink_factor"] = 0.8
-    snakemake.params["IMC_pixelsize"] = 0.22537
+    snakemake.params["microscopy_pixelsize"] = 0.22537
     snakemake.params["IMS_rotation_angle"] = 180
     snakemake.params["IMS_to_postIMS_n_splits"] = 19
     snakemake.params["IMS_to_postIMS_init_gridsearch"] = 3
@@ -53,7 +54,7 @@ setNThreads(snakemake.threads)
 # params
 stepsize = float(snakemake.params["IMS_pixelsize"])
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
-resolution = float(snakemake.params["IMC_pixelsize"])
+resolution = float(snakemake.params["microscopy_pixelsize"])
 rotation_imz = float(snakemake.params["IMS_rotation_angle"])
 assert(rotation_imz in [-270,-180,-90,0,90,180,270])
 rotmat = get_rotmat_from_angle(rotation_imz)
@@ -77,7 +78,6 @@ threads = snakemake.threads
 postIMS_file = snakemake.input["postIMS_downscaled"]
 postIMSr_file = snakemake.input["postIMSmask_downscaled"]
 imzmlfile = snakemake.input["imzml"]
-imc_mask_file = snakemake.input["IMCmask"]
 output_table = snakemake.input["IMS_to_postIMS_matches"]
 
 # outputs
@@ -86,6 +86,20 @@ gridsearch_transform_filename = snakemake.output["gridsearch_transform"]
 
 postIMS_ablation_centroids_filename = snakemake.output["postIMS_ablation_centroids"]
 metadata_to_save_filename = snakemake.output["metadata"]
+
+
+postIMS_ome = from_tiff(postIMS_file)
+postIMS_resolution = postIMS_ome.images[0].pixels.physical_size_x
+logging.info(f"postIMS resolution: {postIMS_resolution}")
+assert postIMS_resolution == resolution
+
+postIMSr_ome = from_tiff(postIMSr_file)
+postIMSr_resolution = postIMSr_ome.images[0].pixels.physical_size_x
+logging.info(f"postIMS mask resolution: {postIMSr_resolution}")
+
+rescale = postIMSr_resolution/resolution
+logging.info(f"rescale: {rescale}")
+
 
 
 logging.info("Read imzml")
@@ -117,8 +131,8 @@ logging.info("Read postIMS region bounding box")
 # read crop bbox
 dfmeta = pd.read_csv(output_table)
 logging.info(f"{dfmeta}")
-imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed_on_postIMS","")
-imc_project = os.path.split(os.path.split(os.path.split(os.path.split(imc_mask_file)[0])[0])[0])[1]
+imc_samplename = os.path.splitext(os.path.splitext(os.path.split(metadata_to_save_filename)[1])[0])[0].replace("_step1_metadata","")
+imc_project = os.path.split(os.path.split(os.path.split(os.path.split(metadata_to_save_filename)[0])[0])[0])[1]
 # imc_project = "cirrhosis_TMA"
 # imc_project="test_split_ims"
 # imc_project="test_combined"
@@ -131,17 +145,33 @@ project_name = "postIMS_to_IMS_"+imc_project+"-"+imc_samplename
 img_shape = get_image_shape(postIMS_file)
 inds_arr = np.logical_and(dfmeta["project_name"] == imc_project, dfmeta["sample_name"] == imc_samplename)
 xmin = dfmeta[inds_arr]["postIMS_xmin"].tolist()[0]-int(imspixel_outscale*stepsize)
+xmin = xmin*rescale
 xmin = 0 if xmin<0 else xmin
 ymin = dfmeta[inds_arr]["postIMS_ymin"].tolist()[0]-int(imspixel_outscale*stepsize)
+ymin = ymin*rescale
 ymin = 0 if ymin<0 else ymin
 xmax = dfmeta[inds_arr]["postIMS_xmax"].tolist()[0]+int(imspixel_outscale*stepsize)
+xmax = xmax*rescale
 xmax = img_shape[0] if xmax>img_shape[0] else xmax
 ymax = dfmeta[inds_arr]["postIMS_ymax"].tolist()[0]+int(imspixel_outscale*stepsize)
+ymax = ymax*rescale
 ymax = img_shape[1] if ymax>img_shape[1] else ymax
-logging.info(f"xmin: {xmin}")
-logging.info(f"xmax: {xmax}")
-logging.info(f"ymin: {ymin}")
-logging.info(f"ymax: {ymax}")
+logging.info(f"Bounding box postIMS:")
+logging.info(f"\txmin: {xmin}")
+logging.info(f"\txmax: {xmax}")
+logging.info(f"\tymin: {ymin}")
+logging.info(f"\tymax: {ymax}")
+
+xmin_mask = xmin/rescale
+ymin_mask = ymin/rescale
+xmax_mask = xmax/rescale
+ymax_mask = ymax/rescale
+logging.info(f"Bounding box postIMS mask:")
+logging.info(f"\txmin: {xmin_mask}")
+logging.info(f"\txmax: {xmax_mask}")
+logging.info(f"\tymin: {ymin_mask}")
+logging.info(f"\tymax: {ymax_mask}")
+
 # needed:
 regionimz = dfmeta[inds_arr]["imzregion"].tolist()[0]
 logging.info(f"imz region: {regionimz}")
@@ -157,7 +187,12 @@ ksize = ksize+1 if ksize%2==0 else ksize
 cv2.medianBlur(src=postIMSmpre,dst=postIMSmpre, ksize=ksize)
 
 logging.info("Read cropped postIMS mask")
-postIMSrcut = readimage_crop(postIMSr_file, [int(xmin), int(ymin), int(xmax), int(ymax)])
+postIMSrcut = readimage_crop(postIMSr_file, [int(xmin_mask), int(ymin_mask), int(xmax_mask), int(ymax_mask)])
+if rescale != 1:
+    logging.info(f"Resize postIMS mask.info")
+    logging.info(f"\tshape before: {postIMSrcut.shape}")
+    postIMSrcut = cv2.resize(postIMSrcut, (postIMSmpre.shape[1],postIMSmpre.shape[0]), interpolation=cv2.INTER_NEAREST)
+    logging.info(f"\tshape after: {postIMSrcut.shape}")
 # to np.uint8
 cv2.convertScaleAbs(src=postIMSrcut, dst=postIMSrcut)
 logging.info("Create ringmask")
@@ -587,16 +622,16 @@ y_ranges = np.clip([y_coords - stepsize_px_half, y_coords + stepsize_px_half], 0
 for xr, yr in zip(x_ranges.T, y_ranges.T):
     postIMSpimg[xr[0]:(xr[1]+1), yr[0]:(yr[1]+1)] = 255
 
-logging.info("    - {np.sum(postIMSpimg)/255/np.prod(postIMSpimg.shape)} area proportion")
+logging.info(f"    - {np.sum(postIMSpimg)/255/np.prod(postIMSpimg.shape)} area proportion")
 
 logging.info("    - Closing")
 cv2.morphologyEx(src=postIMSpimg, dst=postIMSpimg, op = cv2.MORPH_CLOSE, kernel = skimage.morphology.square(int(stepsize/resolution/4))).astype(bool)
 
-logging.info("    - {np.sum(postIMSpimg)/np.prod(postIMSpimg.shape)} area proportion")
+logging.info(f"    - {np.sum(postIMSpimg)/np.prod(postIMSpimg.shape)} area proportion")
 
 logging.info("    - Remove small holes")
 postIMSpimg = skimage.morphology.remove_small_holes(postIMSpimg, int((stepsize/resolution*10)**2))
-logging.info("    - {np.sum(postIMSpimg)/np.prod(postIMSpimg.shape)} area proportion")
+logging.info(f"    - {np.sum(postIMSpimg)/np.prod(postIMSpimg.shape)} area proportion")
 logging.info("    - Rescale")
 wn = int(postIMSpimg.shape[0]*(1/(stepsize/resolution)*10))
 hn = int(postIMSpimg.shape[1]*(1/(stepsize/resolution)*10))
@@ -991,7 +1026,9 @@ metadata_to_save = {
     'IMS_bbox': list(imz_bbox), 
     'postIMS_bbox': list(postIMS_bbox),
     'IMS_regions': [int(p) for p in imzuqregs],
-    'Matching_IMS_region': regionimz
+    'Matching_IMS_region': regionimz,
+    'rescale': 1,
+    'resolution': resolution,
     }
 with open(metadata_to_save_filename, "w") as fp:
     json.dump(metadata_to_save , fp) 

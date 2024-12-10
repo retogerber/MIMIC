@@ -2,12 +2,13 @@ import sys,os
 sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0], "..","..","workflow","scripts","utils")))
 from rembg import new_session
 from segment_anything import sam_model_registry
+from ome_types import from_tiff
 import torch
 import cv2
 import json
 import skimage
 import numpy as np
-from image_utils import convert_and_scale_image, get_image_shape, extract_mask, readimage_crop, sam_core, saveimage_tile, preprocess_mask
+from image_utils import convert_and_scale_image, get_image_shape, extract_mask, readimage_crop, sam_core, saveimage_tile, preprocess_mask,get_pyr_levels
 from utils import setNThreads, snakeMakeMock
 import logging, traceback
 import logging_utils
@@ -18,6 +19,7 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake.params["IMS_pixelsize"] = 30
     snakemake.params["IMS_shrink_factor"] = 0.8
     snakemake.params["microscopy_pixelsize"] = 0.22537
+    snakemake.params["rescale"] = 2
     snakemake.params["postIMSmask_extraction_constraint"] = "min_preIMS"
     snakemake.params["postIMSmask_extraction_constraint_parameter"] = 5
     snakemake.input["sam_weights"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/Misc/sam_vit_h_4b8939.pth"
@@ -37,10 +39,14 @@ setNThreads(snakemake.threads)
 stepsize = float(snakemake.params["IMS_pixelsize"])
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
 resolution = float(snakemake.params["microscopy_pixelsize"])
+rescale = float(snakemake.params["compute_rescale"])
+out_rescale = float(snakemake.params["out_rescale"])
 # upscale in all directions from TMA location 
 expand_microns = stepsize*15
 postIMSmask_extraction_constraint = snakemake.params["postIMSmask_extraction_constraint"]
+postIMSmask_extraction_constraint = "none"
 postIMSmask_extraction_constraint_parameter = snakemake.params["postIMSmask_extraction_constraint_parameter"]
+postIMSmask_extraction_constraint_parameter = 0
 
 # inputs
 postIMS_file = snakemake.input["postIMS_downscaled"]
@@ -51,6 +57,7 @@ model_name = "isnet-general-use"
 os.environ["OMP_NUM_THREADS"] = str(snakemake.threads)
 rembg_session = new_session(model_name)
 CHECKPOINT_PATH = snakemake.input["sam_weights"]
+
 DEVICE = 'cpu'
 MODEL_TYPE = "vit_h"
 
@@ -58,6 +65,15 @@ MODEL_TYPE = "vit_h"
 postIMSr_file = snakemake.output["postIMSmask_downscaled"]
 preIMSr_file = snakemake.output["postIMSmask_downscaled"].replace("postIMS_reduced_mask.ome.tiff","preIMS_reduced_mask.ome.tiff").replace("data/postIMS/","data/preIMS/")
 
+
+postIMS_ome = from_tiff(postIMS_file)
+postIMS_resolution = postIMS_ome.images[0].pixels.physical_size_x
+logging.info(f"postIMS resolution: {postIMS_resolution}")
+assert postIMS_resolution == resolution
+preIMS_ome = from_tiff(preIMS_file)
+preIMS_resolution = preIMS_ome.images[0].pixels.physical_size_x
+logging.info(f"preIMS resolution: {preIMS_resolution}")
+assert preIMS_resolution == resolution
 
 logging.info("get IMC locations")
 imcbboxls = list()
@@ -71,30 +87,53 @@ for imcmaskfile in imc_mask_files:
     ymin=int(np.min(boundary_points[:,0]))
     ymax=int(np.max(boundary_points[:,0]))
     bbox = np.array([xmin,ymin,xmax,ymax])
-    if resolution != 1:
-        bbox = (bbox*resolution).astype(int)
+    if rescale != 1:
+        bbox = (bbox/rescale).astype(int)
     logging.info(f"    {bbox}:{imcmaskfile}")
     imcbboxls.append(bbox)
 
+def get_pyrlvl_rescalemod_imgshape(imgfile, rescale):
+    preIMS_pyr_levels = get_pyr_levels(imgfile)
+    preIMS_pyr_xsize = [get_image_shape(imgfile, pyr_level=i)[0] for i in preIMS_pyr_levels]
+    preIMS_pyr_xscalefactor = [1]+[1/np.round(preIMS_pyr_xsize[i]/preIMS_pyr_xsize[i-1],3) for i in range(1,len(preIMS_pyr_xsize))]
+    for i in range(2,len(preIMS_pyr_xscalefactor)):
+        preIMS_pyr_xscalefactor[i] *= preIMS_pyr_xscalefactor[i-1]
+    preIMS_pyr_xres = [resolution*preIMS_pyr_xscalefactor[i] for i in range(len(preIMS_pyr_xscalefactor))]
+
+    if rescale in preIMS_pyr_xscalefactor:
+        preIMS_pyr_level = preIMS_pyr_levels[preIMS_pyr_xscalefactor.index(rescale)]
+        preIMS_rescale_modifier = preIMS_pyr_xscalefactor[preIMS_pyr_xscalefactor.index(rescale)]
+        preIMS_imgshape = get_image_shape(imgfile, pyr_level=preIMS_pyr_level)
+        preIMS_rescale=1
+    else:   
+        preIMS_pyr_level = 0
+        preIMS_rescale_modifier = 1
+        preIMS_imgshape = get_image_shape(imgfile)
+        preIMS_imgshape = (int(preIMS_imgshape[0]/rescale),int(preIMS_imgshape[1]/rescale),preIMS_imgshape[2])
+        preIMS_rescale=rescale
+    return preIMS_pyr_level, preIMS_rescale, preIMS_rescale_modifier, preIMS_imgshape
 
 logging.info("Create bounding box of preIMS tissue")
-imgshape = get_image_shape(preIMS_file)
-logging.info(f"preIMS shape: {imgshape}")
+preIMS_pyr_level, preIMS_rescale, preIMS_rescale_modifier, preIMS_shape = get_pyrlvl_rescalemod_imgshape(preIMS_file, rescale)
+logging.info("Create bounding box of postIMS tissue")
+postIMS_pyr_level, postIMS_rescale, postIMS_rescale_modifier, postIMS_shape = get_pyrlvl_rescalemod_imgshape(postIMS_file, rescale)
+
+ 
 corebboxls = list()
-preIMSstitch = np.zeros(imgshape[:2])
+preIMSstitch = np.zeros(preIMS_shape[:2])
 for i,bb1 in enumerate(imcbboxls):
     logging.info(f"\t{imc_mask_files[i]}")
     logging.info(f"\t\t{bb1}")
     # bounding box
     bbn = [0]*4
     # scale up by 1.35 mm in each direction, leading to image size of about 3.7mm * 3.7mm, which should be enough to include whole TMA core
-    bbn[0] = max(0, int(np.floor((bb1[0] - 1350)/resolution)))
-    bbn[1] = max(0, int(np.floor((bb1[1] - 1350)/resolution)))
-    bbn[2] = min(imgshape[0], int(np.ceil((bb1[2] + 1350)/resolution)))
-    bbn[3] = min(imgshape[1], int(np.ceil((bb1[3] + 1350)/resolution)))
+    bbn[0] = max(0, int(np.floor((bb1[0] - 1350/resolution/rescale))))
+    bbn[1] = max(0, int(np.floor((bb1[1] - 1350/resolution/rescale))))
+    bbn[2] = min(preIMS_shape[0], int(np.ceil((bb1[2] + 1350/resolution/rescale))))
+    bbn[3] = min(preIMS_shape[1], int(np.ceil((bb1[3] + 1350/resolution/rescale))))
     logging.info(f"\t\t{bbn}")
 
-    img_mask = extract_mask(preIMS_file, bbn, session=rembg_session, rescale=resolution/4, is_postIMS = False)[0,:,:]
+    img_mask = extract_mask(preIMS_file, np.array(bbn*preIMS_rescale).astype(int), session=rembg_session, rescale=preIMS_rescale_modifier/4, is_postIMS = False, pyr_level=preIMS_pyr_level)[0,:,:]
     img_mask = preprocess_mask(img_mask,1)
     wn=bbn[2]-bbn[0]
     hn=bbn[3]-bbn[1]
@@ -109,41 +148,41 @@ for i,bb1 in enumerate(imcbboxls):
 
     logging.info(f"\t\t{bbnn}")
     # edges
-    if bbnn[0]>bb1[0]/resolution:
+    if bbnn[0]>bb1[0]:
         bbnn[0] = bbn[0]
-    if bbnn[1]>bb1[1]/resolution:
+    if bbnn[1]>bb1[1]:
         bbnn[1] = bbn[1]
-    if bbnn[2]<bb1[2]/resolution:
+    if bbnn[2]<bb1[2]:
         bbnn[2] = bbn[2]
-    if bbnn[3]<bb1[3]/resolution:
+    if bbnn[3]<bb1[3]:
         bbnn[3] = bbn[3]
     logging.info(f"\t\t{bbnn}")
 
     assert((bbnn[2]-bbnn[0]) <= (bbn[2]-bbn[0]))
     assert((bbnn[3]-bbnn[1]) <= (bbn[3]-bbn[1]))
 
-    assert((bbnn[2]-bbnn[0]) >= (bb1[2]-bb1[0])/resolution)
-    assert((bbnn[3]-bbnn[1]) >= (bb1[3]-bb1[1])/resolution)
+    assert((bbnn[2]-bbnn[0]) >= (bb1[2]-bb1[0]))
+    assert((bbnn[3]-bbnn[1]) >= (bb1[3]-bb1[1]))
 
-    assert(bbnn[0]<bb1[0]/resolution)
-    assert(bbnn[1]<bb1[1]/resolution)
-    assert(bbnn[2]>bb1[2]/resolution)
-    assert(bbnn[3]>bb1[3]/resolution)
+    assert(bbnn[0]<bb1[0])
+    assert(bbnn[1]<bb1[1])
+    assert(bbnn[2]>bb1[2])
+    assert(bbnn[3]>bb1[3])
 
     bbnn = np.array(bbnn)
-    if resolution != 1:
-        bbnn = (bbnn*resolution).astype(int)
     logging.info(f"\t\t{bbnn}")
     corebboxls.append(bbnn)
     preIMSstitch[bbn[0]:bbn[2],bbn[1]:bbn[3]] = np.max(np.stack([preIMSstitch[bbn[0]:bbn[2],bbn[1]:bbn[3]],img_mask], axis=0),axis=0)
 
-saveimage_tile(preIMSstitch, preIMSr_file, 1)
+if out_rescale != 1 or rescale != 1:
+    wn, hn = (np.array(get_image_shape(postIMS_file)[:2])/out_rescale).astype(int)
+    cvi = cv2.resize(preIMSstitch, (hn,wn), interpolation=cv2.INTER_NEAREST)
+saveimage_tile(preIMSstitch, preIMSr_file, resolution*out_rescale)
 
 if postIMSmask_extraction_constraint == "preIMS":
     logging.info("Only extract postIMS tissue location using preIMS mask")
     logging.info("Downscale preIMS mask")
-    postIMS_shape = (np.array(get_image_shape(postIMS_file)[:2])*resolution).astype(int)
-    postIMSstitch = np.zeros(postIMS_shape)
+    postIMSstitch = np.zeros(postIMS_shape[:2])
     preIMSstitch_red = cv2.resize(preIMSstitch, (postIMSstitch.shape[1],postIMSstitch.shape[0]), interpolation=cv2.INTER_NEAREST)
     logging.info(f"Get convex hull")
     lbs = skimage.measure.label(preIMSstitch_red)
@@ -158,11 +197,11 @@ if postIMSmask_extraction_constraint == "preIMS":
 
     logging.info("Upscale mask")
     # rescale
-    if resolution != 1:
-        wn, hn = get_image_shape(postIMS_file)[:2]
+    if out_rescale != 1 or rescale != 1:
+        wn, hn = (np.array(get_image_shape(postIMS_file)[:2])/out_rescale).astype(int)
         cvi = cv2.resize(cvi, (hn,wn), interpolation=cv2.INTER_NEAREST)
     logging.info("Save mask")
-    saveimage_tile(cvi, postIMSr_file, resolution)
+    saveimage_tile(cvi, postIMSr_file, resolution*out_rescale)
     sys.exit(0)
 
 
@@ -198,25 +237,19 @@ if postIMSmask_extraction_constraint == "preIMS":
 #     return tmpimg 
 
 logging.info("Remove background individually for each IMC location with rembg")
-postIMS_shape = (np.array(get_image_shape(postIMS_file)[:2])*resolution).astype(int)
-postIMSstitch = np.zeros(postIMS_shape)
+postIMSstitch = np.zeros(postIMS_shape[:2])
 preIMSstitch_red = cv2.resize(preIMSstitch, (postIMSstitch.shape[1],postIMSstitch.shape[0]), interpolation=cv2.INTER_NEAREST)
 rembg_mask_areas = []
 for i in range(len(corebboxls)):
-    xmin = max(0, int(corebboxls[i][0] - expand_microns))
-    ymin = max(0, int(corebboxls[i][1] - expand_microns))
-    xmax = min(postIMS_shape[0], int(corebboxls[i][2] + expand_microns))
-    ymax = min(postIMS_shape[1], int(corebboxls[i][3] + expand_microns))
+    xmin = max(0, int(corebboxls[i][0] - expand_microns/resolution/rescale))
+    ymin = max(0, int(corebboxls[i][1] - expand_microns/resolution/rescale))
+    xmax = min(postIMS_shape[0], int(corebboxls[i][2] + expand_microns/resolution/rescale))
+    ymax = min(postIMS_shape[1], int(corebboxls[i][3] + expand_microns/resolution/rescale))
     logging.info(f"i: {i}, {os.path.basename(imc_mask_files[i])}, coords:[{xmin}:{xmax},{ymin}:{ymax}]")
-    tmpimg = extract_mask(postIMS_file,(np.ceil(np.array([xmin,ymin,xmax,ymax])/resolution)).astype(int), rembg_session, resolution)[0,:,:]
+    tmpimg = extract_mask(postIMS_file,(np.ceil(np.array([xmin,ymin,xmax,ymax])*postIMS_rescale)).astype(int), rembg_session, postIMS_rescale_modifier/4 , pyr_level=postIMS_pyr_level)[0,:,:]
     rembg_mask_areas.append(np.sum(tmpimg>0))
     wn, hn = postIMSstitch[xmin:xmax,ymin:ymax].shape
-    if tmpimg[:wn,:hn].shape[0]-wn > -2 and tmpimg[:wn,:hn].shape[1]-hn > -2:
-        tmpimg = cv2.resize(tmpimg[:wn,:hn].astype(np.uint8), (hn,wn), interpolation=cv2.INTER_NEAREST).astype(bool)
-    elif tmpimg[:wn,:hn].shape[0]-wn < -1 and tmpimg[:wn,:hn].shape[1]-hn < -1:
-        raise ValueError("shapes are too different!")
-    else:
-        tmpimg = tmpimg[:wn,:hn]
+    tmpimg = cv2.resize(tmpimg[:wn,:hn].astype(np.uint8), (hn,wn), interpolation=cv2.INTER_NEAREST).astype(bool)
     logging.info(f"\tshape 1: {postIMSstitch[xmin:xmax,ymin:ymax].shape}")
     logging.info(f"\tshape 2: {tmpimg.shape}")
     logging.info(f"\tarea: {np.sum(tmpimg>0)}")
@@ -224,7 +257,11 @@ for i in range(len(corebboxls)):
 
 # threshold
 postIMSrs = postIMSstitch>0
-saveimage_tile(postIMSrs, postIMSr_file.replace("reduced_mask","reduced_mask_rembg"), resolution)
+if out_rescale != 1 or rescale != 1:
+    wn, hn = (np.array(get_image_shape(postIMS_file)[:2])/out_rescale).astype(int)
+    postIMSrs = cv2.resize(postIMSrs.astype(np.uint8), (hn,wn), interpolation=cv2.INTER_NEAREST)
+saveimage_tile(postIMSrs, postIMSr_file.replace("reduced_mask","reduced_mask_rembg"), resolution*out_rescale)
+
 
 logging.info("Check mask")
 IMCrs_filled = list()
@@ -235,25 +272,24 @@ for i in range(len(imcbboxls)):
     ymax = int(imcbboxls[i][3])
     IMCrs_filled.append(np.min(postIMSrs[xmin:xmax,ymin:ymax]) == 1)
 
-postIMSstitch = np.zeros(postIMS_shape)
+postIMSstitch = np.zeros(postIMS_shape[:2])
 inds = np.array(list(range(len(imcbboxls))))
-
 logging.info("Run segment anything model on IMC locations")
 sam = sam_model_registry[MODEL_TYPE](checkpoint=CHECKPOINT_PATH)
 sam.to(device=DEVICE)
 sam_mask_areas = []
 for i in inds:
     # bounding box
-    xmin = max(0, int(corebboxls[i][0] - expand_microns))
-    ymin = max(0, int(corebboxls[i][1] - expand_microns))
-    xmax = min(postIMS_shape[0], int(corebboxls[i][2] + expand_microns))
-    ymax = min(postIMS_shape[1], int(corebboxls[i][3] + expand_microns))
+    xmin = max(0, int(corebboxls[i][0] - expand_microns/resolution/rescale))
+    ymin = max(0, int(corebboxls[i][1] - expand_microns/resolution/rescale))
+    xmax = min(postIMS_shape[0], int(corebboxls[i][2] + expand_microns/resolution/rescale))
+    ymax = min(postIMS_shape[1], int(corebboxls[i][3] + expand_microns/resolution/rescale))
     logging.info(f"i: {i}, {os.path.basename(imc_mask_files[i])}, coords:[{xmin}:{xmax},{ymin}:{ymax}]")
 
     # read image
-    saminp = readimage_crop(postIMS_file, (np.ceil(np.array([xmin,ymin,xmax,ymax])/resolution)).astype(int))
+    saminp = readimage_crop(postIMS_file, (np.ceil(np.array([xmin,ymin,xmax,ymax])*postIMS_rescale)).astype(int), pyr_level=postIMS_pyr_level)
     # to gray scale, rescale
-    saminp = convert_and_scale_image(saminp, resolution)
+    saminp = convert_and_scale_image(saminp, postIMS_rescale_modifier/4)
     saminp = np.stack([saminp, saminp, saminp], axis=2)
 
     imcarea = (imcbboxls[i][2]-imcbboxls[i][0])*(imcbboxls[i][3]-imcbboxls[i][1])
@@ -263,7 +299,8 @@ for i in inds:
         [imcbboxls[i][2]-corebboxls[i][0],imcbboxls[i][3]-corebboxls[i][1]],
         [imcbboxls[i][0]-corebboxls[i][0],imcbboxls[i][3]-corebboxls[i][1]],
         [((imcbboxls[i][2]-corebboxls[i][0])-(imcbboxls[i][0]-corebboxls[i][0]))//2,((imcbboxls[i][3]-corebboxls[i][1])-(imcbboxls[i][1]-corebboxls[i][1]))//2],
-    ])
+    ])*(postIMS_rescale*postIMS_rescale_modifier/4)
+    pts = pts.astype(int)
     postIMSmasks, scores1 = sam_core(saminp, sam, pts)
     postIMSmasks = np.stack([preprocess_mask(msk,1) for msk in postIMSmasks ])
     pts_in_mask = list()
@@ -301,12 +338,7 @@ for i in inds:
     tmpimg = postIMSmasks[tmpind,:,:][0,:,:].astype(np.uint8)*255
     sam_mask_areas.append(np.sum(tmpimg>0))
     wn, hn = postIMSstitch[xmin:xmax,ymin:ymax].shape
-    if tmpimg[:wn,:hn].shape[0]-wn > -2 and tmpimg[:wn,:hn].shape[1]-hn > -2:
-        tmpimg = cv2.resize(tmpimg[:wn,:hn].astype(np.uint8), (hn,wn), interpolation=cv2.INTER_NEAREST).astype(bool)
-    elif tmpimg[:wn,:hn].shape[0]-wn < -1 and tmpimg[:wn,:hn].shape[1]-hn < -1:
-        raise ValueError("shapes are too different!")
-    else:
-        tmpimg = tmpimg[:wn,:hn]
+    tmpimg = cv2.resize(tmpimg[:wn,:hn].astype(np.uint8), (hn,wn), interpolation=cv2.INTER_NEAREST).astype(bool)
     logging.info(f"\tshape 1: {postIMSstitch[xmin:xmax,ymin:ymax].shape}")
     logging.info(f"\tshape 2: {tmpimg.shape}")
     logging.info(f"\tarea postIMSmask: {np.sum(tmpimg>0)}")
@@ -314,7 +346,11 @@ for i in inds:
     postIMSstitch[xmin:xmax,ymin:ymax] = np.max(np.stack([postIMSstitch[xmin:xmax,ymin:ymax],tmpimg], axis=0),axis=0)
     # cv2.imwrite("tmp.png",tmpimg.astype(np.uint8)*255)
 
-saveimage_tile(postIMSstitch>0, postIMSr_file.replace("reduced_mask","reduced_mask_no_constraints"), resolution)
+
+if out_rescale != 1 or rescale != 1:
+    wn, hn = (np.array(get_image_shape(postIMS_file)[:2])/out_rescale).astype(int)
+    postIMSstitch_out = cv2.resize(postIMSstitch.astype(np.uint8), (hn,wn), interpolation=cv2.INTER_NEAREST)
+saveimage_tile(postIMSstitch_out>0, postIMSr_file.replace("reduced_mask","reduced_mask_no_constraints"), resolution*out_rescale)
 
 if not postIMSmask_extraction_constraint is None:
     logging.info("Apply mask extraction constraint")
@@ -356,7 +392,13 @@ for i in range(len(imcbboxls)):
     logging.info(f"{sam_mask_areas[i]-rembg_mask_areas[i]}\t, {(sam_mask_areas[i]-rembg_mask_areas[i])/(0.5*(sam_mask_areas[i]+rembg_mask_areas[i])):.4f}\t, {os.path.basename(imc_mask_files[i])}")
 
 
-saveimage_tile(postIMSsamr, postIMSr_file.replace("reduced_mask","reduced_mask_no_convexhull"), resolution)
+if out_rescale != 1 or rescale != 1:
+    wn, hn = (np.array(get_image_shape(postIMS_file)[:2])/out_rescale).astype(int)
+    postIMSsamr = cv2.resize(postIMSsamr.astype(np.uint8), (hn,wn), interpolation=cv2.INTER_NEAREST)
+saveimage_tile(postIMSsamr, postIMSr_file.replace("reduced_mask","reduced_mask_no_convexhull"), resolution*out_rescale)
+
+
+
 logging.info(f"Get convex hull")
 lbs = skimage.measure.label(postIMSsamr)
 rps = skimage.measure.regionprops(lbs)
@@ -369,10 +411,9 @@ for i in range(len(rps)):
     logging.info(f"Number of pixels in postIMS mask after: {np.sum(cvi[tbb[0]:tbb[2],tbb[1]:tbb[3]]>0)}")
 logging.info("Save mask")
 
-# rescale
-if resolution != 1:
-    wn, hn = get_image_shape(postIMS_file)[:2]
-    cvi = cv2.resize(cvi, (hn,wn), interpolation=cv2.INTER_NEAREST)
 
-saveimage_tile(cvi, postIMSr_file, resolution)
+if out_rescale != 1 or rescale != 1:
+    wn, hn = (np.array(get_image_shape(postIMS_file)[:2])/out_rescale).astype(int)
+    cvi = cv2.resize(cvi, (hn,wn), interpolation=cv2.INTER_NEAREST)
+saveimage_tile(cvi, postIMSr_file, resolution*out_rescale)
 logging.info("Finished")

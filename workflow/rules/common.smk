@@ -333,3 +333,11 @@ def return_file_or_generic(file, bool, generic = config["generic_input"]):
         return file
     else:
         return generic
+
+
+def checkpoint_input_file_exists_or_generic(file, generic = config["generic_input"]):
+    bool = os.path.isfile(file)
+    if bool:
+        return file
+    else:
+        return generic

@@ -116,7 +116,8 @@ use rule extract_microscopy_mask_from_registration_postIMS_nogeojson as extract_
 checkpoint create_postIMSpreIMS_mask_table:
     input:
         script="workflow/scripts/Microscopy/create_postIMSpreIMSmask_geojson_presence.sh",
-        TMA_geojson_dir="results/{project_name}/data/TMA_location",
+        postIMS_location=lambda wildcards: checkpoint_input_file_exists_or_generic(f"results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_mask_on_postIMS.geojson"),
+        preIMS_location=lambda wildcards: checkpoint_input_file_exists_or_generic(f"results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_mask_on_preIMS.geojson"),
     output:
         table="results/{project_name}/data/TMA_location/use_which_postIMSpreIMS_geojsons.csv",
     log:
@@ -125,7 +126,7 @@ checkpoint create_postIMSpreIMS_mask_table:
     container:
         config["container"]
     shell:
-        "workflow/scripts/Microscopy/create_postIMSpreIMSmask_geojson_presence.sh -i {input.TMA_geojson_dir} -o {output.table}  > {log.stdout} 2> {log.stderr} "
+        "workflow/scripts/Microscopy/create_postIMSpreIMSmask_geojson_presence.sh -a {input.postIMS_location} -b {input.preIMS_location} -o {output.table}  > {log.stdout} 2> {log.stderr} "
 
 
 rule prepare_register_postIMC_to_postIMS:
@@ -496,7 +497,7 @@ rule transform_postIMC_to_preIMC:
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
-        IMC_location_spacing=lambda wildcards: get_column_entry_from_metadata(
+        TMA_location_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
@@ -504,7 +505,7 @@ rule transform_postIMC_to_preIMC:
         ),
         output_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
-            "IMC_pixel_size",
+            "microscopy_pixel_size",
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
@@ -540,7 +541,7 @@ rule transform_preIMC_to_preIMS:
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
-        IMC_location_spacing=lambda wildcards: get_column_entry_from_metadata(
+        TMA_location_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
@@ -548,7 +549,7 @@ rule transform_preIMC_to_preIMS:
         ),
         output_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
-            "IMC_pixel_size",
+            "microscopy_pixel_size",
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
@@ -584,7 +585,7 @@ rule transform_preIMS_to_postIMS:
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
-        IMC_location_spacing=lambda wildcards: get_column_entry_from_metadata(
+        TMA_location_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
@@ -592,7 +593,7 @@ rule transform_preIMS_to_postIMS:
         ),
         output_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
-            "IMC_pixel_size",
+            "microscopy_pixel_size",
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
@@ -616,90 +617,4 @@ rule transform_preIMS_to_postIMS:
         config["container"]
     script:
         "scripts/Microscopy/transform_postIMC_to_postIMS.py"
-
-
-rule downscale_postIMS:
-    threads: 4
-    resources:
-        mem_mb=5000,
-    params:
-        input_spacing=lambda wildcards: get_column_entry_from_metadata(
-            wildcards.project_name,
-            "microscopy_pixel_size",
-            "project_name",
-            read_sample_metadata(config["sample_metadata"]),
-        ),
-        output_spacing=lambda wildcards: get_column_entry_from_metadata(
-            wildcards.project_name,
-            "microscopy_pixel_size",
-            "project_name",
-            read_sample_metadata(config["sample_metadata"]),
-        ),
-    input:
-        postIMS="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
-        #IMC_transformed=lambda wildcards: expand(
-        #    "results/{{project_name}}/data/IMC_mask/{sample}_transformed_on_postIMS.ome.tiff",
-        #    sample=get_column_entry_from_metadata(
-        #        wildcards.project_name,
-        #        "sample_name",
-        #        "project_name",
-        #        read_sample_metadata(config["sample_metadata"]),
-        #        return_all=True,
-        #    ),
-        #),
-    output:
-        postIMS_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS_reduced.ome.tiff",
-    log:
-        stdout="logs/downscale_postIMS/{project_name}.stdout",
-    benchmark:
-        "benchmarks/downscale_postIMS/{project_name}.txt",
-    container:
-        config["container"]
-    script:
-        "scripts/Microscopy/downscale_image.py"
-
-
-use rule downscale_postIMS as downscale_preIMS with:
-    input:
-        postIMS="results/{project_name}/data/preIMS/{project_name}-preIMS_to_postIMS_registered.ome.tiff",
-        IMC_transformed=lambda wildcards: expand(
-            "results/{{project_name}}/data/IMC_mask/{sample}_transformed_on_postIMS.ome.tiff",
-            sample=get_column_entry_from_metadata(
-                wildcards.project_name,
-                "sample_name",
-                "project_name",
-                read_sample_metadata(config["sample_metadata"]),
-                return_all=True,
-            ),
-        ),
-    output:
-        postIMS_downscaled="results/{project_name}/data/preIMS/{project_name}-preIMS_to_postIMS_registered_reduced.ome.tiff",
-    log:
-        stdout="logs/downscale_preIMS/{project_name}.stdout",
-    benchmark:
-        "benchmarks/downscale_preIMS/{project_name}.txt",
-
-
-use rule downscale_postIMS as downscale_preIMC with:
-    input:
-        postIMS="results/{project_name}/data/preIMC/{project_name}-preIMC_to_postIMS_registered.ome.tiff",
-        IMC_transformed=lambda wildcards: expand(
-            "results/{{project_name}}/data/IMC_mask/{sample}_transformed_on_postIMS.ome.tiff",
-            sample=get_column_entry_from_metadata(
-                wildcards.project_name,
-                "sample_name",
-                "project_name",
-                read_sample_metadata(config["sample_metadata"]),
-                return_all=True,
-            ),
-        ),
-    output:
-        postIMS_downscaled="results/{project_name}/data/preIMC/{project_name}-preIMC_to_postIMS_registered_reduced.ome.tiff",
-    log:
-        stdout="logs/downscale_preIMC/{project_name}.stdout",
-    benchmark:
-        "benchmarks/downscale_preIMC/{project_name}.txt",
-
-
-
 

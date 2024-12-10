@@ -6,6 +6,7 @@ import pycpd
 import SimpleITK as sitk
 import napari_imsmicrolink
 from napari_imsmicrolink.utils.json import NpEncoder
+from ome_types import from_tiff
 import skimage
 import numpy as np
 import json
@@ -14,7 +15,7 @@ from sklearn.neighbors import KDTree
 import shapely
 import shapely.affinity
 from pathlib import Path
-from image_utils import readimage_crop, saveimage_tile
+from image_utils import readimage_crop, saveimage_tile, get_image_shape
 from registration_utils import composite2affine, create_imz_coords,get_rotmat_from_angle,  concave_boundary_from_grid_holes, indices_sequence_from_ordered_points, angle_code_from_point_sequence, image_from_points, get_sigma, get_angle, get_angle_vec
 from utils import setNThreads, snakeMakeMock
 import logging, traceback
@@ -24,7 +25,7 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake = snakeMakeMock()
     snakemake.params["IMS_pixelsize"] = 30
     snakemake.params["IMS_shrink_factor"] = 0.8
-    snakemake.params["IMC_pixelsize"] = 0.22537
+    snakemake.params["microscopy_pixelsize"] = 0.22537
     snakemake.params["IMS_rotation_angle"] = 180
     snakemake.params['within_IMC_fine_registration'] = True
     snakemake.params["min_index_length"] = 10
@@ -46,7 +47,7 @@ setNThreads(snakemake.threads)
 # params
 stepsize = float(snakemake.params["IMS_pixelsize"])
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
-resolution = float(snakemake.params["IMC_pixelsize"])
+resolution = float(snakemake.params["microscopy_pixelsize"])
 rotation_imz = float(snakemake.params["IMS_rotation_angle"])
 assert(rotation_imz in [-270,-180,-90,0,90,180,270])
 rotmat = get_rotmat_from_angle(rotation_imz)
@@ -62,9 +63,7 @@ max_n = snakemake.params["max_index_length"]
 # inputs
 imzmlfile = snakemake.input["imzml"]
 imc_mask_file = snakemake.input["IMCmask"]
-imc_samplename = os.path.splitext(os.path.splitext(os.path.split(imc_mask_file)[1])[0])[0].replace("_transformed_on_postIMS","")
-imc_project = os.path.split(os.path.split(os.path.split(os.path.split(imc_mask_file)[0])[0])[0])[1]
-project_name = "postIMS_to_IMS_"+imc_project+"-"+imc_samplename
+
 postIMS_file = snakemake.input["postIMS_downscaled"]
 masks_transform_filename = snakemake.input["masks_transform"]
 gridsearch_transform_filename = snakemake.input["gridsearch_transform"]
@@ -78,13 +77,27 @@ ims_to_postIMS_regerror_image = snakemake.output["IMS_to_postIMS_error_image"]
 coordsfile_out = snakemake.output["imsml_coords_fp"]
 output_dir = os.path.dirname(coordsfile_out)
 
+imc_samplename = os.path.splitext(os.path.splitext(os.path.split(metadata_to_save_filename)[1])[0])[0].replace("_step1_metadata","")
+imc_project = os.path.split(os.path.split(os.path.split(os.path.split(metadata_to_save_filename)[0])[0])[0])[1]
+project_name = "postIMS_to_IMS_"+imc_project+"-"+imc_samplename
+
+
+postIMS_ome = from_tiff(postIMS_file)
+postIMS_resolution = postIMS_ome.images[0].pixels.physical_size_x
+logging.info(f"postIMS resolution: {postIMS_resolution}")
+assert postIMS_resolution == resolution
+
 
 logging.info("Read data")
 
 with open(metadata_to_save_filename, 'r') as fp:
     metadata = json.load(fp)
+metadata_resolution = metadata['resolution']
+rescale = metadata['rescale']
+logging.info(f"rescale: {rescale}")
 imz_bbox = metadata['IMS_bbox']
 postIMS_bbox = metadata['postIMS_bbox']
+postIMS_bbox = (np.array(postIMS_bbox)*rescale).astype(int)
 xmin, ymin, xmax, ymax = postIMS_bbox
 imzuqregs = np.array(metadata['IMS_regions'])
 regionimz = metadata['Matching_IMS_region']
@@ -455,17 +468,29 @@ else:
 
 if points_found:
     logging.info(f"Run skimage ransac registration on matching points")
-    inliersls = []
-    modells=[]
-    for i in range(1000):
-        mat, inliers = skimage.measure.ransac((centsred_borderfilt,tmpimzrotfilt), skimage.transform.AffineTransform, min_samples=7, residual_threshold=0.1, max_trials=10000)
-        modells.append(mat.params)
-        inliersls.append(np.array(inliers))
-    inliers = np.vstack(inliersls)
-    
-    # np.sum(np.sum(inliers,axis=1)==np.max(np.sum(inliers,axis=1)))
-    # np.array(modells)[np.array(inliersls)==np.max(inliersls)]
-    outlier = np.sum(inliers,axis=0)<900
+    tmpfilename = f"{os.path.dirname(snakemake.log['stdout'])}/{os.path.basename(snakemake.log['stdout']).split('.')[0]}_ransac_cpd_registration.svg"
+    plt.close()
+    plt.scatter(tmpimzrotfilt[:,1], tmpimzrotfilt[:,0],color="red",alpha=0.2)
+    plt.scatter(centsred_borderfilt[:,1], centsred_borderfilt[:,0],color="blue",alpha=0.2)
+    plt.title("matching points")
+    fig = plt.gcf()
+    fig.set_size_inches(20,20)
+    fig.savefig(tmpfilename)
+    # plt.show()
+
+    params = cv2.UsacParams()
+    params.confidence = 0.999
+    params.sampler = cv2.SAMPLING_PROSAC
+    params.score = cv2.SCORE_METHOD_MAGSAC
+    params.maxIterations = 1000000
+    params.neighborsSearch = cv2.NEIGH_FLANN_RADIUS
+    params.threshold = 1
+    params.loMethod = cv2.LOCAL_OPTIM_GC
+    params.loIterations = 100
+    M, mask = cv2.estimateAffine2D(centsred_borderfilt, tmpimzrotfilt, params)
+    logging.info(f"M: {M}")
+    logging.info(f"mask: {mask.shape}")
+    outlier = mask.flatten()==0
     logging.info(f"Number of outliers: {np.sum(outlier)}/{len(outlier)}")
 
     if np.sum(outlier)/len(outlier)>0.1:
@@ -580,7 +605,10 @@ def resample_image(transform, fixed, moving_np):
 logging.info("Prepare SITK registration")
 
 # Read IMC image mask
+logging.info(f"bbox: {[int(xmin), int(ymin), int(xmax), int(ymax)]}")
 imcmask = readimage_crop(imc_mask_file, [int(xmin), int(ymin), int(xmax), int(ymax)])
+logging.info(f"IMC mask shape: {imcmask.shape}")
+logging.info(f"max size imc: {get_image_shape(imc_mask_file)}")
 imcmaskch = skimage.morphology.convex_hull_image(imcmask>0)
 imcmaskch = skimage.transform.resize(imcmaskch,postIMS_shape)
 imcmaskch = cv2.morphologyEx(src=imcmaskch.astype(np.uint8), op = cv2.MORPH_DILATE, kernel = skimage.morphology.square(2*int((1/resolution)*stepsize*2))).astype(bool)
@@ -642,9 +670,9 @@ if (np.sum(pcontsc) > np.sum(pcontsi)/10) and np.all(prop_diff < 0.25) and do_wi
     R.SetMetricSamplingPercentage(0.25, seed=1234)
     R.SetInterpolator(sitk.sitkLinear)
     R.SetOptimizerAsGradientDescent(
-        learningRate=1, numberOfIterations=1000, 
+        learningRate=0.01, numberOfIterations=1000, 
         convergenceMinimumValue=1e-6, convergenceWindowSize=10,
-        estimateLearningRate=R.EachIteration
+        estimateLearningRate=sitk.ImageRegistrationMethod.Never
     )
     # R.SetOptimizerScalesFromIndexShift()
     R.SetOptimizerScalesFromPhysicalShift()

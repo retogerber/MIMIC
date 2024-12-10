@@ -1,7 +1,5 @@
 import sys,os
 sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0], "..","..","workflow","scripts","utils")))
-# sys.path.insert(1, os.path.abspath(os.path.join(os.getcwd(), "workflow","scripts","utils")))
-# sys.path.remove('/home/retger/.local/lib/python3.10/site-packages')
 import cv2
 import SimpleITK as sitk
 import pandas as pd
@@ -11,6 +9,7 @@ import pycpd
 import napari_imsmicrolink
 import skimage
 import numpy as np
+from ome_types import from_tiff
 from image_utils import readimage_crop, saveimage_tile
 from utils import setNThreads, snakeMakeMock
 import logging, traceback
@@ -20,7 +19,7 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake = snakeMakeMock()
     snakemake.params["IMS_pixelsize"] = 30
     snakemake.params["IMS_shrink_factor"] = 0.8
-    snakemake.params["IMC_pixelsize"] = 0.22537
+    snakemake.params["microscopy_pixelsize"] = 0.22537
     snakemake.params["IMS_rotation_angle"] = 180
     snakemake.params["sample_core_names"] = "id1007966_001|-_-|A1|-|-|id1007966_002|-_-|A2"
     snakemake.input["postIMSmask_downscaled"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow_biopsies/results/id1007966/data/postIMS/id1007966_postIMS_reduced_mask.ome.tiff"
@@ -36,9 +35,11 @@ setNThreads(snakemake.threads)
 # params
 stepsize = float(snakemake.params["IMS_pixelsize"])
 pixelsize = stepsize*float(snakemake.params["IMS_shrink_factor"])
-resolution = float(snakemake.params["IMC_pixelsize"])
+resolution = float(snakemake.params["microscopy_pixelsize"])
 rotation_imz = float(snakemake.params["IMS_rotation_angle"])
 assert(rotation_imz in [-270,-180,-90,0,90,180,270])
+rescale = float(snakemake.params["out_rescale"])
+
 # inputs
 postIMSr_file = snakemake.input["postIMSmask_downscaled"]
 imzmlfile = snakemake.input["imzml"]
@@ -49,6 +50,11 @@ sample_core_names = snakemake.params["sample_core_names"]
 # outputs
 output_table = snakemake.output["IMS_to_postIMS_matches"]
 
+
+postIMS_ome = from_tiff(postIMSr_file)
+postIMS_resolution = postIMS_ome.images[0].pixels.physical_size_x
+logging.info(f"postIMS resolution: {postIMS_resolution}")
+assert postIMS_resolution == resolution*rescale
 
 logging.info("IMC location bounding boxes:")
 imcbboxls = list()
@@ -61,7 +67,9 @@ for imcmaskfile in imc_mask_files:
     xmax=int(np.max(boundary_points[:,1]))
     ymin=int(np.min(boundary_points[:,0]))
     ymax=int(np.max(boundary_points[:,0]))
-    bbox = [xmin,ymin,xmax,ymax]
+    bbox = np.array([xmin,ymin,xmax,ymax])
+    if rescale != 1:
+        bbox = (bbox/rescale).astype(int)
     logging.info(f"    {bbox}:{imcmaskfile}")
     imcbboxls.append(bbox)
 
@@ -137,10 +145,10 @@ logging.info(f"postIMS_pre_bbox filtered: {postIMS_pre_bbox}")
 logging.info(f"postIMS_pre_areas filtered: {postIMS_pre_areas}")
 logging.info("Find global bounding box of cores")
 global_bbox = [
-    np.max([0,np.min([p[0] for p in postIMS_pre_bbox])-int(1/resolution)]),
-    np.max([0,np.min([p[1] for p in postIMS_pre_bbox])-int(1/resolution)]),
-    np.min([np.max([p[2] for p in postIMS_pre_bbox])+int(1/resolution),postIMSregin.shape[0]]),
-    np.min([np.max([p[3] for p in postIMS_pre_bbox])+int(1/resolution),postIMSregin.shape[1]]),
+    np.max([0,np.min([p[0] for p in postIMS_pre_bbox])-int(1/(resolution*rescale))]),
+    np.max([0,np.min([p[1] for p in postIMS_pre_bbox])-int(1/(resolution*rescale))]),
+    np.min([np.max([p[2] for p in postIMS_pre_bbox])+int(1/(resolution*rescale)),postIMSregin.shape[0]]),
+    np.min([np.max([p[3] for p in postIMS_pre_bbox])+int(1/(resolution*rescale)),postIMSregin.shape[1]]),
 ]
 del tmpbool
 logging.info(f"\txmin: {global_bbox[0]}")
@@ -176,7 +184,7 @@ imzregions = imzregions.astype(np.uint8)
 # remove imz areas that are clearly too small to match
 imzregpop = skimage.measure.regionprops(imzregions)
 imzlabels = np.array([r.label for r in imzregpop])
-imzareas = np.array([r.area for r in imzregpop]) * (stepsize/resolution)**2
+imzareas = np.array([r.area for r in imzregpop]) * (stepsize/(resolution*rescale))**2
 logging.info(f"IMZ regions: {imzlabels}")
 logging.info(f"IMZ areas: {imzareas}")
 to_remove = imzareas < np.min(postIMS_pre_areas)*0.05
@@ -223,8 +231,8 @@ if len(np.unique(np.array(postIMSregions))) == 1 and len(np.unique(np.array(imzu
 
 logging.info("Scale IMZ image")
 # rescale to postIMS resolution
-wn = int(imzimg.shape[0]*stepsize/resolution)
-hn = int(imzimg.shape[1]*stepsize/resolution)
+wn = int(imzimg.shape[0]*stepsize/(resolution*rescale))
+hn = int(imzimg.shape[1]*stepsize/(resolution*rescale))
 logging.info(f"    Shape before: {imzimg.shape}")
 imzimgres = cv2.resize(imzimg, (hn,wn), interpolation=cv2.INTER_NEAREST)
 imzimgres[imzimgres>0] = 255 
@@ -299,8 +307,8 @@ def find_approx_init_translation(imzcents, picents):
     max_dists = list()
     xrange = np.abs(imzimgres.shape[0]-postIMSregin.shape[0])
     yrange = np.abs(imzimgres.shape[1]-postIMSregin.shape[1])
-    xshifts = list(range(-xrange,xrange,np.round(50/resolution).astype(np.uint))) + [xrange]
-    yshifts = list(range(-yrange,yrange,np.round(50/resolution).astype(np.uint))) + [yrange]
+    xshifts = list(range(-xrange,xrange,np.round(50/(resolution*rescale)).astype(np.uint))) + [xrange]
+    yshifts = list(range(-yrange,yrange,np.round(50/(resolution*rescale)).astype(np.uint))) + [yrange]
     combs = np.array(np.meshgrid(np.array(xshifts),np.array(yshifts))).T.reshape(-1,2)
     for i in range(combs.shape[0]):
         kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')

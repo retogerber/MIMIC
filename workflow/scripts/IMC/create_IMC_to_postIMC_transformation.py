@@ -2,6 +2,7 @@ import sys,os
 import wsireg
 import SimpleITK as sitk
 sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0], "..","..","workflow","scripts","utils")))
+sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0],"workflow","scripts","utils")))
 import numpy as np
 import json
 from image_utils import get_image_shape
@@ -14,10 +15,10 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake.params["input_spacing_postIMC"] = 0.22537
     snakemake.params["input_spacing_IMC"] = 1
     snakemake.params["IMC_rotation_angle"] = 180
-    snakemake.input["IMC"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMC/Cirrhosis-TMA-5_New_Detector_002.tiff"
-    snakemake.input["IMC_location_on_postIMC"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/IMC_location/test_combined_IMC_mask_on_postIMC_B1.geojson"
-    snakemake.input["postIMC"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/postIMC/test_combined_postIMC.ome.tiff"
-    snakemake.output["IMC_to_postIMC_transform"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/registrations/IMC_to_postIMC/test_combined_B1/test_combined_B1-IMC_to_postIMC_transformations.json"
+    snakemake.input["IMC"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC/Cirrhosis-TMA-5_New_Detector_002.tiff"
+    snakemake.input["IMC_location_on_postIMC"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_postIMC_B1.geojson"
+    snakemake.input["postIMC"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/test_split_pre_postIMC.ome.tiff"
+    snakemake.output["IMC_to_postIMC_transform"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/registrations/IMC_to_postIMC/test_split_pre_B1/test_split_pre_B1-IMC_to_postIMC_transformations.json"
     if bool(getattr(sys, 'ps1', sys.flags.interactive)):
         raise Exception("Running in interactive mode!!")
 
@@ -67,10 +68,10 @@ is_top = boundary_points[:,0]<(ymin+ymax)/2
 is_bottom = boundary_points[:,0]>=(ymin+ymax)/2
 
 imc_corners = np.array([
-    [0,0],
-    [imc_shape[1],0],
-    [imc_shape[1],imc_shape[2]],
-    [0,imc_shape[2]]
+    [0.5,0.5],
+    [imc_shape[1]-0.5,0.5],
+    [imc_shape[1]-0.5,imc_shape[2]-0.5],
+    [0.5,imc_shape[2]-0.5]
 ])
 
 is_left_imc = imc_corners[:,1]<(imc_corners[:,1].max()+imc_corners[:,1].min())/2
@@ -92,29 +93,40 @@ imc_pts_ind = [
     np.arange(4)[np.logical_and(is_left_imc, is_bottom_imc)][0]
 ]
 
-bpts = np.stack([boundary_points[imc_location_pts_ind[i],:] for i in range(4)])
-ipts = np.stack([imc_corners[imc_pts_ind[i],:] for i in range(4)])
+bpts = np.stack([boundary_points[imc_location_pts_ind[i],:] for i in range(4)])*input_spacing_postIMC
+ipts = np.stack([imc_corners[imc_pts_ind[i],:] for i in range(4)])*input_spacing_IMC
 
 rot_transform = sitk.Euler2DTransform()
 rot_transform.SetCenter([imc_shape[1]//2,imc_shape[2]//2])
 rot_transform.SetAngle(IMC_rotation_angle/180*np.pi)
 
 logging.info(f"IMC points before rotation: \n{ipts}")
-ipts = np.round(np.stack([rot_transform.GetInverse().TransformPoint(pt) for pt in ipts.astype(float)])).astype(int)
+ipts = np.stack([rot_transform.GetInverse().TransformPoint(pt) for pt in ipts.astype(float)])
 logging.info(f"IMC points after rotation: \n{ipts}")
 logging.info(f"PostIMC points: \n{bpts}")
 
-bptsf = [float(c) for p in bpts[:, [0, 1]] for c in p]
-iptsf = [float(c) for p in ipts[:, [0, 1]] for c in p]
+bptsf = [float(c) for p in bpts[:, [1, 0]] for c in p]
+iptsf = [float(c) for p in ipts[:, [1, 0]] for c in p]
+# bptsf = [float(c) for p in bpts[:, [0, 1]] for c in p]
+# iptsf = [float(c) for p in ipts[:, [0, 1]] for c in p]
 
-transform = sitk.AffineTransform(
-    sitk.LandmarkBasedTransformInitializer(
-        sitk.AffineTransform(2), bptsf, iptsf 
-    )
-)
+logging.info("create resampler")
+postIMC_shape = get_image_shape(postIMC_file)
+postimc = np.zeros(np.array(postIMC_shape[:2])[::-1], dtype=np.uint8)
+postimc = sitk.GetImageFromArray(postimc)
+postimc.SetSpacing([input_spacing_postIMC,input_spacing_postIMC])
+
+
+landmark_initializer = sitk.LandmarkBasedTransformInitializerFilter()
+landmark_initializer.SetFixedLandmarks(bptsf)
+landmark_initializer.SetMovingLandmarks(iptsf)
+landmark_initializer.SetReferenceImage(postimc)
+transform = sitk.AffineTransform(2)
+# transform = sitk.Euler2DTransform()
+transform = landmark_initializer.Execute(transform)
 logging.info(f"Transform parameters: {transform.GetParameters()}")
 
-iptsf_trans = [transform.GetInverse().TransformPoint(pt) for pt in ipts.astype(float)]
+iptsf_trans = [np.array(transform.GetInverse().TransformPoint(pt[[1,0]]))[[1,0]] for pt in ipts.astype(float)]
 iptsf_trans =np.stack(iptsf_trans)
 logging.info(f"PostIMC points: \n{bpts}")
 logging.info(f"Transformed IMC points: \n{iptsf_trans}")
@@ -123,9 +135,10 @@ logging.info(f"Transformed IMC points: \n{iptsf_trans}")
 distances = np.linalg.norm(bpts-iptsf_trans, axis=1)
 logging.info(f"Distances: {distances}")
 
-
-logging.info("create resampler")
-postIMC_shape = get_image_shape(postIMC_file)
+# from skimage.transform import warp, AffineTransform
+# model = AffineTransform()
+# model.estimate(bpts, ipts)
+# model.params
 
 def get_resampler(transform, fixed, default_value=0.0):
     resampler = sitk.ResampleImageFilter()
@@ -139,13 +152,11 @@ def get_resampler(transform, fixed, default_value=0.0):
 def resample_image(resampler, moving):
     return sitk.GetArrayFromImage(resampler.Execute(moving))
 
-
-postimc = np.zeros(postIMC_shape[:2], dtype=float)
-postimc = sitk.GetImageFromArray(postimc)
 resampler = get_resampler(transform, postimc)
 
 logging.info("ITK transformation to parameter map")
 tform=wsireg.parameter_maps.transformations.BASE_AFF_TFORM.copy()
+# tform=wsireg.parameter_maps.transformations.BASE_RIG_TFORM.copy()
 tform["CenterOfRotationPoint"] = [str(p) for p in transform.GetCenter()]
 tform["TransformParameters"] = [str(p) for p in transform.GetParameters()]
 
@@ -162,8 +173,8 @@ logging.info(f"parameter: {test_transform.GetParameters() == transform.GetParame
 assert test_transform.GetParameters() == transform.GetParameters()
 logging.info(f"center: {test_transform.GetCenter() == transform.GetCenter()}")
 assert test_transform.GetCenter() == transform.GetCenter()
-logging.info(f"size: {test_transform.OutputSize == np.array(postIMC_shape[:2])[::-1]}")
-assert np.all(test_transform.OutputSize == np.array(postIMC_shape[:2])[::-1])
+logging.info(f"size: {test_transform.OutputSize == np.array(postIMC_shape[:2])}")
+assert np.all(test_transform.OutputSize == np.array(postIMC_shape[:2]))
 
 logging.info("save transformation")
 if not os.path.exists(os.path.dirname(IMC_to_postIMC_transform)):

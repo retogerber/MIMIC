@@ -21,7 +21,7 @@ rule transformed_IMCmask_to_shape:
             read_sample_metadata(config["sample_metadata"]),
         ),
     input:
-        IMCmask="results/{project_name}/data/IMC_mask/{sample}_transformed_on_postIMS.ome.tiff",
+        IMCmask="results/{project_name}/data/IMC_mask/{project_name}_IMC_transformed_on_postIMS.ome.tiff",
         IMC_location=lambda wildcards: f'results/{wildcards.project_name}/data/IMC_location/{wildcards.project_name}_IMC_mask_on_postIMS_{get_column_entry_from_metadata_two_conditions(wildcards.sample,wildcards.project_name, "core_name", "sample_name","project_name", read_sample_metadata(config["sample_metadata"]))}.geojson',
     output:
         IMCmask_shape_transformed="results/{project_name}/data/IMC_mask/{sample}_transformed_on_postIMS_cell_masks.geojson",
