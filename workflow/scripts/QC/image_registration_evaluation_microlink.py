@@ -43,10 +43,15 @@ imc_mask_file = snakemake.input["IMCmask"]
 
 transform_file = snakemake.input["imsmicrolink_meta"]
 
+
 logging.info("Read metadata")
 with open(metadata_to_save_filename, 'r') as fp:
     metadata = json.load(fp)
+metadata_resolution = metadata['resolution']
+rescale = metadata['rescale']
+logging.info(f"rescale: {rescale}")
 postIMS_bbox = metadata['postIMS_bbox']
+postIMS_bbox = np.array(postIMS_bbox)*rescale
 xmin, ymin, xmax, ymax = postIMS_bbox
 
 centsred = np.loadtxt(postIMS_ablation_centroids_filename, delimiter=',')

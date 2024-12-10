@@ -21,6 +21,7 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake.params["input_spacing"] = 0.22537
     snakemake.params["input_spacing_IMC_location"] = 0.22537
     snakemake.params["output_spacing"] = 1
+    snakemake.params["compute_rescale"] = 4
     snakemake.params["remove_postIMS_grid"] = False
     snakemake.params["region_extraction_method"]="sam_prefilter"
     snakemake.input["sam_weights"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/Misc/sam_vit_h_4b8939.pth"
@@ -42,6 +43,7 @@ input_spacing_IMC_location = snakemake.params["input_spacing_IMC_location"]
 output_spacing = snakemake.params["output_spacing"]
 used_region_extraction_method = snakemake.params["region_extraction_method"]
 assert(used_region_extraction_method in ["sam_prefilter","sam"])
+compute_rescale = snakemake.params["compute_rescale"]
 
 # inputs
 DEVICE = 'cpu'
@@ -205,8 +207,10 @@ def get_regions_sam_prefilter(img, mask, sam, min_area=24**2,max_area=512**2, qu
     return regions, bboxes
 
 
-def get_regions_sam(img, sam, min_area=24**2,max_area=512**2):
-    points_per_side = int(np.ceil(np.max(img.shape)/np.sqrt(min_area)))
+def get_regions_sam(img, sam, min_area=24**2,max_area=512**2, compute_rescale=1):
+    points_per_side = int(np.ceil(np.max(img.shape)/np.sqrt(min_area)))/compute_rescale
+    logging.info(f"points_per_side: {points_per_side}")
+    logging.info(f"total points: {points_per_side**2}")
     mask_generator = SamAutomaticMaskGenerator(sam, points_per_side=points_per_side, stability_score_thresh=0.9, pred_iou_thresh=0.8)
     img_stacked = np.stack([img, img, img], axis=2)
     t1=time.time()
@@ -243,11 +247,23 @@ logging.info(f"bounding box for region extraction: {bb31}")
 # plt.show()
 
 
+microscopy_image_scaled = microscopy_image[bb31[0]:bb31[2],bb31[1]:bb31[3]]
+logging.info(f"microimage_scaled shape: {microscopy_image_scaled.shape}")
+microscopy_image_scaled = cv2.resize(microscopy_image_scaled, (int(microscopy_image_scaled.shape[1]/compute_rescale), int(microscopy_image_scaled.shape[0]/compute_rescale)), interpolation=cv2.INTER_LINEAR)
+logging.info(f"microimage_scaled shape: {microscopy_image_scaled.shape}")
 
 if used_region_extraction_method == "sam_prefilter":
-    regions, bboxes = get_regions_sam_prefilter(microscopy_image[bb31[0]:bb31[2],bb31[1]:bb31[3]], mask_2[bb31[0]:bb31[2],bb31[1]:bb31[3]], sam, min_area=min_area, max_area=max_area)
+    mask2_scaled = mask_2[bb31[0]:bb31[2],bb31[1]:bb31[3]]
+    mask2_scaled = cv2.resize(mask2_scaled, (int(mask2_scaled.shape[1]/compute_rescale), int(mask2_scaled.shape[0]/compute_rescale)), interpolation=cv2.INTER_NEAREST)
+    logging.info(f"mask2_scaled shape: {mask2_scaled.shape}")
+    regions, bboxes = get_regions_sam_prefilter(microscopy_image_scaled, mask2_scaled, sam, min_area=min_area/(compute_rescale**2), max_area=max_area/(compute_rescale**2))
 else:
-    regions, bboxes = get_regions_sam(microscopy_image[bb31[0]:bb31[2],bb31[1]:bb31[3]], sam, min_area=min_area, max_area=max_area)
+    regions, bboxes = get_regions_sam(microscopy_image_scaled, sam, min_area=min_area/(compute_rescale**2), max_area=max_area/(compute_rescale**2), compute_rescale=compute_rescale)
+
+regions = [np.array([p*compute_rescale for p in reg]) for reg in regions]
+bboxes = [[p*compute_rescale for p in bb] for bb in bboxes]
+
+logging.info(f"Number of regions: {len(regions)}")
 
 # arrowed_microscopy_image_1 = np.stack([microscopy_image, microscopy_image, microscopy_image], axis=2)
 # for k in range(len(regions)):

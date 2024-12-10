@@ -56,6 +56,7 @@ input_jsons10 = snakemake.input['postIMC_to_postIMS_global_metrics']
 input_jsons11 = snakemake.input['postIMC_to_preIMC_global_metrics']
 input_jsons12 = snakemake.input['preIMC_to_preIMS_global_metrics']
 input_jsons13 = snakemake.input['preIMS_to_postIMS_global_metrics']
+input_jsons14 = snakemake.input['IMC_to_postIMC_error']
 output_csv = snakemake.output['registration_metrics_combined']
 
 
@@ -216,6 +217,17 @@ if input_jsons13 != generic_input:
         dfout = temp_dfout
         dfout_exists = True
     logging.info(dfout.columns)
+
+if input_jsons14 != generic_input:
+    logging.info("Read IMC_to_postIMC error metrics json")
+    temp_dfout = to_pd(input_jsons14, "_error_metrics_IMC_to_postIMC.json$")
+    if dfout_exists:
+        dfout = dfout.join(temp_dfout)
+    else:
+        dfout = temp_dfout
+        dfout_exists = True
+    logging.info(dfout.columns)
+
 
 
 with pd.option_context('display.max_rows', None,
