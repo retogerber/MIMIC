@@ -73,6 +73,20 @@ def IMC_location_from_project_name_and_sample_name(wildcards, target=""):
     )
     return f"results/{wildcards.project_name}/data/IMC_location/{wildcards.project_name}_IMC_mask_on_{target}_{core}.geojson",
 
+def TMA_location_from_project_name_and_sample_name(wildcards, target=""):
+    assert(target in ["postIMC","preIMC","preIMS","postIMS"])
+    core=get_column_entry_from_metadata_two_conditions(
+        wildcards.project_name,
+        wildcards.sample,
+        "core_name",
+        "project_name",
+        "sample_name",
+        read_sample_metadata(config["sample_metadata"]),
+        return_all=False,
+    )
+    return f"results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_{target}_{core}.geojson",
+
+
 def IMC_to_preIMC_transform_pkl_core_name_from_sample_name(wildcards):
     core_name = get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, "core_name", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
     reg_type = get_column_entry_from_metadata(wildcards.project_name, "IMS_pixel_size", "project_name", read_sample_metadata(config["sample_metadata"])),
@@ -184,16 +198,34 @@ def choose_postIMC_to_postIMS_transform_all(wildcards, transform_target=None):
 #        return filename_out
 
 def choose_imsml_coordsfile_base(sample, project_name):
-        filename = get_column_entry_from_metadata_two_conditions(sample, project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
-        filename = str(filename).strip()
-        if filename == "":
-            filename_out = f"results/{project_name}/data/IMS/postIMS_to_IMS_{project_name}-{sample}-IMSML-coords.h5"
-        else:
-            filename_out = f"results/{project_name}/data/IMS/{filename}"
-        return filename_out
+    filename = get_column_entry_from_metadata_two_conditions(sample, project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
+    filename = str(filename).strip()
+    if filename == "":
+        filename_out = f"results/{project_name}/data/IMS/postIMS_to_IMS_{project_name}-{sample}-IMSML-coords.h5"
+    else:
+        filename_out = f"results/{project_name}/data/IMS/{filename}"
+    return filename_out
 
 def choose_imsml_coordsfile(wildcards):
-        return choose_imsml_coordsfile_base(wildcards.sample, wildcards.project_name)
+    return choose_imsml_coordsfile_base(wildcards.sample, wildcards.project_name)
+
+def choose_all_imsml_coordsfile_from_project(wildcards):
+    sample_names = get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all = True)
+    return [choose_imsml_coordsfile_base(sample, wildcards.project_name) for sample in sample_names]
+
+def choose_imsml_metafile_base(sample, project_name):
+    filename = get_column_entry_from_metadata_two_conditions(sample, project_name, "coords_filename", "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]))
+    filename = str(filename).strip().replace("-coords.h5","-meta.json")
+    if filename == "":
+        filename_out = f"results/{project_name}/data/IMS/postIMS_to_IMS_{project_name}-{sample}-IMSML-meta.json"
+    else:
+        filename_out = f"results/{project_name}/data/IMS/{filename}"
+    return filename_out
+
+def choose_all_imsml_metafile_from_project(wildcards):
+    sample_names = get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all = True)
+    return [choose_imsml_metafile_base(sample, wildcards.project_name) for sample in sample_names]
+
 
 def imzml_peaks_from_sample_and_project(wildcards):
     imzml_file=get_column_entry_from_metadata_two_conditions(
@@ -206,6 +238,20 @@ def imzml_peaks_from_sample_and_project(wildcards):
         )
     imzml_base = imzml_file.replace(".imzML","")
     return f"results/{wildcards.project_name}/data/IMS/{imzml_base}_peaks.h5"
+
+def imzml_peaks_from_project(wildcards):
+    sample_names = get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all = True)
+    imzml_files=[get_column_entry_from_metadata_two_conditions(
+            wildcards.project_name,
+            sample,
+            "imzml_filename",
+            "project_name",
+            "sample_name",
+            read_sample_metadata(config["sample_metadata"])
+        ) for sample in sample_names]
+    imzml_bases = [imzml_file.replace(".imzML","") for imzml_file in imzml_files]
+    peak_files = [f"results/{wildcards.project_name}/data/IMS/{imzml_base}_peaks.h5" for imzml_base in imzml_bases]
+    return peak_files
 
 
 def choose_IMS_to_postIMS_svg(wildcards):

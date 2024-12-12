@@ -474,7 +474,6 @@ rule transform_postIMC_to_postIMS:
         TMA_location_source=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMC_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
         TMA_location_target=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMS_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
     output:
-        #postIMC_transformed="results/{project_name}/data/postIMC/{sample}_transformed_on_postIMS.ome.tiff",
         postIMC_transformed="results/{project_name}/data/postIMC/{project_name}_postIMC_transformed_on_postIMS.ome.tiff",
     log:
         stdout="logs/transform_postIMC_to_postIMS/{project_name}.stdout",

@@ -64,9 +64,10 @@ def to_pd(input_jsons, reg):
     jl = [json.load(open(f, "r")) for f in input_jsons]
     samplenames = [re.sub(reg,"",os.path.basename(s)) for s in input_jsons]
 
-    logging.info("to dataframe")
+    logging.info("\tto dataframe")
     dfls = []
     for i in range(len(samplenames)):
+        logging.info(f"\t\t{samplenames[i]}")
         jl[i]["sample"] = samplenames[i]
         dfls.append(pd.DataFrame(jl[i], index=["sample"]))
     dfout1 = pd.concat(dfls).set_index("sample")

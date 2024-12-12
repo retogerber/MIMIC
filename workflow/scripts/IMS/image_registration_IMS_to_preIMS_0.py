@@ -8,7 +8,7 @@ import cv2
 import json
 import skimage
 import numpy as np
-from image_utils import convert_and_scale_image, get_image_shape, extract_mask, readimage_crop, sam_core, saveimage_tile, preprocess_mask,get_pyr_levels
+from image_utils import convert_and_scale_image, get_image_shape, extract_mask, readimage_crop, sam_core, saveimage_tile, preprocess_mask,get_pyr_levels, get_pyrlvl_rescalemod_imgshape
 from utils import setNThreads, snakeMakeMock
 import logging, traceback
 import logging_utils
@@ -92,26 +92,6 @@ for imcmaskfile in imc_mask_files:
     logging.info(f"    {bbox}:{imcmaskfile}")
     imcbboxls.append(bbox)
 
-def get_pyrlvl_rescalemod_imgshape(imgfile, rescale):
-    preIMS_pyr_levels = get_pyr_levels(imgfile)
-    preIMS_pyr_xsize = [get_image_shape(imgfile, pyr_level=i)[0] for i in preIMS_pyr_levels]
-    preIMS_pyr_xscalefactor = [1]+[1/np.round(preIMS_pyr_xsize[i]/preIMS_pyr_xsize[i-1],3) for i in range(1,len(preIMS_pyr_xsize))]
-    for i in range(2,len(preIMS_pyr_xscalefactor)):
-        preIMS_pyr_xscalefactor[i] *= preIMS_pyr_xscalefactor[i-1]
-    preIMS_pyr_xres = [resolution*preIMS_pyr_xscalefactor[i] for i in range(len(preIMS_pyr_xscalefactor))]
-
-    if rescale in preIMS_pyr_xscalefactor:
-        preIMS_pyr_level = preIMS_pyr_levels[preIMS_pyr_xscalefactor.index(rescale)]
-        preIMS_rescale_modifier = preIMS_pyr_xscalefactor[preIMS_pyr_xscalefactor.index(rescale)]
-        preIMS_imgshape = get_image_shape(imgfile, pyr_level=preIMS_pyr_level)
-        preIMS_rescale=1
-    else:   
-        preIMS_pyr_level = 0
-        preIMS_rescale_modifier = 1
-        preIMS_imgshape = get_image_shape(imgfile)
-        preIMS_imgshape = (int(preIMS_imgshape[0]/rescale),int(preIMS_imgshape[1]/rescale),preIMS_imgshape[2])
-        preIMS_rescale=rescale
-    return preIMS_pyr_level, preIMS_rescale, preIMS_rescale_modifier, preIMS_imgshape
 
 logging.info("Create bounding box of preIMS tissue")
 preIMS_pyr_level, preIMS_rescale, preIMS_rescale_modifier, preIMS_shape = get_pyrlvl_rescalemod_imgshape(preIMS_file, rescale)

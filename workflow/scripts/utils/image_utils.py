@@ -32,6 +32,27 @@ def check_pyr_level(z, pyr_level):
         Exception("No multiscale group found in the zarr file.")
     return pyrl
 
+def get_pyrlvl_rescalemod_imgshape(imgfile, rescale):
+    preIMS_pyr_levels = get_pyr_levels(imgfile)
+    preIMS_pyr_xsize = [get_image_shape(imgfile, pyr_level=i)[0] for i in preIMS_pyr_levels]
+    preIMS_pyr_xscalefactor = [1]+[1/np.round(preIMS_pyr_xsize[i]/preIMS_pyr_xsize[i-1],3) for i in range(1,len(preIMS_pyr_xsize))]
+    for i in range(2,len(preIMS_pyr_xscalefactor)):
+        preIMS_pyr_xscalefactor[i] *= preIMS_pyr_xscalefactor[i-1]
+
+    if rescale in preIMS_pyr_xscalefactor:
+        preIMS_pyr_level = preIMS_pyr_levels[preIMS_pyr_xscalefactor.index(rescale)]
+        preIMS_rescale_modifier = preIMS_pyr_xscalefactor[preIMS_pyr_xscalefactor.index(rescale)]
+        preIMS_imgshape = get_image_shape(imgfile, pyr_level=preIMS_pyr_level)
+        preIMS_rescale=1
+    else:   
+        preIMS_pyr_level = 0
+        preIMS_rescale_modifier = 1
+        preIMS_imgshape = get_image_shape(imgfile)
+        preIMS_imgshape = (int(preIMS_imgshape[0]/rescale),int(preIMS_imgshape[1]/rescale),preIMS_imgshape[2])
+        preIMS_rescale=rescale
+    return preIMS_pyr_level, preIMS_rescale, preIMS_rescale_modifier, preIMS_imgshape
+
+
 
 def readimage_crop(image: str, bbox: list[int], pyr_level=0):
     '''
@@ -84,7 +105,7 @@ def get_image_shape(image: str, pyr_level=0):
     return image_shape
 
 
-def saveimage_tile(image: np.ndarray, filename: str, resolution: float, dtype= np.uint8, is_rgb: bool = None):
+def saveimage_tile(image: np.ndarray, filename: str, resolution: float, dtype= np.uint8, is_rgb: bool = None, channel_names=None, compression="default"):
     '''
     Save an image as a tiled OME-TIFF file.
 
@@ -106,13 +127,13 @@ def saveimage_tile(image: np.ndarray, filename: str, resolution: float, dtype= n
         empty_transform['Size'] = (image.shape[1], image.shape[0])
     rt = wsireg.reg_transforms.reg_transform_seq.RegTransform(empty_transform)
     rts = wsireg.reg_transforms.reg_transform_seq.RegTransformSeq(rt,[0])
-    ri = wsireg.reg_images.loader.reg_image_loader(image.astype(dtype), resolution)
+    ri = wsireg.reg_images.loader.reg_image_loader(image.astype(dtype), resolution, channel_names=channel_names)
     if not is_rgb is None:
         ri._is_rgb = is_rgb
     writer = wsireg.writers.ome_tiff_writer.OmeTiffWriter(ri, reg_transform_seq=rts)
     img_basename = os.path.basename(filename).split(".")[0]
     img_dirname = os.path.dirname(filename)
-    writer.write_image_by_plane(img_basename, output_dir=img_dirname, tile_size=1024)
+    writer.write_image_by_plane(img_basename, output_dir=img_dirname, tile_size=1024, compression=compression)
 
 
 def convert_and_scale_image(image: np.ndarray, scale: float=1.0) -> np.ndarray: 

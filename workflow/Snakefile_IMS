@@ -302,7 +302,8 @@ rule register_IMS_to_postIMS_single_core_2:
                 read_sample_metadata(config["sample_metadata"]),
             ),
         ),
-        IMCmask="results/{project_name}/data/IMC_mask/{sample}_transformed_on_postIMS.ome.tiff",
+        #IMCmask="results/{project_name}/data/IMC_mask/{sample}_transformed_on_postIMS.ome.tiff",
+        IMCmask="results/{project_name}/data/IMC_mask/{project_name}_IMC_transformed_on_postIMS.ome.tiff",
         postIMS_downscaled="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
     output:
         IMS_to_postIMS_error="results/{project_name}/data/registration_metric/{sample}_IMS_to_postIMS_reg_metrics_auto.json",
@@ -386,4 +387,56 @@ rule create_IMS_tiff:
         config["container"]
     script:
         "scripts/IMS/create_IMS_tiff.py"
+
+rule transform_IMS_to_postIMS:
+    threads: 4
+    resources:
+        mem_mb=10000,
+    params:
+        microscopy_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        IMS_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMS_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        IMS_rotation_angle=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMS_rotation_angle",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+            return_all=True,
+        ),
+        sample_names=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "sample_name",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+            return_all=True,
+        ),
+        # set to true to assert that full IMS data is transformed and not just the TMA core mask, if parts of the IMS to postIMS registration are done globally and others automatically this can lead to undefined behaviour, alternatively below use the "TMA_location_target" currently commented out
+        use_bbox = False,
+    input:
+        imzml_coords = choose_all_imsml_coordsfile_from_project,
+        imzml_peaks = imzml_peaks_from_project,
+        ims_meta = choose_all_imsml_metafile_from_project,
+        TMA_location_target=lambda wildcards: [f"results/{wildcards.project_name}/data/registration_metric/{sample}_step1_metadata.json" for sample in get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
+        # TMA_location_target=lambda wildcards: expand('results/{{project_name}}/data/TMA_location/{{project_name}}_TMA_location_on_postIMS_{core}.geojson', core = get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)),
+        postIMS = "results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
+    output:
+        IMS_transformed="results/{project_name}/data/IMS/{project_name}_IMS_on_postIMS.ome.tiff",
+    log:
+        stdout="logs/transform_IMS_to_postIMS/{project_name}.stdout",
+        stderr="logs/transform_IMS_to_postIMS/{project_name}.stderr",
+    benchmark:
+        "benchmarks/transform_IMS_to_postIMS/{project_name}.txt",
+    container:
+        config["container"]
+    script:
+        "scripts/IMS/transform_IMS_to_postIMS.py"
 

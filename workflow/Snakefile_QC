@@ -305,41 +305,25 @@ rule image_registration_evaluation:
     resources:
         mem_mb=50000,
     params:
-        input_spacing_1=lambda wildcards: get_column_entry_from_metadata(
-            wildcards.project_name,
-            "IMC_pixel_size",
-            "project_name",
-            read_sample_metadata(config["sample_metadata"]),
-        ),
-        input_spacing_2=lambda wildcards: get_column_entry_from_metadata(
+        input_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
-        output_spacing=lambda wildcards: get_column_entry_from_metadata(
-            wildcards.project_name,
-            "IMC_pixel_size",
-            "project_name",
-            read_sample_metadata(config["sample_metadata"]),
-        ),
-        IMS_pixelsize=lambda wildcards: get_column_entry_from_metadata(
-            wildcards.project_name,
-            "IMS_pixel_size",
-            "project_name",
-            read_sample_metadata(config["sample_metadata"]),
-        ),
+        rescale = 8,
     input:
         postIMC_on_preIMC="results/{project_name}/data/postIMC/{project_name}_postIMC_transformed_on_preIMC.ome.tiff",
         preIMC="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
-        IMC_on_preIMC=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"preIMC"),
+        TMA_on_preIMC=lambda wildcards: TMA_location_from_project_name_and_sample_name(wildcards,"preIMC"),
         preIMC_on_preIMS="results/{project_name}/data/preIMC/{project_name}_preIMC_transformed_on_preIMS.ome.tiff",
         preIMS="results/{project_name}/data/preIMS/{project_name}_preIMS.ome.tiff",
-        IMC_on_preIMS=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"preIMS"),
+        TMA_on_preIMS=lambda wildcards: TMA_location_from_project_name_and_sample_name(wildcards,"preIMS"),
         preIMS_on_postIMS="results/{project_name}/data/preIMS/{project_name}_preIMS_transformed_on_postIMS.ome.tiff",
         postIMS="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
-        IMC_on_postIMS=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"postIMS"),
-        postIMC_on_postIMS="results/{project_name}/data/postIMC/{sample}_transformed_on_postIMS.ome.tiff",
+        TMA_on_postIMS=lambda wildcards: TMA_location_from_project_name_and_sample_name(wildcards,"postIMS"),
+        postIMC_on_postIMS="results/{project_name}/data/postIMC/{project_name}_postIMC_transformed_on_postIMS.ome.tiff",
+        IMC="results/{project_name}/data/IMC/{sample}.tiff",
         sam_weights="results/Misc/sam_vit_h_4b8939.pth",
     output:
         registration_metrics="results/{project_name}/data/registration_metric/{sample}_reg_metrics.csv",
@@ -715,7 +699,7 @@ use rule image_registration_evaluation_compare_regions_postIMC_to_preIMC as imag
 
 use rule image_registration_evaluation_compare_regions_postIMC_to_preIMC as image_registration_evaluation_compare_regions_postIMC_to_postIMS with:
     input:
-        microscopy_image_1="results/{project_name}/data/postIMC/{sample}_transformed_on_postIMS.ome.tiff",
+        microscopy_image_1="results/{project_name}/data/postIMC/{project_name}_postIMC_transformed_on_postIMS.ome.tiff",
         microscopy_image_2="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
         contours_in_1="results/{project_name}/data/postIMC/{sample}_postIMC_on_postIMS_landmark_regions.json",
         contours_in_2="results/{project_name}/data/postIMS/{sample}_postIMS_landmark_regions.json",
@@ -798,7 +782,7 @@ use rule image_registration_evaluation_calculate_global_metrics_postIMC_to_preIM
 
 use rule image_registration_evaluation_calculate_global_metrics_postIMC_to_preIMC as image_registration_evaluation_calculate_global_metrics_postIMC_to_postIMS with:
     input:
-        microscopy_image_1="results/{project_name}/data/postIMC/{sample}_transformed_on_postIMS.ome.tiff",
+        microscopy_image_1="results/{project_name}/data/postIMC/{project_name}_postIMC_transformed_on_postIMS.ome.tiff",
         microscopy_image_2="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
         IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"postIMS"),
     output:
@@ -936,7 +920,7 @@ use rule image_registration_evaluation_create_blending_gif_postIMC_to_preIMC as 
         pixel_expansion=101,
         remove_postIMS_grid=True,
     input:
-        microscopy_image_1="results/{project_name}/data/postIMC/{sample}_transformed_on_postIMS.ome.tiff",
+        microscopy_image_1="results/{project_name}/data/postIMC/{project_name}_postIMC_transformed_on_postIMS.ome.tiff",
         microscopy_image_2="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
         IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"postIMS"),
     output:
