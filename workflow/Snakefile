@@ -100,6 +100,10 @@ def return_output_files(wildcards):
         )
     if "regIMS" in stages or "all" in stages:
         files += [choose_imsml_coordsfile_base(sample_names[i], project_names[i]) for i in range(len(sample_names))]
+        files += expand(
+            "results/{project_name}/data/IMS/{project_name}_IMS_on_postIMS.ome.tiff",
+            project_name=project_names,
+        )
 
     if "regIMC" in stages or "all" in stages:
         core_names = [
@@ -117,6 +121,10 @@ def return_output_files(wildcards):
             zip,
             project_name=project_names,
             core=core_names,
+        )
+        files += expand(
+            "results/{project_name}/data/IMC_mask/{project_name}_IMC_transformed_on_postIMC.ome.tiff",
+            project_name=project_names,
         )
     if "Microscopy" in stages or "all" in stages:
         files += expand(
@@ -164,6 +172,10 @@ rule IMS:
             project_name=unique_imzml_project[1],
             imzml_base=unique_imzml_project[0],
         ),
+        files3 = expand(
+            "results/{project_name}/data/IMS/{project_name}_IMS_on_postIMS.ome.tiff",
+            project_name=project_names,
+        ),
 
 rule regIMS:
     input:
@@ -187,7 +199,11 @@ rule regIMC:
             zip,
             project_name=project_names,
             core=core_names,
-        )
+        ),
+        files2 = expand(
+            "results/{project_name}/data/IMC_mask/{project_name}_IMC_transformed_on_postIMC.ome.tiff",
+            project_name=project_names,
+        ),
 
 rule Microscopy:
     input:
