@@ -17,6 +17,7 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake = snakeMakeMock()
     snakemake.params["IMS_pixelsize"] = 30
     snakemake.params["microscopy_pixelsize"] = 0.22537
+    snakemake.params["output_pixelsize"] = 1
     snakemake.params["IMS_rotation_angle"] = [180,180]
     snakemake.params["sample_names"] = ["Cirrhosis-TMA-5_New_Detector_001","Cirrhosis-TMA-5_New_Detector_002"]
     snakemake.params["use_bbox"] = False
@@ -39,6 +40,7 @@ setNThreads(snakemake.threads)
 # params
 ims_spacing = snakemake.params["IMS_pixelsize"]
 microscopy_spacing = snakemake.params["microscopy_pixelsize"]
+output_spacing = snakemake.params["output_pixelsize"]
 ims_rotation_angle = snakemake.params["IMS_rotation_angle"]
 if isinstance(ims_rotation_angle, str) or isinstance(ims_rotation_angle, int):
     ims_rotation_angle = list(ims_rotation_angle)
@@ -144,12 +146,14 @@ for single_TMA_geojson_file in TMA_target_geojson_file:
     if isinstance(TMA_geojson,list):
         TMA_geojson=TMA_geojson[0]
     if 'postIMS_bbox' in TMA_geojson.keys():
-        bb1 = np.array(TMA_geojson['postIMS_bbox']).astype(int)
+        bb1 = np.array(TMA_geojson['postIMS_bbox'])/(output_spacing/microscopy_spacing)
+        bb1 = bb1.astype(int)
     else:
         # bounding box
         bb1 = shape(TMA_geojson['geometry']).bounds
         # reorder axis
-        bb1 = np.array([bb1[1],bb1[0],bb1[3],bb1[2]]).astype(int)
+        bb1 = np.array([bb1[1],bb1[0],bb1[3],bb1[2]])/(output_spacing/microscopy_spacing)
+        bb1 = bb1.astype(int)
     bb_target_ls.append(bb1)
 
 merged_df,_ = get_coords(imsml_coords[0], imsml_peaks[0], ims_spacing)
@@ -161,7 +165,7 @@ for pc in peak_col:
     peak_names.append(regex.sub("", pc))
 
 image_shape = get_image_shape(postIMS_file)
-output_image_shape = [len(peak_col), image_shape[0], image_shape[1]]
+output_image_shape = [len(peak_col), int(image_shape[0]/(output_spacing/microscopy_spacing)), int(image_shape[1]/(output_spacing/microscopy_spacing))]
 out_image = np.zeros(output_image_shape, dtype=np.float32)    
 logging.info(f"Ouput image shape: {out_image.shape}")
 for sample_id in range(len(imsml_coords)):
@@ -201,7 +205,7 @@ for sample_id in range(len(imsml_coords)):
 
     logging.info(f"\tGet bounding box")
     corner_pts = np.array([[ims_x_min, ims_y_min], [ims_x_max, ims_y_min], [ims_x_max, ims_y_max], [ims_x_min, ims_y_max]])
-    corner_pts_scaled = np.array([transform.TransformPoint([float(x*ims_spacing), float(y*ims_spacing)]) for x,y in corner_pts])/microscopy_spacing
+    corner_pts_scaled = np.array([transform.TransformPoint([float(x*ims_spacing), float(y*ims_spacing)]) for x,y in corner_pts])/(output_spacing/microscopy_spacing)
     bbox = np.array([np.min(corner_pts_scaled, axis=0), np.max(corner_pts_scaled, axis=0)]).flatten().astype(int)
     bbox[0] = (np.floor(bbox[0])-ims_spacing)
     offset_x = 0 if bbox[0]>=0 else -bbox[0]
@@ -237,9 +241,9 @@ for sample_id in range(len(imsml_coords)):
 
     composite.AddTransform(transform)
     if use_bbox:
-        composite.AddTransform(sitk.TranslationTransform(2, [float((bbox[0])*microscopy_spacing), float((bbox[1])*microscopy_spacing)]))
+        composite.AddTransform(sitk.TranslationTransform(2, [float((bbox[0])*output_spacing), float((bbox[1])*output_spacing)]))
     else:
-        composite.AddTransform(sitk.TranslationTransform(2, [float(bb_target_ls[sample_id][0])*microscopy_spacing, float(bb_target_ls[sample_id][1])*microscopy_spacing]))
+        composite.AddTransform(sitk.TranslationTransform(2, [float(bb_target_ls[sample_id][0])*output_spacing, float(bb_target_ls[sample_id][1])*output_spacing]))
 
     logging.info(f"\tnumber of transforms: {composite.GetNumberOfTransforms()}")
     logging.info(f"\ttransforms:")
@@ -254,7 +258,7 @@ for sample_id in range(len(imsml_coords)):
 
 
     tmpimg = sitk.Image([1,1], sitk.sitkFloat32)
-    tmpimg.SetSpacing([microscopy_spacing,microscopy_spacing])
+    tmpimg.SetSpacing([output_spacing,output_spacing])
     resampler = get_resampler(composite, tmpimg)
     if use_bbox:
         newsize = np.array([bbox[2]-bbox[0],bbox[3]-bbox[1]], dtype='int').tolist()
@@ -279,7 +283,7 @@ for sample_id in range(len(imsml_coords)):
 
 
 logging.info(f"Save image")
-saveimage_tile(out_image, filename = ims_out, resolution=microscopy_spacing, dtype=np.float32, is_rgb=False, channel_names = peak_names, compression="default")
+saveimage_tile(out_image, filename = ims_out, resolution=output_spacing, dtype=np.float32, is_rgb=False, channel_names = peak_names, compression="default")
 
 # import tifffile
 # postIMS = tifffile.imread(postIMS_file)

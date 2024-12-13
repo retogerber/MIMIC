@@ -105,10 +105,10 @@ ipts = np.stack([rot_transform.GetInverse().TransformPoint(pt) for pt in ipts.as
 logging.info(f"IMC points after rotation: \n{ipts}")
 logging.info(f"PostIMC points: \n{bpts}")
 
-bptsf = [float(c) for p in bpts[:, [1, 0]] for c in p]
-iptsf = [float(c) for p in ipts[:, [1, 0]] for c in p]
-# bptsf = [float(c) for p in bpts[:, [0, 1]] for c in p]
-# iptsf = [float(c) for p in ipts[:, [0, 1]] for c in p]
+# bptsf = [float(c) for p in bpts[:, [1, 0]] for c in p]
+# iptsf = [float(c) for p in ipts[:, [1, 0]] for c in p]
+bptsf = [float(c) for p in bpts[:, [0, 1]] for c in p]
+iptsf = [float(c) for p in ipts[:, [0, 1]] for c in p]
 
 logging.info("create resampler")
 postIMC_shape = get_image_shape(postIMC_file)

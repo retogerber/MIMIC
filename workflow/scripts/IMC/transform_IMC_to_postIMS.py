@@ -77,7 +77,7 @@ for TMA_geojson_polygon in TMA_target_geojson_polygon_ls:
     # bounding box
     bb1 = TMA_geojson_polygon.bounds
     # reorder axis
-    bb1 = np.array([bb1[1],bb1[0],bb1[3],bb1[2]])/(TMA_location_spacing/output_spacing)
+    bb1 = np.array([bb1[1],bb1[0],bb1[3],bb1[2]])/(output_spacing/TMA_location_spacing)
     bb1 = bb1.astype(int)
     bb_target_ls.append(bb1)
 
@@ -155,14 +155,15 @@ tmp_imc_dim = get_image_shape(imc_file[0])
 if len(tmp_imc_dim)==2:
     n_channels = 1
 else:
-    n_channels = tmp_imc_dim[2]
+    chind = np.argmin(tmp_imc_dim)
+    n_channels = tmp_imc_dim[chind]
 
 
 img_dtype = readimage_crop(imc_file[0], [0,0,1,1]).dtype
 # get output shape
 try:
     output_shape = get_image_shape(microscopy_target_image)
-    output_shape = [n_channels, output_shape[0],output_shape[1]]
+    output_shape = [n_channels, int(output_shape[0]/(output_spacing/TMA_location_spacing)),int(output_shape[1]/(output_spacing/TMA_location_spacing))]
 except:
     if rtlsls[0].composite_transform is None:
         output_shape = [n_channels, np.max([bb[2] for bb in bb_target_ls]), np.max([bb[3] for bb in bb_target_ls])]
@@ -171,6 +172,7 @@ except:
 
 # init output image
 out_image = np.zeros(output_shape, dtype=img_dtype)    
+logging.info(f"Output shape: {output_shape}")
 # loop over imc images
 for i in range(len(rtlsls)):
     logging.info(f"Transform image {i}")
@@ -191,7 +193,7 @@ for i in range(len(rtlsls)):
     for j,trl in enumerate(trls):
         composite.AddTransform(trl)
     # add translation to target
-    composite.AddTransform(sitk.TranslationTransform(2, [float(bb_target_ls[i][0])*output_spacing, float(bb_target_ls[i][1])*output_spacing]))
+    composite.AddTransform(sitk.TranslationTransform(2, [float(bb_target_ls[i][1])*output_spacing, float(bb_target_ls[i][0])*output_spacing]))
 
 
     logging.info(f"\tnumber of transforms: {composite.GetNumberOfTransforms()}")
@@ -214,17 +216,21 @@ for i in range(len(rtlsls)):
     logging.info(f"\torigin: {resampler.GetOutputOrigin()}")
     logging.info(f"\tspacing: {resampler.GetOutputSpacing()}")
     logging.info(f"\tprevious size: {resampler.GetSize()}")
-    # newsize = np.array([bb_target_ls[i][3]-bb_target_ls[i][1], bb_target_ls[i][2]-bb_target_ls[i][0]], dtype='int').tolist()
-    newsize = np.array([bb_target_ls[i][2]-bb_target_ls[i][0],bb_target_ls[i][3]-bb_target_ls[i][1]], dtype='int').tolist()
+    newsize = np.array([bb_target_ls[i][3]-bb_target_ls[i][1], bb_target_ls[i][2]-bb_target_ls[i][0]], dtype='int').tolist()
     # newsize=np.array(output_shape[:2], dtype=int).tolist()
     resampler.SetSize(newsize)
     logging.info(f"\tcropped size: {resampler.GetSize()}")
     resampler.SetTransform(composite)
 
-    logging.info(f"\t\tread image")
+    logging.info(f"\tread image")
     moving_np = tifffile.imread(imc_file[i])
-    # moving_np = ((moving_np<0)+1).astype(moving_np.dtype)
-    moving_np_swap = np.swapaxes(moving_np,0,1)
+    logging.info(f"\timage shape before swap: {moving_np.shape}")
+    if len(moving_np.shape)==2:
+        moving_np_swap = moving_np
+    else:
+        moving_np_swap = np.moveaxis(moving_np,chind,-1)
+    logging.info(f"\timage shape after swap: {moving_np_swap.shape}")
+
 
     imc_xmax = moving_np_swap.shape[0]
     imc_ymax = moving_np_swap.shape[1]
@@ -248,7 +254,7 @@ for i in range(len(rtlsls)):
         assert prop_nonzero>0
 
         logging.info(f"\t\tadd image to output")
-        out_image[ch, bb_target_ls[i][0]:bb_target_ls[i][2], bb_target_ls[i][1]:bb_target_ls[i][3]] = np.swapaxes(source_image_trans,0,1)
+        out_image[ch, bb_target_ls[i][0]:bb_target_ls[i][2], bb_target_ls[i][1]:bb_target_ls[i][3]] = source_image_trans
 
 
 # postimc=tifffile.imread("/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/test_split_pre_postIMC.ome.tiff")

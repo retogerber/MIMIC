@@ -1,6 +1,6 @@
 if (interactive()){
-  source(file.path("imc_to_ims_workflow", "workflow", "scripts", "combine_IMS_utils.R"))
-  source(file.path("imc_to_ims_workflow", "workflow", "scripts", "logging_utils.R"))
+  source(file.path("workflow", "scripts","Overlap", "combine_IMS_utils.R"))
+  source(file.path("workflow", "scripts","utils", "logging_utils.R"))
 } else{
   source(file.path("workflow", "scripts", "Overlap","combine_IMS_utils.R"))
   source(file.path("workflow", "scripts", "utils", "logging_utils.R"))
@@ -16,10 +16,10 @@ if (interactive()){
   maldi_pixel_size <- 24
 
   # input
-  imspeaks_filename <- c("")
-  imscoords_filename <- c("")
-  celloverlap_filename <- c("")
-  cellcentroids_filename <- c("")
+  imspeaks_filename <- c("results/test_split_pre/data/IMS/IMS_test_split_pre_peaks.h5")
+  imscoords_filename <- c("results/test_split_pre/data/IMS/postIMS_to_IMS_test_split_pre-IMSML-coords.h5","results/test_split_pre/data/IMS/postIMS_to_IMS_test_split_pre-Cirrhosis-TMA-5_New_Detector_002-IMSML-coords.h5")
+  celloverlap_filename <- c("results/test_split_pre/data/cell_overlap/test_split_pre_Cirrhosis-TMA-5_New_Detector_001_cell_overlap_IMS.csv","results/test_split_pre/data/cell_overlap/test_split_pre_Cirrhosis-TMA-5_New_Detector_002_cell_overlap_IMS.csv")
+  cellcentroids_filename <- c("results/test_split_pre/data/cell_overlap/test_split_pre_Cirrhosis-TMA-5_New_Detector_001_cell_centroids.csv","results/test_split_pre/data/cell_overlap/test_split_pre_Cirrhosis-TMA-5_New_Detector_002_cell_centroids.csv")
 } else{
   # params
   maldi_step_size <- as.numeric(snakemake@params["IMS_pixelsize"])
@@ -58,15 +58,6 @@ names(cellcentroids_filename) <- basename(cellcentroids_filename) |>
   gsub(pattern=paste0(project_name,"_"),replacement="")
 log_message(sprintf("Cell centroids names: %s", paste(names(cellcentroids_filename), collapse=", ")))
 
-# if (length(imscoords_filename)<length(celloverlap_filename)){
-#   if (length(imscoords_filename)==0) {
-#     imscoords_filename <- rep(imscoords_filename,length(celloverlap_filename))
-#     names(imscoords_filename) <- names(celloverlap_filename)
-#   } else {
-#      stop("imscoords files and celloverlap files cannot be matched!")
-#   }
-# }
-
 # check and replace names of manual imsmicrolink files
 if (length(imscoords_filename)>1) {
   is_correct <- names(imscoords_filename) == names(celloverlap_filename)
@@ -80,8 +71,35 @@ if (length(imscoords_filename)>1) {
   }
 }
 
+n_regions <- sapply(seq_along(imscoords_filename), function(i){
+  df <- rhdf5::h5read(imscoords_filename[i], "xy_original") |>
+    t() |>
+    as.data.frame() |>
+    dplyr::rename(ims_x = V1, ims_y = V2) |>
+    dplyr::mutate(ims_xy = paste0(ims_x, "_", ims_y))
+  sp::coordinates(df) <- c("ims_x", "ims_y")
+  sp::gridded(df) <- TRUE
+  dst <- 3
+  nl2 <- BiocNeighbors::findNeighbors(sp::coordinates(df), dst)
+  wm <- nl2$index
+  class(wm) <- c("nb", "list")
+  dj <- spdep::n.comp.nb(wm)
+  df$region_id <- dj$comp.id
+  length(unique(df$region_id))
+})
+log_message(sprintf("Number of regions: %s", paste(n_regions, collapse=", "))) 
+is_manual <- sapply(seq_along(imscoords_filename), function(i) !stringr::str_detect(imscoords_filename[i], paste0("postIMS_to_IMS_",project_name,"-",names(imscoords_filename)[i],"-IMSML-coords.h5")))
+log_message(sprintf("Is manual: %s", paste(is_manual, collapse=", ")))
 
-idx_by_location <- rep(TRUE, length(imscoords_filename))
+# if automatic:
+#  idx_by_location = TRUE
+# if manual:
+#  if number of regions == 1
+#    idx_by_location = TRUE
+#  else
+#    idx_by_location = FALSE
+idx_by_location <- !is_manual & n_regions == 1
+log_message(sprintf("Index by location: %s", paste(idx_by_location,collapse=", ")))
 log_message("Running create_imsc")
 imcims_df <- create_imsc(
   imspeaks_filename, 

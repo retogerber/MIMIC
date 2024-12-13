@@ -17,12 +17,6 @@ configfile: "config/config.yaml"
 
 
 include: "rules/common.smk"
-include: "Snakefile_microscopy"
-include: "Snakefile_IMC"
-include: "Snakefile_IMS"
-include: "Snakefile_QC"
-include: "Snakefile_overlap"
-
 
 
 ### Start of workflow.
@@ -70,7 +64,24 @@ unique_imzml_project = [
 ]
 unique_imzml_project[0] = [os.path.splitext(e)[0] for e in unique_imzml_project[0]]
 
+core_names_per_project = {
+    pr: get_column_entry_from_metadata(
+                pr,
+                'core_name',
+                'project_name',
+                read_sample_metadata(config['sample_metadata']),
+                return_all=True)
+            for pr in unique_project_names
+}
+
 stages = config["stages"]
+
+include: "Snakefile_microscopy"
+include: "Snakefile_IMC"
+include: "Snakefile_IMS"
+include: "Snakefile_QC"
+include: "Snakefile_overlap"
+
 
 def return_output_files(wildcards):
     files = []
@@ -109,10 +120,9 @@ def return_output_files(wildcards):
         )
     if "Microscopy" in stages or "all" in stages:
         files += expand(
-            "results/{project_name}/data/postIMC/{sample}_transformed_on_postIMS.ome.tiff",
+            "results/{project_name}/data/postIMC/{project_name}_postIMC_transformed_on_postIMS.ome.tiff",
             zip,
             project_name=project_names,
-            sample=sample_names,
         )
     if "overlap" in stages or "all" in stages:
         files += expand(
@@ -182,7 +192,7 @@ rule regIMC:
 rule Microscopy:
     input:
         files = expand(
-            "results/{project_name}/data/postIMC/{sample}_transformed_on_postIMS.ome.tiff",
+            "results/{project_name}/data/postIMC/{project_name}_postIMC_transformed_on_postIMS.ome.tiff",
             zip,
             project_name=project_names,
             sample=sample_names,

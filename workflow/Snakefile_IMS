@@ -405,6 +405,12 @@ rule transform_IMS_to_postIMS:
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
+        output_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMC_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
         IMS_rotation_angle=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "IMS_rotation_angle",

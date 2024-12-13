@@ -54,7 +54,7 @@ def get_pyrlvl_rescalemod_imgshape(imgfile, rescale):
 
 
 
-def readimage_crop(image: str, bbox: list[int], pyr_level=0):
+def readimage_crop(image: str, bbox: list[int], pyr_level=0, channel=None):
     '''
     Read a cropped portion of an image.
 
@@ -75,7 +75,17 @@ def readimage_crop(image: str, bbox: list[int], pyr_level=0):
     if isinstance(z, zarr.hierarchy.Group): 
         pyrl = check_pyr_level(z, pyr_level)
         if z[pyrl].ndim == 3:
-            image_crop = z[pyrl][bbox[0]:bbox[2],bbox[1]:bbox[3],:]
+            channel_ind = np.argmin(z[pyrl].shape)
+            if channel is not None:
+                if channel_ind == 0:
+                    image_crop = z[pyrl][channel, bbox[0]:bbox[2],bbox[1]:bbox[3]]
+                else:
+                    image_crop = z[pyrl][bbox[0]:bbox[2],bbox[1]:bbox[3],channel]
+            else:
+                if channel_ind == 0:
+                    image_crop = z[pyrl][:, bbox[0]:bbox[2],bbox[1]:bbox[3]]
+                else:
+                    image_crop = z[pyrl][bbox[0]:bbox[2],bbox[1]:bbox[3],:]
         else:
             image_crop = z[pyrl][bbox[0]:bbox[2],bbox[1]:bbox[3]]
     elif isinstance(z, zarr.core.Array): 

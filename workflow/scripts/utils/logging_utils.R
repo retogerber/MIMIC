@@ -5,7 +5,7 @@ set_threads <- function(snakemake){
 }
 
 log_message <- function(x, type = "INFO"){
-    message(paste0(format(Sys.time(), format="%y-%m-%d %H:%M:%S"), " [",type,"] ", x))
+    message(paste0(format(Sys.time(), format="%y-%m-%d %H:%M:%S"), " [",type,"] ", paste(x, collapse = " ")))
 }
 
 log_snakemake_variables <- function(snakemake){
@@ -20,21 +20,21 @@ log_snakemake_variables <- function(snakemake){
     params <- snakemake@params
     for (nam in names(params)){
       if (nam != ""){
-        log_message(paste0("\t",nam,": ", params[[nam]]))
+        log_message(paste0("\t",nam,": ", paste(params[[nam]], collapse = " ")))
       }
     }
     log_message("Inputs")
     input <- snakemake@input
     for (nam in names(input)){
       if (nam != ""){
-        log_message(paste0("\t",nam,": ", input[[nam]]))
+        log_message(paste0("\t",nam,": ", paste(input[[nam]], collapse = " ")))
       }
     }
     log_message("Output")
     output <- snakemake@output
     for (nam in names(output)){
       if (nam != ""){
-        log_message(paste0("\t",nam,": ", output[[nam]]))
+        log_message(paste0("\t",nam,": ", paste(output[[nam]], collapse = " ")))
       }
     }
 }

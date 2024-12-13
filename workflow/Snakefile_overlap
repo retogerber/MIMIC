@@ -111,6 +111,12 @@ rule calculate_mean_IMC_intensities_with_IMS:
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
+        IMC_pixelsize=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMC_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
         IMS_shrink_factor=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "IMS_shrink_factor",
@@ -121,9 +127,10 @@ rule calculate_mean_IMC_intensities_with_IMS:
         image_utils_file="workflow/scripts/utils/image_utils.py",
     threads: 1
     input:
-        imzml_coords=choose_imsml_coordsfile,
-        imzml_peaks=imzml_peaks_from_sample_and_project,
-        IMC_transformed="results/{project_name}/data/IMC/{sample}_aggr_transformed.ome.tiff",
+        # imzml_coords=choose_imsml_coordsfile,
+        # imzml_peaks=imzml_peaks_from_sample_and_project,
+        IMS_transformed="results/{project_name}/data/IMS/{project_name}_IMS_on_postIMS.ome.tiff",
+        IMC_transformed="results/{project_name}/data/IMC/{project_name}_IMC_aggr_transformed.ome.tiff",
         IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"postIMS"),
         IMC_summary_panel="results/{project_name}/data/IMC_summary_panel/{sample}_summary.csv",
     output:
