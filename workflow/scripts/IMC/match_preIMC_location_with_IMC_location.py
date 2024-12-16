@@ -52,7 +52,7 @@ preIMC_geojson_polygons = [ shape(e['geometry']) for e in preIMC_geojson ]
 
 logging.info("IMC geojson to shapes")
 # polygons from IMC_location
-IMC_geojson_polygons = [ shape(e[0]['geometry']) for e in IMC_geojson]
+IMC_geojson_polygons = [ shape(e['geometry']) for e in IMC_geojson]
 
 logging.info("Detect overlaps")
 # find overlaps

@@ -85,7 +85,7 @@ project_name = "postIMS_to_IMS_"+imc_project+"-"+imc_samplename
 postIMS_ome = from_tiff(postIMS_file)
 postIMS_resolution = postIMS_ome.images[0].pixels.physical_size_x
 logging.info(f"postIMS resolution: {postIMS_resolution}")
-assert postIMS_resolution == resolution
+assert abs(postIMS_resolution - resolution) < 1e-3
 
 
 logging.info("Read data")

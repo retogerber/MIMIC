@@ -158,7 +158,7 @@ if np.any([pseudohash is not None for pseudohash in pseudohash_ls]):
                 has_inverse.append(i)
 
 logging.info("Read json, transform and create shape")
-geojson_out_dict = dict()
+geojson_out_ls = list()
 for i in range(len(IMC_geojson_file_ls)):
     logging.info(f"Read IMC geojson {i}")
     rs = RegShapes(IMC_geojson_file_ls[i], source_res=input_spacing, target_res=output_spacing)
@@ -180,13 +180,18 @@ for i in range(len(IMC_geojson_file_ls)):
     ymax = np.max(tmpout[:,1])
     assert(ymax<=(rtsngeo_ls[i].output_size[1]+200/input_spacing))
 
-    # rs.save_shape_data(IMC_geojson_transformed_file_ls[i])
-    geojson_out_dict[rs.shape_data_gj[0]["properties"]["name"]] = wsireg.reg_shapes.reg_shapes.insert_transformed_pts_gj(
-        rs.shape_data_gj, rs.transformed_shape_data
+    out_shape = wsireg.reg_shapes.reg_shapes.insert_transformed_pts_gj(
+            rs.shape_data_gj, rs.transformed_shape_data
+        )[0]
+    if 'classification' in out_shape['properties']:
+        del out_shape['properties']['classification']
+
+    geojson_out_ls.append(
+        out_shape
     )
 
 json.dump(
-    geojson_out_dict,
+    geojson_out_ls,
     open(
         IMC_geojson_transformed_file,
         "w",

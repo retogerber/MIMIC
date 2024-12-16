@@ -54,7 +54,7 @@ output_table = snakemake.output["IMS_to_postIMS_matches"]
 postIMS_ome = from_tiff(postIMSr_file)
 postIMS_resolution = postIMS_ome.images[0].pixels.physical_size_x
 logging.info(f"postIMS resolution: {postIMS_resolution}")
-assert postIMS_resolution == resolution*rescale
+assert abs(postIMS_resolution - resolution*rescale) < 1e-3
 
 logging.info("IMC location bounding boxes:")
 imcbboxls = list()

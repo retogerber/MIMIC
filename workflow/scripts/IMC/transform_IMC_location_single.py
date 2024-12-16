@@ -7,8 +7,8 @@ import logging_utils
 
 if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake = snakeMakeMock()
-    snakemake.input['IMC_location_transformed'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_preIMS_combined.geojson"
-    snakemake.output['IMC_location_transformed_single'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_preIMS_A1.geojson"
+    snakemake.input['IMC_location_transformed'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on__preIMC_combined.geojson"
+    snakemake.output['IMC_location_transformed_single'] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_preIMC_B1.geojson"
     if bool(getattr(sys, 'ps1', sys.flags.interactive)):
         raise Exception("Running in interactive mode!!")
 # logging setup
@@ -27,12 +27,14 @@ if isinstance(IMC_location_transformed_single, list):
     IMC_location_transformed_single = IMC_location_transformed_single[0]
 
 with open(IMC_location_transformed, "r") as f:
-    geojson_out_dict = json.load(f)
+    geojson_out_ls = json.load(f)
 
 core_name = IMC_location_transformed_single.split("_")[-1].split(".")[0]
+shape_names = [shape["properties"]["name"] for shape in geojson_out_ls]
+shape_idx = shape_names.index(core_name)
 logging.info(f"Writing transformed IMC location for core {core_name}")
 json.dump(
-    geojson_out_dict[core_name],
+    geojson_out_ls[shape_idx],
     open(
         IMC_location_transformed_single,
         "w",

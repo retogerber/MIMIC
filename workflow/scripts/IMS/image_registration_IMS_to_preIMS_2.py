@@ -91,7 +91,7 @@ metadata_to_save_filename = snakemake.output["metadata"]
 postIMS_ome = from_tiff(postIMS_file)
 postIMS_resolution = postIMS_ome.images[0].pixels.physical_size_x
 logging.info(f"postIMS resolution: {postIMS_resolution}")
-assert postIMS_resolution == resolution
+assert abs(postIMS_resolution - resolution) < 1e-3
 
 postIMSr_ome = from_tiff(postIMSr_file)
 postIMSr_resolution = postIMSr_ome.images[0].pixels.physical_size_x

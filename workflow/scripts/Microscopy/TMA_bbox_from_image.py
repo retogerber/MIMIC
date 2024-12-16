@@ -138,13 +138,14 @@ for imcmaskfile, bb, bbout in zip(imc_mask_files, corebboxls, TMA_locations_out)
         [bb[1],bb[0]],
         [bb[1],bb[2]],
         [bb[3],bb[2]],
-        [bb[3],bb[0]]
+        [bb[3],bb[0]],
+        [bb[1],bb[0]]
     ])
     IMC_geojson['geometry']['coordinates'][0] = bpts.tolist()
     if not os.path.exists(os.path.dirname(bbout)):
         os.makedirs(os.path.dirname(bbout))
     with open(bbout, "w") as f:
-        json.dump(IMC_geojson, f)
+        json.dump(IMC_geojson, f, indent=1)
 
 logging.info("Save postIMC mask") 
 saveimage_tile(postIMCstitch, postIMC_mask_file, 1)

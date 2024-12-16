@@ -223,7 +223,7 @@ for i in range(len(rtlsls)):
 # logging.info(f"proportion of non-zero pixels: {prop_nonzero}")
 
 logging.info(f"Save image")
-saveimage_tile(out_image, filename= img_filename_out, resolution=1)
+saveimage_tile(out_image, filename= img_filename_out, resolution=output_spacing)
 
 # wn = int(out_image.shape[0]*0.5)
 # hn = int(out_image.shape[1]*0.5)
