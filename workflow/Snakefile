@@ -101,7 +101,7 @@ def return_output_files(wildcards):
     if "regIMS" in stages or "all" in stages:
         files += [choose_imsml_coordsfile_base(sample_names[i], project_names[i]) for i in range(len(sample_names))]
         files += expand(
-            "results/{project_name}/data/IMS/{project_name}_IMS_on_postIMS.ome.tiff",
+            "results/{project_name}/data/IMS/{project_name}_IMS_on_postIMS",
             project_name=project_names,
         )
 
@@ -173,7 +173,7 @@ rule IMS:
             imzml_base=unique_imzml_project[0],
         ),
         files3 = expand(
-            "results/{project_name}/data/IMS/{project_name}_IMS_on_postIMS.ome.tiff",
+            "results/{project_name}/data/IMS/{project_name}_IMS_on_postIMS",
             project_name=project_names,
         ),
 

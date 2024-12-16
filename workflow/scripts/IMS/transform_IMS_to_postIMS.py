@@ -70,7 +70,7 @@ assert len(imsml_coords) == len(imsml_peaks), "number of coords and peaks files 
 assert len(imsml_coords) == len(ims_meta_file), "number of coords and meta files must be the same"
 assert len(imsml_coords) == len(ims_rotation_angle), "number of coords and rotation angles must be the same"
 # outputs
-ims_out = snakemake.output["IMS_transformed"]
+ims_out_dir = snakemake.output["IMS_transformed"]
 
 # def check_is_manual_registration(imsml_coords, sample_name):
 #     project_name = re.search(r"results/(.*)/data", imsml_coords).group(1)
@@ -164,112 +164,117 @@ peak_names = list()
 for pc in peak_col:
     peak_names.append(regex.sub("", pc))
 
+ims_out = [f"{ims_out_dir}/mz_{peak}.ome.tiff" for peak in peak_names]
+logging.info(f"Output files, base dir:{os.path.basename(ims_out_dir)}")
+logging.info(f"Output files, base names:{[os.path.basename(ims_out[i]) for i in range(len(ims_out))]}")
+
 image_shape = get_image_shape(postIMS_file)
 output_image_shape = [len(peak_col), int(image_shape[0]/(output_spacing/microscopy_spacing)), int(image_shape[1]/(output_spacing/microscopy_spacing))]
 out_image = np.zeros(output_image_shape, dtype=np.float32)    
-logging.info(f"Ouput image shape: {out_image.shape}")
-for sample_id in range(len(imsml_coords)):
-    logging.info(f"Sample: {sample_names[sample_id]}")
-    # logging.info(f"\tis manual registration: {is_manual_registration[sample_id]}")
-    logging.info(f"\tIMS rotation angle: {ims_rotation_angle[sample_id]}")
-    merged_df, reg_direction = get_coords(imsml_coords[sample_id], imsml_peaks[sample_id], ims_spacing)
-    logging.info(f"\tMetadata file: {ims_meta_file[sample_id]}")
-    logging.info(f"\tdirection of registration: {reg_direction}")
-    
-    coords = np.array(merged_df[['coord_0_padded','coord_1_padded']])
-    ims_x_min = np.min(coords[:,1])
-    ims_x_max = np.max(coords[:,1])
-    ims_y_min = np.min(coords[:,0])
-    ims_y_max = np.max(coords[:,0])
+for ch in range(output_image_shape[0]):
+    logging.info(f"Channel: {peak_names[ch]}, file: {ims_out[ch]}")
+    out_image = np.zeros([output_image_shape[1],output_image_shape[2]], dtype=np.float32)    
+    logging.info(f"Ouput image shape single channel: {out_image.shape}")
+    for sample_id in range(len(imsml_coords)):
+        logging.info(f"Sample: {sample_names[sample_id]}")
+        # logging.info(f"\tis manual registration: {is_manual_registration[sample_id]}")
+        logging.info(f"\tIMS rotation angle: {ims_rotation_angle[sample_id]}")
+        merged_df, reg_direction = get_coords(imsml_coords[sample_id], imsml_peaks[sample_id], ims_spacing)
+        logging.info(f"\tMetadata file: {ims_meta_file[sample_id]}")
+        logging.info(f"\tdirection of registration: {reg_direction}")
+
+        coords = np.array(merged_df[['coord_0_padded','coord_1_padded']])
+        ims_x_min = np.min(coords[:,1])
+        ims_x_max = np.max(coords[:,1])
+        ims_y_min = np.min(coords[:,0])
+        ims_y_max = np.max(coords[:,0])
 
 
-    tmp_peak_col = [col for col in merged_df.columns if "peak" in col]
-    assert all([pcol in peak_col for pcol in tmp_peak_col])
+        tmp_peak_col = [col for col in merged_df.columns if "peak" in col]
+        assert all([pcol in peak_col for pcol in tmp_peak_col])
 
-    ims_idxs = np.array(merged_df.index)[:,np.newaxis]
-    peaks = np.array(merged_df[[pcol for pcol in tmp_peak_col]])
-    peaks = np.hstack([peaks, ims_idxs])
-    metadata = json.load(open(ims_meta_file[sample_id], "r"))
+        ims_idxs = np.array(merged_df.index)[:,np.newaxis]
+        peaks = np.array(merged_df[[pcol for pcol in tmp_peak_col]])
+        peaks = np.hstack([peaks, ims_idxs])
+        metadata = json.load(open(ims_meta_file[sample_id], "r"))
 
 
-    logging.info(f"\tLoad Affine transformation matrix")
-    aff_mat = np.array(metadata["Affine transformation matrix (yx,microns)"])
-    IMS_to_postIMS_transform = sitk.AffineTransform(2)
-    IMS_to_postIMS_transform.SetMatrix(aff_mat[:2,:2].flatten())
-    IMS_to_postIMS_transform.SetTranslation(aff_mat[:2,2])
-    if reg_direction == "IMS_to_postIMS":
-        logging.info(f"\tInvert affine transform")
-        IMS_to_postIMS_transform = IMS_to_postIMS_transform.GetInverse()
-    logging.info(f"\taffine transform params: {IMS_to_postIMS_transform.GetParameters()}")
-    transform = IMS_to_postIMS_transform
+        logging.info(f"\tLoad Affine transformation matrix")
+        aff_mat = np.array(metadata["Affine transformation matrix (yx,microns)"])
+        IMS_to_postIMS_transform = sitk.AffineTransform(2)
+        IMS_to_postIMS_transform.SetMatrix(aff_mat[:2,:2].flatten())
+        IMS_to_postIMS_transform.SetTranslation(aff_mat[:2,2])
+        if reg_direction == "IMS_to_postIMS":
+            logging.info(f"\tInvert affine transform")
+            IMS_to_postIMS_transform = IMS_to_postIMS_transform.GetInverse()
+        logging.info(f"\taffine transform params: {IMS_to_postIMS_transform.GetParameters()}")
+        transform = IMS_to_postIMS_transform
 
-    logging.info(f"\tGet bounding box")
-    corner_pts = np.array([[ims_x_min, ims_y_min], [ims_x_max, ims_y_min], [ims_x_max, ims_y_max], [ims_x_min, ims_y_max]])
-    corner_pts_scaled = np.array([transform.TransformPoint([float(x*ims_spacing), float(y*ims_spacing)]) for x,y in corner_pts])/(output_spacing/microscopy_spacing)
-    bbox = np.array([np.min(corner_pts_scaled, axis=0), np.max(corner_pts_scaled, axis=0)]).flatten().astype(int)
-    bbox[0] = (np.floor(bbox[0])-ims_spacing)
-    offset_x = 0 if bbox[0]>=0 else -bbox[0]
-    bbox[0] = 0 if bbox[0]<0 else bbox[0]
-    bbox[1] = (np.floor(bbox[1])-ims_spacing)
-    offset_y = 0 if bbox[1]>=0 else -bbox[1]
-    bbox[1] = 0 if bbox[1]<0 else bbox[1]
-    bbox[2] = (np.ceil(bbox[2])+ims_spacing)
-    bbox[2] = image_shape[0] if bbox[2]>image_shape[0] else bbox[2]
-    bbox[3] = (np.ceil(bbox[3])+ims_spacing)
-    bbox[3] = image_shape[1] if bbox[3]>image_shape[1] else bbox[3]
-    bbox = bbox.astype(int)
-    logging.info(f"\tbbox on postIMS: {bbox}")
+        logging.info(f"\tGet bounding box")
+        corner_pts = np.array([[ims_x_min, ims_y_min], [ims_x_max, ims_y_min], [ims_x_max, ims_y_max], [ims_x_min, ims_y_max]])
+        corner_pts_scaled = np.array([transform.TransformPoint([float(x*ims_spacing), float(y*ims_spacing)]) for x,y in corner_pts])/(output_spacing/microscopy_spacing)
+        bbox = np.array([np.min(corner_pts_scaled, axis=0), np.max(corner_pts_scaled, axis=0)]).flatten().astype(int)
+        bbox[0] = (np.floor(bbox[0])-ims_spacing)
+        offset_x = 0 if bbox[0]>=0 else -bbox[0]
+        bbox[0] = 0 if bbox[0]<0 else bbox[0]
+        bbox[1] = (np.floor(bbox[1])-ims_spacing)
+        offset_y = 0 if bbox[1]>=0 else -bbox[1]
+        bbox[1] = 0 if bbox[1]<0 else bbox[1]
+        bbox[2] = (np.ceil(bbox[2])+ims_spacing)
+        bbox[2] = image_shape[0] if bbox[2]>image_shape[0] else bbox[2]
+        bbox[3] = (np.ceil(bbox[3])+ims_spacing)
+        bbox[3] = image_shape[1] if bbox[3]>image_shape[1] else bbox[3]
+        bbox = bbox.astype(int)
+        logging.info(f"\tbbox on postIMS: {bbox}")
 
-    logging.info(f"\tCreate IMS image")
-    # create empty image
-    image = np.zeros((out_image.shape[0],ims_x_max+1, ims_y_max+1))
-    # Fill the image 
-    for i, (xr, yr) in enumerate(zip(coords[:,1].T, coords[:,0].T)):
-        for j in range(peaks.shape[1]):
-            image[j,xr, yr] = peaks[i,j]
+        logging.info(f"\tCreate IMS image")
+        # create empty image
+        image = np.zeros((output_image_shape[0],ims_x_max+1, ims_y_max+1))
+        # Fill the image 
+        for i, (xr, yr) in enumerate(zip(coords[:,1].T, coords[:,0].T)):
+            for j in range(peaks.shape[1]):
+                image[j,xr, yr] = peaks[i,j]
 
-    # checkerboard pattern for quality control
-    for i, (xr, yr) in enumerate(zip(coords[:,1].T, coords[:,0].T)):
-        image[-1,xr, yr] = 1
-    image[-1,::2, :][image[-1,::2,:]!=0] = 2
-    image[-1,:,::2][image[-1,:,::2]!=0] = 2
-    image[-1,::2,::2][image[-1,::2,::2]!=0] = 1
-    logging.info(f"\tImage shape: {image.shape}")
+        # checkerboard pattern for quality control
+        for i, (xr, yr) in enumerate(zip(coords[:,1].T, coords[:,0].T)):
+            image[-1,xr, yr] = 1
+        image[-1,::2, :][image[-1,::2,:]!=0] = 2
+        image[-1,:,::2][image[-1,:,::2]!=0] = 2
+        image[-1,::2,::2][image[-1,::2,::2]!=0] = 1
+        logging.info(f"\tImage shape: {image.shape}")
 
-    logging.info(f"\tCreate composite transform")
-    composite = sitk.CompositeTransform(2)
+        logging.info(f"\tCreate composite transform")
+        composite = sitk.CompositeTransform(2)
 
-    composite.AddTransform(transform)
-    if use_bbox:
-        composite.AddTransform(sitk.TranslationTransform(2, [float((bbox[0])*output_spacing), float((bbox[1])*output_spacing)]))
-    else:
-        composite.AddTransform(sitk.TranslationTransform(2, [float(bb_target_ls[sample_id][0])*output_spacing, float(bb_target_ls[sample_id][1])*output_spacing]))
-
-    logging.info(f"\tnumber of transforms: {composite.GetNumberOfTransforms()}")
-    logging.info(f"\ttransforms:")
-    trls = [composite.GetNthTransform(j) for j in range(composite.GetNumberOfTransforms())]
-    for j,trl in enumerate(trls):
-        if trl.GetName() == "CompositeTransform":
-            trls2 = [trl.GetNthTransform(j) for j in range(trl.GetNumberOfTransforms())]
-            for jj,trl2 in enumerate(trls2):
-                logging.info(f"\t\t{j}{jj}: linear, {trl2.GetParameters()}")
+        composite.AddTransform(transform)
+        if use_bbox:
+            composite.AddTransform(sitk.TranslationTransform(2, [float((bbox[0])*output_spacing), float((bbox[1])*output_spacing)]))
         else:
-            logging.info(f"\t\t{j}: linear, {trl.GetParameters()}")
+            composite.AddTransform(sitk.TranslationTransform(2, [float(bb_target_ls[sample_id][0])*output_spacing, float(bb_target_ls[sample_id][1])*output_spacing]))
+
+        logging.info(f"\tnumber of transforms: {composite.GetNumberOfTransforms()}")
+        logging.info(f"\ttransforms:")
+        trls = [composite.GetNthTransform(j) for j in range(composite.GetNumberOfTransforms())]
+        for j,trl in enumerate(trls):
+            if trl.GetName() == "CompositeTransform":
+                trls2 = [trl.GetNthTransform(j) for j in range(trl.GetNumberOfTransforms())]
+                for jj,trl2 in enumerate(trls2):
+                    logging.info(f"\t\t{j}{jj}: linear, {trl2.GetParameters()}")
+            else:
+                logging.info(f"\t\t{j}: linear, {trl.GetParameters()}")
 
 
-    tmpimg = sitk.Image([1,1], sitk.sitkFloat32)
-    tmpimg.SetSpacing([output_spacing,output_spacing])
-    resampler = get_resampler(composite, tmpimg)
-    if use_bbox:
-        newsize = np.array([bbox[2]-bbox[0],bbox[3]-bbox[1]], dtype='int').tolist()
-    else:
-        newsize = np.array([bb_target_ls[sample_id][2]-bb_target_ls[sample_id][0],bb_target_ls[sample_id][3]-bb_target_ls[sample_id][1]], dtype='int').tolist()
-    resampler.SetSize(newsize)
-    resampler.SetTransform(composite)
+        tmpimg = sitk.Image([1,1], sitk.sitkFloat32)
+        tmpimg.SetSpacing([output_spacing,output_spacing])
+        resampler = get_resampler(composite, tmpimg)
+        if use_bbox:
+            newsize = np.array([bbox[2]-bbox[0],bbox[3]-bbox[1]], dtype='int').tolist()
+        else:
+            newsize = np.array([bb_target_ls[sample_id][2]-bb_target_ls[sample_id][0],bb_target_ls[sample_id][3]-bb_target_ls[sample_id][1]], dtype='int').tolist()
+        resampler.SetSize(newsize)
+        resampler.SetTransform(composite)
 
-    logging.info(f"\tResample image")
-    for ch in range(image.shape[0]):
-        logging.info(f"\t\tchannel {ch}")
+        logging.info(f"\tResample image")
         moving = sitk.GetImageFromArray(np.swapaxes(image[ch,:,:],0,1))
         moving.SetSpacing([ims_spacing, ims_spacing])
 
@@ -277,13 +282,13 @@ for sample_id in range(len(imsml_coords)):
         np.max(source_image_trans)
 
         if use_bbox:
-            out_image[ch, bbox[0]:bbox[2], bbox[1]:bbox[3]] = np.swapaxes(source_image_trans,0,1)
+            out_image[bbox[0]:bbox[2], bbox[1]:bbox[3]] = np.swapaxes(source_image_trans,0,1)
         else:
-            out_image[ch, bb_target_ls[sample_id][0]:bb_target_ls[sample_id][2], bb_target_ls[sample_id][1]:bb_target_ls[sample_id][3]] = np.swapaxes(source_image_trans,0,1)
+            out_image[bb_target_ls[sample_id][0]:bb_target_ls[sample_id][2], bb_target_ls[sample_id][1]:bb_target_ls[sample_id][3]] = np.swapaxes(source_image_trans,0,1)
 
 
-logging.info(f"Save image")
-saveimage_tile(out_image, filename = ims_out, resolution=output_spacing, dtype=np.float32, is_rgb=False, channel_names = peak_names, compression="default")
+    logging.info(f"Save image")
+    saveimage_tile(out_image, filename = ims_out[ch], resolution=output_spacing, dtype=np.float32, is_rgb=False, channel_names = peak_names[ch], compression="default")
 
 # import tifffile
 # postIMS = tifffile.imread(postIMS_file)

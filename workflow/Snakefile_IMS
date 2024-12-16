@@ -435,7 +435,7 @@ rule transform_IMS_to_postIMS:
         # TMA_location_target=lambda wildcards: expand('results/{{project_name}}/data/TMA_location/{{project_name}}_TMA_location_on_postIMS_{core}.geojson', core = get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)),
         postIMS = "results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
     output:
-        IMS_transformed="results/{project_name}/data/IMS/{project_name}_IMS_on_postIMS.ome.tiff",
+        IMS_transformed=directory("results/{project_name}/data/IMS/{project_name}_IMS_on_postIMS"),
     log:
         stdout="logs/transform_IMS_to_postIMS/{project_name}.stdout",
         stderr="logs/transform_IMS_to_postIMS/{project_name}.stderr",
