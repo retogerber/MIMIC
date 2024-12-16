@@ -72,6 +72,7 @@ for single_TMA_geojson_file in TMA_target_geojson_file:
     TMA_target_geojson_polygon_ls.append(shape(TMA_geojson['geometry']))
 
 logging.info("Create bounding box")
+max_shape = get_image_shape(microscopy_target_image)
 bb_target_ls = list()
 for TMA_geojson_polygon in TMA_target_geojson_polygon_ls:
     # bounding box
@@ -79,12 +80,25 @@ for TMA_geojson_polygon in TMA_target_geojson_polygon_ls:
     # reorder axis
     bb1 = np.array([bb1[1],bb1[0],bb1[3],bb1[2]])/(output_spacing/TMA_location_spacing)
     bb1 = bb1.astype(int)
+    if bb1[0]<0:
+        logging.warning(f"\tbb1[0] < 0: {bb1[0]}")
+        bb1[0]=0
+    if bb1[1]<0:
+        logging.warning(f"\tbb1[1] < 0: {bb1[1]}")
+        bb1[1]=0
+    if bb1[2]>max_shape[0]:
+        logging.warning(f"\tbb1[2] > max_shape[0]: {bb1[2]} > {max_shape[0]}")
+        bb1[2]=max_shape[0]
+    if bb1[3]>max_shape[1]:
+        logging.warning(f"\tbb1[3] > max_shape[1]: {bb1[3]} > {max_shape[1]}")
+        bb1[3]=max_shape[1]
     bb_target_ls.append(bb1)
 
 
 logging.info("Load transform")
 rtlsls = list()
 for single_transform_file_postIMC_to_postIMS in transform_file_postIMC_to_postIMS:
+    logging.info(f"Setup transformation for {os.path.basename(single_transform_file_postIMC_to_postIMS)}")
     if transform_target == "postIMC":
         rtlsls.append(RegTransformSeq(None)) 
         continue
@@ -105,7 +119,6 @@ for single_transform_file_postIMC_to_postIMS in transform_file_postIMC_to_postIM
             is_split_transform = len(rtls)==6
 
 
-        logging.info("Setup transformation for image")
         if transform_target == "preIMC":
             n_end = 1
         elif transform_target == "preIMS":

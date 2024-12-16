@@ -72,6 +72,9 @@ assert len(imsml_coords) == len(ims_rotation_angle), "number of coords and rotat
 # outputs
 ims_out_dir = snakemake.output["IMS_transformed"]
 
+if not os.path.exists(ims_out_dir):
+    os.makedirs(ims_out_dir)
+
 # def check_is_manual_registration(imsml_coords, sample_name):
 #     project_name = re.search(r"results/(.*)/data", imsml_coords).group(1)
 #     regex = re.compile(fr"^postIMS_to_IMS_{project_name}-{sample_name}-IMSML-coords.h5$")
@@ -173,7 +176,7 @@ output_image_shape = [len(peak_col), int(image_shape[0]/(output_spacing/microsco
 out_image = np.zeros(output_image_shape, dtype=np.float32)    
 for ch in range(output_image_shape[0]):
     logging.info(f"Channel: {peak_names[ch]}, file: {ims_out[ch]}")
-    out_image = np.zeros([output_image_shape[1],output_image_shape[2]], dtype=np.float32)    
+    out_image = np.zeros([1,output_image_shape[1],output_image_shape[2]], dtype=np.float32)    
     logging.info(f"Ouput image shape single channel: {out_image.shape}")
     for sample_id in range(len(imsml_coords)):
         logging.info(f"Sample: {sample_names[sample_id]}")
@@ -282,9 +285,9 @@ for ch in range(output_image_shape[0]):
         np.max(source_image_trans)
 
         if use_bbox:
-            out_image[bbox[0]:bbox[2], bbox[1]:bbox[3]] = np.swapaxes(source_image_trans,0,1)
+            out_image[0,bbox[0]:bbox[2], bbox[1]:bbox[3]] = np.swapaxes(source_image_trans,0,1)
         else:
-            out_image[bb_target_ls[sample_id][0]:bb_target_ls[sample_id][2], bb_target_ls[sample_id][1]:bb_target_ls[sample_id][3]] = np.swapaxes(source_image_trans,0,1)
+            out_image[0,bb_target_ls[sample_id][0]:bb_target_ls[sample_id][2], bb_target_ls[sample_id][1]:bb_target_ls[sample_id][3]] = np.swapaxes(source_image_trans,0,1)
 
 
     logging.info(f"Save image")

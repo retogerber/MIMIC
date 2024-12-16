@@ -70,7 +70,9 @@ bb1[2] = bb1[2] if bb1[2]<=m2full_shape[1] else m2full_shape[1]
 bb1[3] = bb1[3] if bb1[3]<=m2full_shape[2] else m2full_shape[2]
 logging.info(f"bounding box mask whole image 1: {bb1}")
 
-ims_image = readimage_crop(IMS_on_postIMS, bb1, channel=-2).astype(np.uint32)
+IMS_on_postIMS_file = f"IMS_on_postIMS/mz_indices.ome.tiff"
+logging.info(f"Read IMS image: {IMS_on_postIMS_file}")
+ims_image = readimage_crop(IMS_on_postIMS_file, bb1).astype(np.uint32)
 logging.info(f"IMS image shape: {ims_image.shape}")
 imc_image = readimage_crop(IMC_on_postIMS, bb1)
 logging.info(f"IMC image shape: {imc_image.shape}")
