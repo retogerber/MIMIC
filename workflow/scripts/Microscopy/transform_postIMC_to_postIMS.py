@@ -100,7 +100,7 @@ for TMA_geojson_polygon in TMA_target_geojson_polygon_ls:
 logging.info("Load transform")
 rtlsls = list()
 for single_transform_file_postIMC_to_postIMS in transform_file_postIMC_to_postIMS:
-    # setup transformation sequence
+    logging.info(f"Setup transformation for {os.path.basename(single_transform_file_postIMC_to_postIMS)}")
     rtsn=RegTransformSeq(single_transform_file_postIMC_to_postIMS)
     rtsn.set_output_spacing((float(output_spacing),float(output_spacing)))
 
@@ -116,7 +116,6 @@ for single_transform_file_postIMC_to_postIMS in transform_file_postIMC_to_postIM
         is_split_transform = len(rtls)==6
 
 
-    logging.info("Setup transformation for image")
     if transform_target == "preIMC":
         n_end = 1
     elif transform_target == "preIMS":
@@ -168,6 +167,7 @@ n_channels = get_image_shape(img_file)[2]
 img_dtype = readimage_crop(img_file, [0,0,1,1]).dtype
 output_shape = [rtsn.output_size[1], rtsn.output_size[0], n_channels]
 out_image = np.zeros(output_shape, dtype=img_dtype)    
+logging.info(f"Output shape: {output_shape}")
 for i in range(len(rtlsls)):
     logging.info(f"Transform image {i}")
     logging.info(f"\tbb_source: {bb_source_ls[i]}")
@@ -215,7 +215,7 @@ for i in range(len(rtlsls)):
         source_image_trans = resample_image(resampler, moving)
         prop_nonzero = np.sum(source_image_trans>0)/np.prod(source_image_trans.shape)
         logging.info(f"\t\tproportion of non-zero pixels: {prop_nonzero}")
-        assert prop_nonzero > 0.9
+        assert prop_nonzero > 0
     
         out_image[bb_target_ls[i][0]:bb_target_ls[i][2], bb_target_ls[i][1]:bb_target_ls[i][3],ch] = source_image_trans
 

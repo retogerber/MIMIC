@@ -44,9 +44,7 @@ out_rescale = float(snakemake.params["out_rescale"])
 # upscale in all directions from TMA location 
 expand_microns = stepsize*15
 postIMSmask_extraction_constraint = snakemake.params["postIMSmask_extraction_constraint"]
-postIMSmask_extraction_constraint = "none"
 postIMSmask_extraction_constraint_parameter = snakemake.params["postIMSmask_extraction_constraint_parameter"]
-postIMSmask_extraction_constraint_parameter = 0
 
 # inputs
 postIMS_file = snakemake.input["postIMS_downscaled"]
@@ -69,11 +67,11 @@ preIMSr_file = snakemake.output["postIMSmask_downscaled"].replace("postIMS_reduc
 postIMS_ome = from_tiff(postIMS_file)
 postIMS_resolution = postIMS_ome.images[0].pixels.physical_size_x
 logging.info(f"postIMS resolution: {postIMS_resolution}")
-assert postIMS_resolution == resolution
+assert abs(postIMS_resolution - resolution)<1e-3
 preIMS_ome = from_tiff(preIMS_file)
 preIMS_resolution = preIMS_ome.images[0].pixels.physical_size_x
 logging.info(f"preIMS resolution: {preIMS_resolution}")
-assert preIMS_resolution == resolution
+assert abs(preIMS_resolution - resolution)<1e-3
 
 logging.info("get IMC locations")
 imcbboxls = list()

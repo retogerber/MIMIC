@@ -115,6 +115,8 @@ if prop_area_non_tissue<non_tissue_proportion_lower or prop_area_non_tissue>non_
         "IMC_proportion_area_no_tissue": np.nan 
     }
     json.dump(metric_dict, open(IMC_to_postIMC_error_output,"w"))
+    from pathlib import Path
+    Path(IMC_to_postIMC_error_plot).touch()
     sys.exit(0)
 
 logging.info("invert postIMC image")

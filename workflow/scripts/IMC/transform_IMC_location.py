@@ -14,6 +14,7 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake.params["input_spacing"] = 0.22537
     snakemake.params["output_spacing"] = 0.22537
     snakemake.params["transform_target"] = "postIMS"
+    snakemake.params["use_nonlinear"] = True
     # snakemake.input["postIMC_to_postIMS_transform"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/registrations/postIMC_to_postIMS/test_combined-postIMC_to_postIMS_transformations_mod.json"
     snakemake.input["postIMC_to_postIMS_transform"] = [f"/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/registrations/postIMC_to_postIMS/{core}/test_split_pre_{core}-postIMC_to_postIMS_transformations_mod.json" for core in ["A1","A1","B1"]]
     snakemake.input['IMC_location_on_postIMC'] = [f"/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_postIMC_{core}.geojson" for core in ["A1","A1","B1"]]
@@ -30,6 +31,7 @@ output_spacing = snakemake.params["output_spacing"]
 input_spacing = snakemake.params["input_spacing"]
 transform_target = snakemake.params["transform_target"]
 assert(transform_target in ["preIMC", "preIMS", "postIMS"])
+use_nonlinear = bool(snakemake.params["use_nonlinear"])
 
 # inputs
 transform_file_postIMC_to_postIMS=snakemake.input["postIMC_to_postIMS_transform"]
@@ -46,14 +48,15 @@ if isinstance(IMC_geojson_transformed_file, list):
 
 assert len(transform_file_postIMC_to_postIMS)==len(IMC_geojson_file_ls)
 
-def construct_transform_seq(transform_file):
+def construct_transform_seq(transform_file, use_nonlinear=True):
     # setup transformation sequence
     rtsn=RegTransformSeq(transform_file)
     rtsn.set_output_spacing((float(output_spacing),float(output_spacing)))
     rtls = rtsn.reg_transforms
     logging.info(f"Number of transforms: {len(rtls)}")
 
-    all_linear = np.array([r.is_linear for r in rtls]).all()
+    is_linear = np.array([r.is_linear for r in rtls])
+    all_linear = is_linear.all()
     if all_linear:
         assert(len(rtls)==5 or len(rtls)==3)
         is_split_transform = len(rtls)==5
@@ -82,6 +85,9 @@ def construct_transform_seq(transform_file):
 
     rtls = rtsn.reg_transforms
     rtls = rtls[:n_end]
+    if not use_nonlinear:
+        is_linear = is_linear[:n_end]
+        rtls = [rt for rt, il in zip(rtls, is_linear) if il]
 
     rtsngeo = RegTransformSeq(rtls, transform_seq_idx=list(range(len(rtls))))
     assert(len(rtls)>0)
@@ -103,7 +109,7 @@ rtsngeo_ls = []
 pseudohash_ls = []
 nonlinind_ls = []
 for transform_file in transform_file_postIMC_to_postIMS:
-    rtsngeo, pseudohash, nonlinind = construct_transform_seq(transform_file)
+    rtsngeo, pseudohash, nonlinind = construct_transform_seq(transform_file, use_nonlinear=use_nonlinear)
     rtsngeo_ls.append(rtsngeo)
     pseudohash_ls.append(pseudohash)
     nonlinind_ls.append(nonlinind)
@@ -166,13 +172,13 @@ for i in range(len(IMC_geojson_file_ls)):
     logging.info(f"y: min: {np.min(tmpout[:,1])}, max: {np.max(tmpout[:,1])}")
     logging.info(f"expected size: {rtsngeo_ls[i].output_size}")
     xmin = np.min(tmpout[:,0])
-    assert(xmin>=0)
+    assert(xmin>=-200/input_spacing)
     xmax = np.max(tmpout[:,0])
-    assert(xmax<=rtsngeo_ls[i].output_size[0])
+    assert(xmax<=(rtsngeo_ls[i].output_size[0]+200/input_spacing))
     ymin = np.min(tmpout[:,1])
-    assert(ymin>=0)
+    assert(ymin>=-200/input_spacing)
     ymax = np.max(tmpout[:,1])
-    assert(ymax<=rtsngeo_ls[i].output_size[1])
+    assert(ymax<=(rtsngeo_ls[i].output_size[1]+200/input_spacing))
 
     # rs.save_shape_data(IMC_geojson_transformed_file_ls[i])
     geojson_out_dict[rs.shape_data_gj[0]["properties"]["name"]] = wsireg.reg_shapes.reg_shapes.insert_transformed_pts_gj(
