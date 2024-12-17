@@ -61,55 +61,6 @@ img_filename_out = snakemake.output["postIMC_transformed"]
 img_basename = os.path.basename(img_filename_out).split(".")[0]
 img_dirname = os.path.dirname(img_filename_out)
 
-# get info of IMC location
-TMA_source_geojson_polygon_ls = list()
-for single_TMA_geojson_file in TMA_source_geojson_file:
-    TMA_geojson = json.load(open(single_TMA_geojson_file, "r"))
-    if isinstance(TMA_geojson,list):
-        TMA_geojson=TMA_geojson[0]
-    TMA_source_geojson_polygon_ls.append(shape(TMA_geojson['geometry']))
-
-TMA_target_geojson_polygon_ls = list()
-for single_TMA_geojson_file in TMA_target_geojson_file:
-    TMA_geojson = json.load(open(single_TMA_geojson_file, "r"))
-    if isinstance(TMA_geojson,list):
-        TMA_geojson=TMA_geojson[0]
-    TMA_target_geojson_polygon_ls.append(shape(TMA_geojson['geometry']))
-
-logging.info("Create bounding box")
-bb_source_ls = list()
-for TMA_geojson_polygon in TMA_source_geojson_polygon_ls:
-    # bounding box
-    bb1 = TMA_geojson_polygon.bounds
-    # reorder axis
-    bb1 = np.array([bb1[1],bb1[0],bb1[3],bb1[2]])/(TMA_location_spacing/input_spacing)
-    bb1 = bb1.astype(int)
-    bb_source_ls.append(bb1)
-
-logging.info("Create bounding box")
-max_shape = get_image_shape(img_file)
-bb_target_ls = list()
-for TMA_geojson_polygon in TMA_target_geojson_polygon_ls:
-    # bounding box
-    bb1 = TMA_geojson_polygon.bounds
-    # reorder axis
-    bb1 = np.array([bb1[1],bb1[0],bb1[3],bb1[2]])/(TMA_location_spacing/input_spacing)
-    bb1 = bb1.astype(int)
-    if bb1[0]<0:
-        logging.warning(f"\tbb1[0] < 0: {bb1[0]}")
-        bb1[0]=0
-    if bb1[1]<0:
-        logging.warning(f"\tbb1[1] < 0: {bb1[1]}")
-        bb1[1]=0
-    if bb1[2]>max_shape[0]:
-        logging.warning(f"\tbb1[2] > max_shape[0]: {bb1[2]} > {max_shape[0]}")
-        bb1[2]=max_shape[0]
-    if bb1[3]>max_shape[1]:
-        logging.warning(f"\tbb1[3] > max_shape[1]: {bb1[3]} > {max_shape[1]}")
-        bb1[3]=max_shape[1]
-    bb_target_ls.append(bb1)
-
-
 logging.info("Load transform")
 rtlsls = list()
 for single_transform_file_postIMC_to_postIMS in transform_file_postIMC_to_postIMS:
@@ -179,6 +130,63 @@ def resample_image(resampler, moving):
 n_channels = get_image_shape(img_file)[2]
 img_dtype = readimage_crop(img_file, [0,0,1,1]).dtype
 output_shape = [rtsn.output_size[1], rtsn.output_size[0], n_channels]
+
+# get info of IMC location
+TMA_source_geojson_polygon_ls = list()
+for single_TMA_geojson_file in TMA_source_geojson_file:
+    TMA_geojson = json.load(open(single_TMA_geojson_file, "r"))
+    if isinstance(TMA_geojson,list):
+        TMA_geojson=TMA_geojson[0]
+    TMA_source_geojson_polygon_ls.append(shape(TMA_geojson['geometry']))
+
+TMA_target_geojson_polygon_ls = list()
+for single_TMA_geojson_file in TMA_target_geojson_file:
+    TMA_geojson = json.load(open(single_TMA_geojson_file, "r"))
+    if isinstance(TMA_geojson,list):
+        TMA_geojson=TMA_geojson[0]
+    TMA_target_geojson_polygon_ls.append(shape(TMA_geojson['geometry']))
+
+logging.info("Create bounding box of source")
+bb_source_ls = list()
+for i,TMA_geojson_polygon in enumerate(TMA_source_geojson_polygon_ls):
+    logging.info(f"Create bounding box for {i}")
+    # bounding box
+    bb1 = TMA_geojson_polygon.bounds
+    # reorder axis
+    bb1 = np.array([bb1[1],bb1[0],bb1[3],bb1[2]])/(TMA_location_spacing/input_spacing)
+    bb1 = bb1.astype(int)
+    logging.info(f"\tbb1: {bb1}")
+    logging.info(f"\tshape: {bb1[2]-bb1[0]},{bb1[3]-bb1[1]}")
+    bb_source_ls.append(bb1)
+
+logging.info("Create bounding box of target")
+bb_target_ls = list()
+for i,TMA_geojson_polygon in enumerate(TMA_target_geojson_polygon_ls):
+    logging.info(f"Create bounding box for {i}")
+    # bounding box
+    bb1 = TMA_geojson_polygon.bounds
+    # reorder axis
+    bb1 = np.array([bb1[1],bb1[0],bb1[3],bb1[2]])/(TMA_location_spacing/input_spacing)
+    bb1 = bb1.astype(int)
+    if bb1[0]<0:
+        logging.info(f"\tbb1[0] < 0: {bb1[0]}")
+        bb1[0]=0
+    if bb1[1]<0:
+        logging.info(f"\tbb1[1] < 0: {bb1[1]}")
+        bb1[1]=0
+    if bb1[2]>output_shape[0]:
+        logging.info(f"\tbb1[2] > output_shape[0]: {bb1[2]} > {output_shape[0]}")
+        bb1[2]=output_shape[0]
+    if bb1[3]>output_shape[1]:
+        logging.info(f"\tbb1[3] > output_shape[1]: {bb1[3]} > {output_shape[1]}")
+        bb1[3]=output_shape[1]
+    logging.info(f"\tbb1: {bb1}")
+    logging.info(f"\tshape: {bb1[2]-bb1[0]},{bb1[3]-bb1[1]}")
+    bb_target_ls.append(bb1)
+
+
+
+
 out_image = np.zeros(output_shape, dtype=img_dtype)    
 logging.info(f"Output shape: {output_shape}")
 for i in range(len(rtlsls)):
@@ -229,6 +237,14 @@ for i in range(len(rtlsls)):
         prop_nonzero = np.sum(source_image_trans>0)/np.prod(source_image_trans.shape)
         logging.info(f"\t\tproportion of non-zero pixels: {prop_nonzero}")
         assert prop_nonzero > 0
+        
+        insert_shape = out_image[bb_target_ls[i][0]:bb_target_ls[i][2], bb_target_ls[i][1]:bb_target_ls[i][3],ch].shape
+        logging.info(f"\t\tinsert shape: {insert_shape}")
+        logging.info(f"\t\texpected shape: {source_image_trans.shape}")
+        if insert_shape != source_image_trans.shape:
+            logging.info(f"\t\tadjust shape")
+            source_image_trans = source_image_trans[:insert_shape[0],:insert_shape[1]]
+            logging.info(f"\t\tadjusted shape: {source_image_trans.shape}")
     
         out_image[bb_target_ls[i][0]:bb_target_ls[i][2], bb_target_ls[i][1]:bb_target_ls[i][3],ch] = source_image_trans
 
