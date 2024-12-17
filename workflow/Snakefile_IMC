@@ -414,8 +414,8 @@ rule transform_IMCaggr_to_postIMS:
         postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_all(wildcards, "postIMC"),
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
         matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
-        TMA_location_target=lambda wildcards: expand('results/{{project_name}}/data/TMA_location/{{project_name}}_TMA_location_on_postIMC_{core}.geojson', core = get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)),
-        microscopy_target_image=expand("results/{{project_name}}/data/postIMC/{{project_name}}_postIMC.ome.tiff", transform_target="postIMS"),
+        TMA_location_target=lambda wildcards: expand('results/{{project_name}}/data/TMA_location/{{project_name}}_TMA_location_on_postIMS_{core}.geojson', core = get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)),
+        microscopy_target_image="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff",
     output:
         IMC_transformed="results/{project_name}/data/IMC/{project_name}_IMC_aggr_transformed.ome.tiff",
     log:

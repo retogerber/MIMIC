@@ -64,34 +64,34 @@ img_basename = os.path.basename(img_filename_out).split(".")[0]
 img_dirname = os.path.dirname(img_filename_out)
 
 # get info of IMC location
-TMA_target_geojson_polygon_ls = list()
+logging.info("Create bounding box")
+max_shape = get_image_shape(microscopy_target_image)
+bb_target_ls = list()
 for single_TMA_geojson_file in TMA_target_geojson_file:
     TMA_geojson = json.load(open(single_TMA_geojson_file, "r"))
     if isinstance(TMA_geojson,list):
         TMA_geojson=TMA_geojson[0]
-    TMA_target_geojson_polygon_ls.append(shape(TMA_geojson['geometry']))
-
-logging.info("Create bounding box")
-max_shape = get_image_shape(microscopy_target_image)
-bb_target_ls = list()
-for TMA_geojson_polygon in TMA_target_geojson_polygon_ls:
+    TMA_geojson_polygon = shape(TMA_geojson['geometry'])
+    logging.info(f"Setup bounding box for {os.path.basename(single_TMA_geojson_file)}")
     # bounding box
     bb1 = TMA_geojson_polygon.bounds
+    logging.info(f"\tbbox before scaling: {bb1}")
     # reorder axis
     bb1 = np.array([bb1[1],bb1[0],bb1[3],bb1[2]])/(output_spacing/TMA_location_spacing)
     bb1 = bb1.astype(int)
     if bb1[0]<0:
-        logging.warning(f"\tbb1[0] < 0: {bb1[0]}")
+        logging.info(f"\tbb1[0] < 0: {bb1[0]}")
         bb1[0]=0
     if bb1[1]<0:
-        logging.warning(f"\tbb1[1] < 0: {bb1[1]}")
+        logging.info(f"\tbb1[1] < 0: {bb1[1]}")
         bb1[1]=0
     if bb1[2]>max_shape[0]:
-        logging.warning(f"\tbb1[2] > max_shape[0]: {bb1[2]} > {max_shape[0]}")
+        logging.info(f"\tbb1[2] > max_shape[0]: {bb1[2]} > {max_shape[0]}")
         bb1[2]=max_shape[0]
     if bb1[3]>max_shape[1]:
-        logging.warning(f"\tbb1[3] > max_shape[1]: {bb1[3]} > {max_shape[1]}")
+        logging.info(f"\tbb1[3] > max_shape[1]: {bb1[3]} > {max_shape[1]}")
         bb1[3]=max_shape[1]
+    logging.info(f"\tbbox after scaling: {bb1}")
     bb_target_ls.append(bb1)
 
 
@@ -247,6 +247,7 @@ for i in range(len(rtlsls)):
 
     imc_xmax = moving_np_swap.shape[0]
     imc_ymax = moving_np_swap.shape[1]
+    logging.info(f"\tIMC cornerpoints: {[[0,0],[imc_xmax,0],[0,imc_ymax],[imc_xmax,imc_ymax]]}")
     cornerpoints = np.stack([np.array(composite.TransformPoint([x,y])) for x,y in [[0,0],[imc_xmax,0],[0,imc_ymax],[imc_xmax,imc_ymax]]])
     logging.info(f"\tIMC transformed cornerpoints: {cornerpoints}")
     assert np.all(cornerpoints>=0)

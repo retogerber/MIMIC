@@ -84,50 +84,64 @@ if not os.path.exists(ims_out_dir):
 #         return True
 
 # is_manual_registration = [check_is_manual_registration(imsml_coords[i], sample_names[i]) for i in range(len(imsml_coords))]
-
-def get_coords(imsml_coords, imsml_peaks, ims_spacing):
-    logging.info(f"\tReading h5 coords file: {imsml_coords}")
-    with h5py.File(imsml_coords, "r") as f:
-        # if in imsmicrolink IMS was the target
-        if "xy_micro_physical" in [key for key, val in f.items()]:
-            xy_micro_physical = f["xy_micro_physical"][:]
-            coords_micro = xy_micro_physical
-            direction = "IMS_to_postIMS"
-        # if the microscopy image was the target
-        else:
-            padded = f["xy_padded"][:]
-            coords_micro = (padded * ims_spacing)
-            direction = "postIMS_to_IMS"
-        coords_padded = f["xy_padded"][:]
-        coords_original = f["xy_original"][:]
-        data = {
-            "coord_0_padded": coords_padded[:,0].tolist(),
-            "coord_1_padded": coords_padded[:,1].tolist(),
-            "coord_0": coords_original[:,0].tolist(),
-            "coord_1": coords_original[:,1].tolist(),
-            "coord_micro_0": coords_micro[:,0].tolist(),
-            "coord_micro_1": coords_micro[:,1].tolist()
-        }
-        df_1 = pd.DataFrame(data)
-
+def get_peaks(imsml_peaks, mz=None):
     logging.info(f"\tRead h5 peaks file: {imsml_peaks}")
     with h5py.File(imsml_peaks, "r") as f:
         coords = f["coord"][:]
         coords = coords[:2,:].T
-        peaks = f["peaks"][:]
-        mzs = f["mzs"][:][0]
         data = {
             "coord_0": coords[:,0].tolist(),
             "coord_1": coords[:,1].tolist()
         }
-        for i in range(peaks.shape[1]):
-            data[f"peak_{i}_mz{mzs[i]}"] = peaks[:, i].tolist()
-        df_2 = pd.DataFrame(data)
+        mzs = f["mzs"][:][0]
+        if not mz is None:
+            dists = np.array([abs(float(mz) - float(m)) for m in mzs])
+            mz_ind = np.argmin(dists)
+            data[f"peak_{mz_ind}_mz{mz}"] = f["peaks"][:,mz_ind].tolist()
+        else:
+            peaks = f["peaks"][:]
+            for i in range(peaks.shape[1]):
+                data[f"peak_{i}_mz{mzs[i]}"] = peaks[:, i].tolist()
 
+    return pd.DataFrame(data)
+
+def get_directions(imsml_coords):
+    logging.info(f"\tReading h5 coords file: {imsml_coords}")
+    with h5py.File(imsml_coords, "r") as f:
+        # if in imsmicrolink IMS was the target
+        if "xy_micro_physical" in [key for key, val in f.items()]:
+            direction = "IMS_to_postIMS"
+        # if the microscopy image was the target
+        else:
+            direction = "postIMS_to_IMS"
+    return direction
+
+def get_coords(imsml_coords):
+    logging.info(f"\tReading h5 coords file: {imsml_coords}")
+    with h5py.File(imsml_coords, "r") as f:
+        df_1 = pd.DataFrame({
+            "coord_0_padded": f["xy_padded"][:,0].tolist(),
+            "coord_1_padded": f["xy_padded"][:,1].tolist(),
+            "coord_0": f["xy_original"][:,0].tolist(),
+            "coord_1": f["xy_original"][:,1].tolist()
+        })
+    return df_1
+
+def merge_dfs(df_1, df_2, mz=None):
     logging.info(f"\tMerge dataframes")
-    merged_df = df_1.merge(df_2, on=["coord_0", "coord_1"], how="inner")
-    return merged_df, direction
-
+    if not mz is None:
+        peak_col = [col for col in df_2.columns if "peak" in col]
+        no_peak_col = [col for col in df_2.columns if not "peak" in col]
+        regex = re.compile(r"^peak_[0-9]*_mz")
+        peak_names = list()
+        for pc in peak_col:
+            peak_names.append(regex.sub("", pc))
+        dists = np.array([abs(float(mz) - float(m)) for m in peak_names])
+        mz_ind = np.argmin(dists)
+        merged_df = df_1.merge(df_2[no_peak_col+[peak_col[mz_ind]]], on=["coord_0", "coord_1"], how="inner")
+    else:
+        merged_df = df_1.merge(df_2, on=["coord_0", "coord_1"], how="inner")
+    return merged_df
 
 def get_resampler(transform, fixed, default_value=0.0):
     resampler = sitk.ResampleImageFilter()
@@ -159,7 +173,14 @@ for single_TMA_geojson_file in TMA_target_geojson_file:
         bb1 = bb1.astype(int)
     bb_target_ls.append(bb1)
 
-merged_df,_ = get_coords(imsml_coords[0], imsml_peaks[0], ims_spacing)
+logging.info(f"Get coordinates")
+df1_dic = {f: get_coords(f) for f in np.unique(imsml_coords)}
+directions = {f: get_directions(f) for f in np.unique(imsml_coords)}
+logging.info(f"Get peaks")
+df2_dic = {f: get_peaks(f) for f in np.unique(imsml_peaks)}
+logging.info(f"Done reading data")
+
+merged_df = merge_dfs(df1_dic[imsml_coords[0]], df2_dic[imsml_peaks[0]])
 # number of peaks + index
 peak_col = [col for col in merged_df.columns if "peak" in col] + ["indices","qc"]
 regex = re.compile(r"^peak_[0-9]*_mz")
@@ -182,7 +203,8 @@ for ch in range(output_image_shape[0]):
         logging.info(f"Sample: {sample_names[sample_id]}")
         # logging.info(f"\tis manual registration: {is_manual_registration[sample_id]}")
         logging.info(f"\tIMS rotation angle: {ims_rotation_angle[sample_id]}")
-        merged_df, reg_direction = get_coords(imsml_coords[sample_id], imsml_peaks[sample_id], ims_spacing)
+        reg_direction = directions[imsml_coords[sample_id]]
+        merged_df = merge_dfs(df1_dic[imsml_coords[sample_id]], df2_dic[imsml_peaks[sample_id]], mz=peak_names[ch])
         logging.info(f"\tMetadata file: {ims_meta_file[sample_id]}")
         logging.info(f"\tdirection of registration: {reg_direction}")
 
@@ -194,11 +216,16 @@ for ch in range(output_image_shape[0]):
 
 
         tmp_peak_col = [col for col in merged_df.columns if "peak" in col]
-        assert all([pcol in peak_col for pcol in tmp_peak_col])
+        assert len(tmp_peak_col) == 1
+        tmp_peak_col = tmp_peak_col[0]
 
-        ims_idxs = np.array(merged_df.index)[:,np.newaxis]
-        peaks = np.array(merged_df[[pcol for pcol in tmp_peak_col]])
-        peaks = np.hstack([peaks, ims_idxs])
+        if peak_names[ch] == "indices":
+            peaks = np.array(merged_df.index)
+        elif peak_names[ch] == "qc":
+            peaks = np.array([0,0])
+        else:
+            peaks = np.array(merged_df[tmp_peak_col])
+        assert peaks.ndim == 1
         metadata = json.load(open(ims_meta_file[sample_id], "r"))
 
 
@@ -232,18 +259,21 @@ for ch in range(output_image_shape[0]):
 
         logging.info(f"\tCreate IMS image")
         # create empty image
-        image = np.zeros((output_image_shape[0],ims_x_max+1, ims_y_max+1))
-        # Fill the image 
-        for i, (xr, yr) in enumerate(zip(coords[:,1].T, coords[:,0].T)):
-            for j in range(peaks.shape[1]):
-                image[j,xr, yr] = peaks[i,j]
-
+        # image = np.zeros((output_image_shape[0],ims_x_max+1, ims_y_max+1))
+        image = np.zeros((1,ims_x_max+1, ims_y_max+1))
+        if peak_names[ch] == "qc":
         # checkerboard pattern for quality control
-        for i, (xr, yr) in enumerate(zip(coords[:,1].T, coords[:,0].T)):
-            image[-1,xr, yr] = 1
-        image[-1,::2, :][image[-1,::2,:]!=0] = 2
-        image[-1,:,::2][image[-1,:,::2]!=0] = 2
-        image[-1,::2,::2][image[-1,::2,::2]!=0] = 1
+            for i, (xr, yr) in enumerate(zip(coords[:,1].T, coords[:,0].T)):
+                image[0,xr, yr] = 1
+            image[0,::2, :][image[-1,::2,:]!=0] = 2
+            image[0,:,::2][image[-1,:,::2]!=0] = 2
+            image[0,::2,::2][image[-1,::2,::2]!=0] = 1
+        else:
+            # Fill the image 
+            for i, (xr, yr) in enumerate(zip(coords[:,1].T, coords[:,0].T)):
+                image[0,xr, yr] = peaks[i]
+
+
         logging.info(f"\tImage shape: {image.shape}")
 
         logging.info(f"\tCreate composite transform")
@@ -278,7 +308,7 @@ for ch in range(output_image_shape[0]):
         resampler.SetTransform(composite)
 
         logging.info(f"\tResample image")
-        moving = sitk.GetImageFromArray(np.swapaxes(image[ch,:,:],0,1))
+        moving = sitk.GetImageFromArray(np.swapaxes(image[0,:,:],0,1))
         moving.SetSpacing([ims_spacing, ims_spacing])
 
         source_image_trans = resample_image(resampler, moving)
