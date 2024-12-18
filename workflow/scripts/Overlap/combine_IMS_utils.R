@@ -152,7 +152,7 @@ create_imsc <- function(imspeaks_filename, imscoords_filename,
     pd[[sample_id_colname]] <- names(imscoords_filename)
   } else{
     pdin <- as.data.frame(t(rhdf5::h5read(imspeaks_filename, "peaks"))) # or peak_data
-    pdls <- future.apply::future_lapply(seq_along(imscoords_filename), function(i) get_peak_data(imspeaks_filename, imscoords_filename[i], maldi_pixelsize,idx_by_location=idx_by_location[i], pd=pdin))
+    pdls <- lapply(seq_along(imscoords_filename), function(i) get_peak_data(imspeaks_filename, imscoords_filename[i], maldi_pixelsize,idx_by_location=idx_by_location[i], pd=pdin))
     for(i in seq_along(pdls)){
       pdls[[i]][[sample_id_colname]] <- names(imscoords_filename)[i]
     }

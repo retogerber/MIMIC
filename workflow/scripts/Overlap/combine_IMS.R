@@ -102,7 +102,6 @@ log_message(sprintf("Is manual: %s", paste(is_manual, collapse=", ")))
 idx_by_location <- !is_manual | n_regions == 1
 log_message(sprintf("Index by location: %s", paste(idx_by_location,collapse=", ")))
 log_message("Running create_imsc")
-plan(multisession, workers = n_worker)
 imcims_df <- create_imsc(
   imspeaks_filename, 
   imscoords_filename, 
