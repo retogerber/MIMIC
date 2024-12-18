@@ -586,7 +586,7 @@ rule transform_postIMC_to_preIMC:
         transform_source="postIMC",
         transform_target="preIMC",
     input:
-        postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_all(wildcards, "postIMS"),
+        postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_all(wildcards, "preIMC"),
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
         matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         postIMC="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff",
@@ -630,7 +630,7 @@ rule transform_preIMC_to_preIMS:
         transform_source="preIMC",
         transform_target="preIMS",
     input:
-        postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_all(wildcards, "postIMS"),
+        postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_all(wildcards, "preIMS"),
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
         matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         postIMC="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
@@ -684,9 +684,9 @@ rule transform_preIMS_to_postIMS:
     output:
         postIMC_transformed="results/{project_name}/data/preIMS/{project_name}_preIMS_transformed_on_postIMS.ome.tiff",
     log:
-        stdout="logs/transform_preIMC_to_preIMS/{project_name}.stdout",
+        stdout="logs/transform_preIMS_to_postIMS/{project_name}.stdout",
     benchmark:
-        "benchmarks/transform_preIMC_to_preIMS/{project_name}.txt",
+        "benchmarks/transform_preIMS_to_postIMS/{project_name}.txt",
     container:
         config["container"]
     script:

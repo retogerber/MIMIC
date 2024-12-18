@@ -104,7 +104,7 @@ rule image_registration_evaluation_postIMC_to_preIMC:
     params:
         input_spacing_1=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
-            "IMC_pixel_size",
+            "microscopy_pixel_size",
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
@@ -170,7 +170,7 @@ use rule image_registration_evaluation_postIMC_to_preIMC as image_registration_e
     params:
         input_spacing_1=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
-            "IMC_pixel_size",
+            "microscopy_pixel_size",
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
@@ -261,7 +261,7 @@ rule image_registration_evaluation_preIMS_to_postIMS_sitk:
     params:
         input_spacing_1=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
-            "IMC_pixel_size",
+            "microscopy_pixel_size",
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
@@ -623,7 +623,7 @@ rule image_registration_evaluation_compare_regions_postIMC_to_preIMC:
     params:
         input_spacing_1=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
-            "IMC_pixel_size",
+            "microscopy_pixel_size",
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
@@ -719,7 +719,7 @@ rule image_registration_evaluation_calculate_global_metrics_postIMC_to_preIMC:
     params:
         input_spacing_1=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
-            "IMC_pixel_size",
+            "microscopy_pixel_size",
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
@@ -801,7 +801,7 @@ rule image_registration_evaluation_create_blending_gif_postIMC_to_preIMC:
     params:
         input_spacing_1=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
-            "IMC_pixel_size",
+            "microscopy_pixel_size",
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
@@ -856,7 +856,7 @@ use rule image_registration_evaluation_create_blending_gif_postIMC_to_preIMC as 
     params:
         input_spacing_1=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
-            "IMC_pixel_size",
+            "microscopy_pixel_size",
             "project_name",
             read_sample_metadata(config["sample_metadata"]),
         ),

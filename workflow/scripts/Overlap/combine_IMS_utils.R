@@ -11,7 +11,8 @@
 #' imspeaks_filename <- file.path("inst", "extdata", "IMS_test_combined_peaks.h5")
 #' imscoords_filename <- file.path("inst", "extdata", "postIMS_to_IMS_test_combined-IMSML-coords.h5")
 #' pd <- get_peak_data(imspeaks_filename, imscoords_filename, 30)
-get_peak_data <- function(imspeaks_filename, imscoords_filename, maldi_pixelsize, idx_by_location=FALSE) {
+get_peak_data <- function(imspeaks_filename, imscoords_filename, maldi_pixelsize, idx_by_location=FALSE, pd=NULL) {
+  t1 <- Sys.time()
   if (length(imspeaks_filename)>1){
     stop(call. = FALSE, "Multiple imspeaks files given!")
   }
@@ -24,7 +25,9 @@ get_peak_data <- function(imspeaks_filename, imscoords_filename, maldi_pixelsize
   if (!file.exists(imscoords_filename)) {
     stop(call. = FALSE, paste0("file '", imscoords_filename, "' does not exist"))
   }
-  pd <- as.data.frame(t(rhdf5::h5read(imspeaks_filename, "peaks"))) # or peak_data
+  if (is.null(pd)){
+    pd <- as.data.frame(t(rhdf5::h5read(imspeaks_filename, "peaks"))) # or peak_data
+  }
   mz <- rhdf5::h5read(imspeaks_filename, "mzs")
   colnames(pd) <- as.character(signif(mz, 7))
   pd$ims_idx <- seq_len(dim(pd)[1]) - 1
@@ -148,7 +151,8 @@ create_imsc <- function(imspeaks_filename, imscoords_filename,
     pd <- get_peak_data(imspeaks_filename, imscoords_filename, maldi_pixelsize)
     pd[[sample_id_colname]] <- names(imscoords_filename)
   } else{
-    pdls <- lapply(seq_along(imscoords_filename), function(i) get_peak_data(imspeaks_filename, imscoords_filename[i], maldi_pixelsize,idx_by_location=idx_by_location[i]))
+    pdin <- as.data.frame(t(rhdf5::h5read(imspeaks_filename, "peaks"))) # or peak_data
+    pdls <- future.apply::future_lapply(seq_along(imscoords_filename), function(i) get_peak_data(imspeaks_filename, imscoords_filename[i], maldi_pixelsize,idx_by_location=idx_by_location[i], pd=pdin))
     for(i in seq_along(pdls)){
       pdls[[i]][[sample_id_colname]] <- names(imscoords_filename)[i]
     }
@@ -429,17 +433,18 @@ is_associated_ims_cell_positions <- function(x, type = c("cor", "dist"), thresho
 #' has_flipped_axis_ims(imcims_df)
 #' has_flipped_axis_ims(imcims_df, type = "dist", IMS_pixel_size = 30)
 has_flipped_axis_ims <- function(x, type = c("cor", "dist"), threshold = 0.975, IMS_pixel_size = NULL, ims_cols = c("ims_x", "ims_y"), cell_cols = c("Pos_X_on_IMS", "Pos_Y_on_IMS")) {
-  normal_case <- is_associated_ims_cell_positions(x, type, threshold, IMS_pixel_size, ims_cols, cell_cols)
-  flipped_case <- is_associated_ims_cell_positions(x, type, threshold, IMS_pixel_size, rev(ims_cols), cell_cols)
+  normal_case <- is_associated_ims_cell_positions(x, type, threshold, IMS_pixel_size, ims_cols, cell_cols, return_val = TRUE)
+  flipped_case <- is_associated_ims_cell_positions(x, type, threshold, IMS_pixel_size, rev(ims_cols), cell_cols, return_val = TRUE)
+  logratiocor <- log10(abs(normal_case)/abs(flipped_case))
+  large_logratiocor <- abs(logratiocor) > log10(2)
+  any_large_cor <- normal_case > 0.8 | flipped_case > 0.8
 
   # normal_case_cor <- is_associated_ims_cell_positions(x, type, threshold, IMS_pixel_size, ims_cols, cell_cols, return_val=TRUE)
   # flipped_case_cor <- is_associated_ims_cell_positions(x, type, threshold, IMS_pixel_size, rev(ims_cols), cell_cols, return_val=TRUE)
-  if (normal_case & !flipped_case) {
+  if ((any_large_cor | large_logratiocor) & logratiocor<0) {
     return(FALSE)
-  } else if (!normal_case & flipped_case) {
+  } else if ((any_large_cor | large_logratiocor) & logratiocor>0) {
     return(TRUE)
-  } else if (normal_case & flipped_case) {
-    stop("Both are associated!")
   } else {
     stop("Neither are associated!")
   }

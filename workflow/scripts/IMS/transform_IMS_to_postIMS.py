@@ -136,9 +136,13 @@ def merge_dfs(df_1, df_2, mz=None):
         peak_names = list()
         for pc in peak_col:
             peak_names.append(regex.sub("", pc))
-        dists = np.array([abs(float(mz) - float(m)) for m in peak_names])
-        mz_ind = np.argmin(dists)
-        merged_df = df_1.merge(df_2[no_peak_col+[peak_col[mz_ind]]], on=["coord_0", "coord_1"], how="inner")
+        try:
+            dists = np.array([abs(float(mz) - float(m)) for m in peak_names])
+            mz_ind = np.argmin(dists)
+            col_names = no_peak_col+[peak_col[mz_ind]]
+        except:
+            col_names = no_peak_col
+        merged_df = df_1.merge(df_2[col_names], on=["coord_0", "coord_1"], how="inner")
     else:
         merged_df = df_1.merge(df_2, on=["coord_0", "coord_1"], how="inner")
     return merged_df
@@ -214,17 +218,14 @@ for ch in range(output_image_shape[0]):
         ims_y_min = np.min(coords[:,0])
         ims_y_max = np.max(coords[:,0])
 
-
-        tmp_peak_col = [col for col in merged_df.columns if "peak" in col]
-        assert len(tmp_peak_col) == 1
-        tmp_peak_col = tmp_peak_col[0]
-
         if peak_names[ch] == "indices":
             peaks = np.array(merged_df.index)
         elif peak_names[ch] == "qc":
             peaks = np.array([0,0])
         else:
-            peaks = np.array(merged_df[tmp_peak_col])
+            tmp_peak_col = [col for col in merged_df.columns if "peak" in col]
+            assert len(tmp_peak_col) == 1
+            peaks = np.array(merged_df[tmp_peak_col[0]])
         assert peaks.ndim == 1
         metadata = json.load(open(ims_meta_file[sample_id], "r"))
 
