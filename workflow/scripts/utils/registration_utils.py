@@ -426,6 +426,7 @@ def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, ma
     tmpb = border_points[border_points[:,0] > (np.max(border_points[:,0])-1),:]
     global_init_point = tmpb[tmpb[:,1]==np.min(tmpb[:,1])][0]
 
+    itersnpoints = []
     # iterate
     iter = 0
     while points.shape[0]>1 and iter<maxit:
@@ -582,7 +583,13 @@ def concave_boundary_from_grid_holes(points: np.ndarray, max_dist: float=1.4, ma
             pconts1 = np.array([po.contains(tpls_all[i]) for i in range(len(tpls_all))])
             points = points[~pconts1]
 
+        itersnpoints.append(points.shape[0])
         print(f"{iter}: n_points: {points.shape[0]:5}")
+
+        if len(itersnpoints)>2:
+            if np.all(np.diff(itersnpoints[-2:])==0):
+                print("no change in number of points")
+                break
     
     if iter >= maxit:
         # return alpha hull

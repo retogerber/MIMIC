@@ -1426,6 +1426,19 @@ use rule convert_to_png_and_downscale_IMS_to_postIMS as convert_to_png_and_downs
     log:
         stdout="logs/convert_image_to_png_and_downscale/{project_name}_{core}.stdout",
 
+rule symlink_IMC_to_preIMC_plot:
+    input:
+        input_image="logs/image_registration_evaluation_IMC_to_preIMC/{project_name}_{sample}.png",
+    output:
+        output_image="results/{project_name}/data/registration_metric/report/{project_name}_{sample}_IMC_to_preIMC_plot.png",
+    log:
+        stdout="logs/symlink_IMC_to_preIMC_plot/{project_name}_{sample}.stdout",
+    container:
+        config["container"]
+    shell:
+        "ln -sr -T {input.input_image} {output.output_image} > {log.stdout} 2> {log.stdout}"
+
+
 
 
 rule generate_registration_report:
@@ -1705,6 +1718,19 @@ rule generate_registration_report:
             core=get_column_entry_from_metadata(
                 wildcards.project_name,
                 "core_name",
+                "project_name",
+                read_sample_metadata(config["sample_metadata"]),
+                return_all=True,
+            ),
+        ),
+        "images" in config["QC_metrics"] and "IMC_to_postIMC" in config["QC_steps"]
+        ),
+        IMC_to_preIMC_plot = lambda wildcards: return_file_or_generic(
+        expand(
+            "results/{{project_name}}/data/registration_metric/report/{{project_name}}_{sample}_IMC_to_preIMC_plot.png",
+            sample = get_column_entry_from_metadata(
+                wildcards.project_name,
+                "sample_name",
                 "project_name",
                 read_sample_metadata(config["sample_metadata"]),
                 return_all=True,

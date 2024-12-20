@@ -73,6 +73,7 @@ gif_postIMC_postIMS <- sapply(snakemake@input[["gif_postIMC_postIMS"]], function
 gif_preIMC_preIMS <- sapply(snakemake@input[["gif_preIMC_preIMS"]], function(s) file.path(basedir, s))
 gif_preIMS_postIMS <- sapply(snakemake@input[["gif_preIMS_postIMS"]], function(s) file.path(basedir, s))
 IMC_location_extraction_image <- sapply(snakemake@input[["IMC_location_extraction_image"]], function(s) file.path(basedir, s))
+plot_IMC_to_preIMC <- sapply(snakemake@input[["IMC_to_preIMC_plot"]], function(s) file.path(basedir, s))
 ```
 
 
@@ -80,6 +81,7 @@ IMC_location_extraction_image <- sapply(snakemake@input[["IMC_location_extractio
 basedir <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow"
 # project_name <- "test_combined"
 # sample_names <- c("Cirrhosis-TMA-5_New_Detector_001", "Cirrhosis-TMA-5_New_Detector_002")
+input_csv_files <- "results/cirrhosis_TMA/data/registration_metric/cirrhosis_TMA_reg_metrics_combined.csv"
 input_csv_files <- "/home/retger/Downloads/cirrhosis_TMA_reg_metrics_combined.csv"
 input_csv_files <- c("/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/registration_metric/test_combined_reg_metrics_combined.csv")
 input_csv_files <- "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA_reg_metrics_combined.csv"
@@ -1535,6 +1537,27 @@ function imageZoom(imgID, resultID) {
 </script>
 
 # IMC to postIMS 
+
+```{r}
+to_include1 <- "IMC_to_postIMC" %in% snakemake@params[["QC_steps"]] 
+to_include_images <- ("images" %in% snakemake@params[["QC_metrics"]]) & to_include1
+```
+
+```{r, results='asis', include=to_include_images}
+cat("
+\n### Overlayed {.tabset}\n
+")
+```
+
+```{r, include=to_include_images}
+filenames <- plot_IMC_to_preIMC
+img_height <- 500
+```
+```{r plot_images_IMC_to_preIMS, ref.label='plot_images', results='asis', include=to_include_images}
+```
+
+
+
 ### images {.tabset}
 
 ```{r}
