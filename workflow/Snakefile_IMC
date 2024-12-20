@@ -78,6 +78,8 @@ rule register_IMC_location_on_postIMC:
         "scripts/IMC/IMC_location_from_postIMC.py"
 
 rule create_IMC_to_postIMC_ITK_transform:
+    resources:
+        mem_mb=10000,
     params:
         input_spacing_postIMC=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
@@ -500,7 +502,7 @@ use rule transform_IMCmask_to_postIMC as transform_IMCmask_to_preIMC with:
     input:
         IMC=lambda wildcards: [f"results/{wildcards.project_name}/data/IMC_mask/{sample}.tiff" for sample in get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
         IMC_to_postIMC_transform=lambda wildcards: [f'results/{wildcards.project_name}/registrations/IMC_to_postIMC/{wildcards.project_name}_{core}/{wildcards.project_name}_{core}-IMC_to_postIMC_transformations.json' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
-        postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_all(wildcards, "postIMS"),
+        postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_all(wildcards, "preIMC"),
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
         matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         TMA_location_target=lambda wildcards: expand('results/{{project_name}}/data/TMA_location/{{project_name}}_TMA_location_on_preIMC_{core}.geojson', core = get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)),

@@ -220,8 +220,8 @@ if input_jsons13 != generic_input:
     logging.info(dfout.columns)
 
 if input_jsons14 != generic_input:
-    logging.info("Read IMC_to_postIMC error metrics json")
-    temp_dfout = to_pd(input_jsons14, "_error_metrics_IMC_to_postIMC.json$")
+    logging.info("Read IMC_to_preIMC error metrics json")
+    temp_dfout = to_pd(input_jsons14, "_error_metrics_IMC_to_preIMC.json$")
     if dfout_exists:
         dfout = dfout.join(temp_dfout)
     else:

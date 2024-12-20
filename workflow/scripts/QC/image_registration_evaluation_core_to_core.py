@@ -40,9 +40,9 @@ input_spacing_2 = snakemake.params["input_spacing_2"]
 input_spacing_IMC_location = snakemake.params["input_spacing_IMC_location"]
 output_spacing = snakemake.params["output_spacing"]
 # maximum assumed distance between corresponding points
-dmax = snakemake.params["max_distance"]
+dmax = snakemake.params["max_distance"]/input_spacing_1
 # minimum distance between points on the same image 
-dmin = snakemake.params["min_distance"]
+dmin = snakemake.params["min_distance"]/input_spacing_1
 
 # inputs
 microscopy_file_1 = snakemake.input['microscopy_image_1']

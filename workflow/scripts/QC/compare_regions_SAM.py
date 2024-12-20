@@ -47,8 +47,8 @@ input_spacing_2 = snakemake.params["input_spacing_2"]
 input_spacing_IMC_location = snakemake.params["input_spacing_IMC_location"]
 output_spacing = snakemake.params["output_spacing"]
 
-dmax = snakemake.params["max_distance"]
-dmin = snakemake.params["min_distance"]
+dmax = snakemake.params["max_distance"]/input_spacing_1
+dmin = snakemake.params["min_distance"]/input_spacing_1
 
 pixel_expansion = snakemake.params["pixel_expansion"]
 

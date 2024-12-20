@@ -2,7 +2,6 @@ import sys,os
 import wsireg
 import SimpleITK as sitk
 sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0], "..","..","workflow","scripts","utils")))
-sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0],"workflow","scripts","utils")))
 import numpy as np
 import json
 from image_utils import get_image_shape
@@ -15,9 +14,9 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake.params["input_spacing_postIMC"] = 0.22537
     snakemake.params["input_spacing_IMC"] = 1
     snakemake.params["IMC_rotation_angle"] = 180
-    snakemake.input["IMC"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC/Cirrhosis-TMA-5_New_Detector_002.tiff"
-    snakemake.input["IMC_location_on_postIMC"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/IMC_location/test_split_pre_IMC_mask_on_postIMC_B1.geojson"
-    snakemake.input["postIMC"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/data/postIMC/test_split_pre_postIMC.ome.tiff"
+    snakemake.input["IMC"] = "results/NASH_HCC_TMA/data/IMC/NASH_HCC_TMA-2_014.tiff"
+    snakemake.input["IMC_location_on_postIMC"] = "results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_registered_IMC_mask_on_postIMC_B9.geojson"
+    snakemake.input["postIMC"] = "results/NASH_HCC_TMA/data/postIMC/NASH_HCC_TMA_postIMC.ome.tiff"
     snakemake.output["IMC_to_postIMC_transform"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_split_pre/registrations/IMC_to_postIMC/test_split_pre_B1/test_split_pre_B1-IMC_to_postIMC_transformations.json"
     if bool(getattr(sys, 'ps1', sys.flags.interactive)):
         raise Exception("Running in interactive mode!!")
@@ -69,9 +68,9 @@ is_bottom = boundary_points[:,0]>=(ymin+ymax)/2
 
 imc_corners = np.array([
     [0.5,0.5],
-    [imc_shape[1]-0.5,0.5],
-    [imc_shape[1]-0.5,imc_shape[2]-0.5],
-    [0.5,imc_shape[2]-0.5]
+    [imc_shape[2]-0.5,0.5],
+    [imc_shape[2]-0.5,imc_shape[1]-0.5],
+    [0.5,imc_shape[1]-0.5]
 ])
 
 is_left_imc = imc_corners[:,1]<(imc_corners[:,1].max()+imc_corners[:,1].min())/2
@@ -97,13 +96,14 @@ bpts = np.stack([boundary_points[imc_location_pts_ind[i],:] for i in range(4)])*
 ipts = np.stack([imc_corners[imc_pts_ind[i],:] for i in range(4)])*input_spacing_IMC
 
 rot_transform = sitk.Euler2DTransform()
-rot_transform.SetCenter([imc_shape[1]//2,imc_shape[2]//2])
+rot_transform.SetCenter([imc_shape[2]/2,imc_shape[1]/2])
 rot_transform.SetAngle(IMC_rotation_angle/180*np.pi)
 
 logging.info(f"IMC points before rotation: \n{ipts}")
 ipts = np.stack([rot_transform.GetInverse().TransformPoint(pt) for pt in ipts.astype(float)])
 logging.info(f"IMC points after rotation: \n{ipts}")
 logging.info(f"PostIMC points: \n{bpts}")
+assert np.all(ipts>=0)
 
 # bptsf = [float(c) for p in bpts[:, [1, 0]] for c in p]
 # iptsf = [float(c) for p in ipts[:, [1, 0]] for c in p]
