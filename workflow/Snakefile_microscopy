@@ -118,6 +118,7 @@ checkpoint create_postIMSpreIMS_mask_table:
         script="workflow/scripts/Microscopy/create_postIMSpreIMSmask_geojson_presence.sh",
         postIMS_location=lambda wildcards: checkpoint_input_file_exists_or_generic(f"results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_mask_on_postIMS.geojson"),
         preIMS_location=lambda wildcards: checkpoint_input_file_exists_or_generic(f"results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_mask_on_preIMS.geojson"),
+        generic_file = config["generic_input"]
     output:
         table="results/{project_name}/data/TMA_location/use_which_postIMSpreIMS_geojsons.csv",
     log:
@@ -126,7 +127,7 @@ checkpoint create_postIMSpreIMS_mask_table:
     container:
         config["container"]
     shell:
-        "workflow/scripts/Microscopy/create_postIMSpreIMSmask_geojson_presence.sh -a {input.postIMS_location} -b {input.preIMS_location} -o {output.table}  > {log.stdout} 2> {log.stderr} "
+        "workflow/scripts/Microscopy/create_postIMSpreIMSmask_geojson_presence.sh -a {input.postIMS_location} -b {input.preIMS_location} -g {input.generic_file} -o {output.table}  > {log.stdout} 2> {log.stderr} "
 
 
 rule prepare_register_postIMC_to_postIMS:
