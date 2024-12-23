@@ -330,7 +330,7 @@ def find_approx_init_translation(imzcents, picents):
         # if (picents.shape[0]==1) and (imzcents.shape[0]==1):
         #     max_dists_red.append(np.max(distances))
         # else:
-        reg = pycpd.RigidRegistration(X=imzcents[indices,:], Y=picents, w=0, s=1)
+        reg = pycpd.RigidRegistration(X=imzcents[indices,:], Y=picents+np.array(combs_red[i,:]), w=0, s=1)
         TY, (s_reg, R_reg, t_reg) = reg.register()
         kdt = KDTree(imzcents, leaf_size=30, metric='euclidean')
         distances, indices = kdt.query(TY, k=1, return_distance=True)
@@ -349,7 +349,7 @@ def find_approx_init_translation(imzcents, picents):
     logging.info(f"combs_red shape: {combs_red.shape}")
     logging.info(f"combs_red shape: {combs_red[min_ind,:].shape}")
     logging.info(f"combs_red shape: {combs_red[min_ind,:]}")
-    xy_init_shift = combs_red[min_ind,:] + t_reg
+    xy_init_shift = t_reg+np.array(combs_red[min_ind,:])
     return xy_init_shift, np.min(max_dists_red), (s_reg, R_reg, t_reg)
 
 logging.info(f"Inital Matching")
@@ -376,8 +376,9 @@ else:
     logging.info(f"Initial translation: {xy_init_shift}")
     logging.info(f"Initial distances: {distances}")
     indices = [ni[0] for ni in indices]
-    reg = pycpd.RigidRegistration(X=imzcents[indices,:], Y=picents, w=0, s=1)
+    reg = pycpd.RigidRegistration(X=imzcents[indices,:], Y=picents+xy_init_shift, w=0, s=1)
     TY, (s_reg, R_reg, t_reg) = reg.register()
+    t_reg = t_reg+xy_init_shift
     logging.info(f"Rigid registration: {s_reg}, {R_reg}, {t_reg}")
     # actual initial transform for registration
     init_trans = np.round(t_reg+np.array([global_bbox[0],global_bbox[1]])).astype(int)
