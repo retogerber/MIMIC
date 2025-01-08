@@ -246,7 +246,7 @@ logging.info("register IMC to preIMC")
 IMCimg = (IMC_image==0).astype(np.uint8)
 # distance to zero
 IMCimg = cv2.distanceTransform(IMCimg, cv2.DIST_L2, maskSize=cv2.DIST_MASK_PRECISE)
-IMCmask_distqs = np.quantile(IMCimg[IMCimg>0],[0.05, 0.25, 0.5, 0.75, 0.95, 1])
+IMCmask_distqs = np.nanquantile(IMCimg[IMCimg>0],[0.05, 0.25, 0.5, 0.75, 0.95, 1])
 
 # invert
 IMCimg = 1/(IMCimg+1)
