@@ -17,16 +17,16 @@ import logging_utils
 
 if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake = snakeMakeMock()
-    snakemake.params["input_spacing_1"] = 1
+    snakemake.params["input_spacing_1"] = 0.22537
     snakemake.params["input_spacing_2"] = 0.22537
     snakemake.params["input_spacing_IMC_location"] = 0.22537
     snakemake.params["output_spacing"] = 1
     snakemake.params["max_distance"] = 50
     snakemake.params["min_distance"] = 10
-    snakemake.input["microscopy_image_1"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA-2_020_transformed_on_postIMS.ome.tiff"
-    snakemake.input["microscopy_image_2"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/postIMS/NASH_HCC_TMA_postIMS.ome.tiff"
-    snakemake.input["IMC_location"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_postIMS_C9.geojson"
-    snakemake.input["sam_weights"] = "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/Misc/sam_vit_h_4b8939.pth"
+    snakemake.input["microscopy_image_1"] = "results/NASH_HCC_TMA/data/preIMC/NASH_HCC_TMA_preIMC_transformed_on_preIMS.ome.tiff"
+    snakemake.input["microscopy_image_2"] = "results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA_preIMS.ome.tiff"
+    snakemake.input["IMC_location"] = "results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_preIMS_A2.geojson"
+    snakemake.input["sam_weights"] = "results/Misc/sam_vit_h_4b8939.pth"
     if bool(getattr(sys, 'ps1', sys.flags.interactive)):
         raise Exception("Running in interactive mode!!")
 # logging setup
@@ -40,9 +40,9 @@ input_spacing_2 = snakemake.params["input_spacing_2"]
 input_spacing_IMC_location = snakemake.params["input_spacing_IMC_location"]
 output_spacing = snakemake.params["output_spacing"]
 # maximum assumed distance between corresponding points
-dmax = snakemake.params["max_distance"]/input_spacing_1
+dmax = snakemake.params["max_distance"]/output_spacing
 # minimum distance between points on the same image 
-dmin = snakemake.params["min_distance"]/input_spacing_1
+dmin = snakemake.params["min_distance"]/output_spacing
 
 # inputs
 microscopy_file_1 = snakemake.input['microscopy_image_1']
@@ -172,20 +172,19 @@ logging.info("segment | n_found | n_used | dx | dy")
 for j in range((len(x_segs)-n_shift)):
     for i in range((len(x_segs)-n_shift)):
         cv2.setRNGSeed(2391)
+        # setup descriptor and detector
+        descriptor=cv2.xfeatures2d.VGG_create()
+        detector=cv2.KAZE_create(extended=True, upright=True)
+        # descriptor=cv2.xfeatures2d.VGG_create(scale_factor=5.0)
+        # detector=cv2.BRISK_create()
+
         # extract keypoints and descriptors
         img1 = microscopy_image_1[x_segs[i]:x_segs[i+n_shift],y_segs[j]:y_segs[j+n_shift]]
-        # img1 = cv2.medianBlur(img1, ksize)
-        # img1 = cv2.createCLAHE().apply(img1)
-        # kp1,des1 = cv2.BRISK_create(thresh=50,octaves=n_shift).detectAndCompute(img1,None)
-        # kp1,des1 = cv2.ORB_create().detectAndCompute(img1,None)
-        # kp1,des1 = cv2.SIFT_create().detectAndCompute(img1,None)
-        kp1,des1 = cv2.KAZE_create(extended=True, upright=True).detectAndCompute(img1,None)
+        kp1, des1 = descriptor.compute(img1, detector.detect(img1))
         pts1 = np.float32([ m.pt for m in kp1 ])
 
         img2 = microscopy_image_2[x_segs[i]:x_segs[i+n_shift],y_segs[j]:y_segs[j+n_shift]]
-        # img2 = cv2.medianBlur(img2, ksize)
-        # img2 = cv2.createCLAHE().apply(img2)
-        kp2,des2 = cv2.KAZE_create(extended=True, upright=True).detectAndCompute(img2,None)
+        kp2, des2 = descriptor.compute(img1, detector.detect(img2))
         pts2 = np.float32([ m.pt for m in kp2 ])
         
 
