@@ -88,6 +88,10 @@ properties:
     maximum: 3
     multipleOf: 1
     description: number of iterations of grid search for initial transformation of IMS ablation marks to postIMS
+  IMS_to_postIMS_point_matching:
+    type: boolean
+    default: true
+    description: should fine registration of IMS ablation marks with IMS pixels be performed by additionally matching
   within_IMC_fine_registration:
     type: boolean
     default: true

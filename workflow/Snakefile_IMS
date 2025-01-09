@@ -273,6 +273,14 @@ rule register_IMS_to_postIMS_single_core_2:
             "sample_name",
             read_sample_metadata(config["sample_metadata"]),
         ),
+        IMS_to_postIMS_point_matching=lambda wildcards: get_column_entry_from_metadata_two_conditions(
+            wildcards.project_name,
+            wildcards.sample,
+            "IMS_to_postIMS_point_matching",
+            "project_name",
+            "sample_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
         within_IMC_fine_registration=lambda wildcards: get_column_entry_from_metadata_two_conditions(
             wildcards.project_name,
             wildcards.sample,

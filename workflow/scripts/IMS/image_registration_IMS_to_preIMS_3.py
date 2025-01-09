@@ -28,6 +28,7 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake.params["microscopy_pixelsize"] = 0.22537
     snakemake.params["IMS_rotation_angle"] = 180
     snakemake.params['within_IMC_fine_registration'] = True
+    snakemake.params['IMS_to_postIMS_point_matching'] = True
     snakemake.params["min_index_length"] = 10
     snakemake.params["max_index_length"] = 30
     snakemake.input["imzml"] = "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/cirrhosis_TMA/data/IMS/cirrhosis_TMA_IMS.imzML"
@@ -57,6 +58,12 @@ if not isinstance(snakemake.params['within_IMC_fine_registration'], bool):
     do_within_IMC_fine_registration = True if snakemake.params['within_IMC_fine_registration'] in ["True","true"] else False
 else:
     do_within_IMC_fine_registration = snakemake.params['within_IMC_fine_registration']
+if not isinstance(snakemake.params['IMS_to_postIMS_point_matching'], bool):
+    assert(isinstance(snakemake.params['IMS_to_postIMS_point_matching'], str))
+    assert(snakemake.params['IMS_to_postIMS_point_matching'].strip() in ["","True","true","False","false"])
+    do_IMS_to_postIMS_point_matching = True if snakemake.params['IMS_to_postIMS_point_matching'] in ["True","true"] else False
+else:
+    do_IMS_to_postIMS_point_matching = snakemake.params['IMS_to_postIMS_point_matching']
 min_n = snakemake.params["min_index_length"]
 max_n = snakemake.params["max_index_length"]
 
@@ -389,6 +396,9 @@ logging.info(f"Unique length of matching codes after filtering: {all_maxlens}")
 points_found = True
 if len(all_maxlens)==0:
     logging.info("No matching points found")
+    points_found = False
+elif not do_IMS_to_postIMS_point_matching:
+    logging.info("Do not use matching points")
     points_found = False
 else:
     scores = np.zeros((len(all_maxlens),3))
