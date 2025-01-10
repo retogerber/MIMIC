@@ -173,12 +173,12 @@ for j in range((len(x_segs)-n_shift)):
     for i in range((len(x_segs)-n_shift)):
         cv2.setRNGSeed(2391)
         # setup descriptor and detector
-        detector=cv2.KAZE_create(extended=True, upright=True)
-        descriptor=detector
         # detector=cv2.KAZE_create(extended=True, upright=True)
+        # descriptor=detector
+        # detector=cv2.KAZE_create()
         # descriptor=cv2.xfeatures2d.VGG_create()
-        # descriptor=cv2.xfeatures2d.VGG_create(scale_factor=5.0)
-        # detector=cv2.BRISK_create()
+        detector=cv2.BRISK_create()
+        descriptor=cv2.xfeatures2d.VGG_create(scale_factor=5.0)
 
         # extract keypoints and descriptors
         img1 = microscopy_image_1[x_segs[i]:x_segs[i+n_shift],y_segs[j]:y_segs[j+n_shift]]
@@ -213,9 +213,12 @@ for j in range((len(x_segs)-n_shift)):
         matches_filt = []
         matches_filt_dist_ratio = []
         for m,n in matches:
-            if m.distance < 0.8*n.distance:
+            if m.distance < 0.7*n.distance:
                 matches_filt.append(m)
                 matches_filt_dist_ratio.append(m.distance/n.distance)
+
+        # img3 = cv2.drawMatches(img1,kp1,img2,kp2,np.array(matches_filt)[::10],None,flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+        # cv2.imwrite(f"matches_{i}_{j}.png",img3)
 
         src_pts = np.float32([ kp1[m.queryIdx].pt for m in matches_filt ]).reshape(-1,1,2)
         dst_pts = np.float32([ kp2[m.trainIdx].pt for m in matches_filt ]).reshape(-1,1,2)
