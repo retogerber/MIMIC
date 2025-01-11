@@ -186,7 +186,7 @@ for j in range((len(x_segs)-n_shift)):
         pts1 = np.float32([ m.pt for m in kp1 ])
 
         img2 = microscopy_image_2[x_segs[i]:x_segs[i+n_shift],y_segs[j]:y_segs[j+n_shift]]
-        kp2, des2 = descriptor.compute(img1, detector.detect(img2))
+        kp2, des2 = descriptor.compute(img2, detector.detect(img2))
         pts2 = np.float32([ m.pt for m in kp2 ])
         
 
@@ -213,7 +213,7 @@ for j in range((len(x_segs)-n_shift)):
         matches_filt = []
         matches_filt_dist_ratio = []
         for m,n in matches:
-            if m.distance < 0.7*n.distance:
+            if m.distance < 0.8*n.distance:
                 matches_filt.append(m)
                 matches_filt_dist_ratio.append(m.distance/n.distance)
 
