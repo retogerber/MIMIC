@@ -173,12 +173,12 @@ for j in range((len(x_segs)-n_shift)):
     for i in range((len(x_segs)-n_shift)):
         cv2.setRNGSeed(2391)
         # setup descriptor and detector
-        # detector=cv2.KAZE_create(extended=True, upright=True)
-        # descriptor=detector
+        detector=cv2.KAZE_create(extended=True, upright=True)
+        descriptor=detector
         # detector=cv2.KAZE_create()
         # descriptor=cv2.xfeatures2d.VGG_create()
-        detector=cv2.BRISK_create()
-        descriptor=cv2.xfeatures2d.VGG_create(scale_factor=5.0)
+        # detector=cv2.BRISK_create()
+        # descriptor=cv2.xfeatures2d.VGG_create(scale_factor=5.0)
 
         # extract keypoints and descriptors
         img1 = microscopy_image_1[x_segs[i]:x_segs[i+n_shift],y_segs[j]:y_segs[j+n_shift]]
