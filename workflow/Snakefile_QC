@@ -48,6 +48,47 @@ rule download_sam_weights:
     shell:
         "cd results/Misc && wget https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth > ../../{log.stdout} 2> ../../{log.stderr}"
 
+rule image_registration_evaluation_IMC_to_postIMC:
+    threads: 4
+    resources:
+        mem_mb=10000,
+    params:
+        input_spacing_postIMC=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        input_spacing_IMC_location=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "microscopy_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        output_spacing=lambda wildcards: get_column_entry_from_metadata(
+            wildcards.project_name,
+            "IMC_pixel_size",
+            "project_name",
+            read_sample_metadata(config["sample_metadata"]),
+        ),
+        pixel_expansion=501, # should be the same as in rule image_registration_evaluation_extract_regions_SAM_preIMC
+    input:
+        postIMC="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff",
+        IMC_location_on_postIMC=lambda wildcards: f"results/{wildcards.project_name}/data/IMC_location/{wildcards.project_name}_IMC_mask_on_postIMC_{get_column_entry_from_metadata_two_conditions(wildcards.sample, wildcards.project_name, 'core_name', 'sample_name', 'project_name', read_sample_metadata(config['sample_metadata']))}.geojson",
+        sam_weights="results/Misc/sam_vit_h_4b8939.pth",
+    output:
+        IMC_to_postIMC_error="results/{project_name}/data/registration_metric/{sample}_error_metrics_IMC_to_postIMC.json",
+        IMC_to_postIMC_error_plot="logs/image_registration_evaluation_IMC_to_postIMC/{project_name}_{sample}.png",
+    log:
+        stdout="logs/image_registration_evaluation_IMC_to_postIMC/{project_name}_{sample}.stdout",
+    benchmark:
+        "benchmarks/image_registration_evaluation_IMC_to_postIMC/{project_name}_{sample}.txt",
+    container:
+        config["container"]
+    script:
+        "scripts/QC/image_registration_evaluation_IMC_to_postIMC.py"
+
+
 rule image_registration_evaluation_IMC_to_preIMC:
     threads: 4
     resources:
@@ -1174,9 +1215,22 @@ rule combine_image_registration_evaluation_results:
         ),
         "intensities" in config["QC_metrics"] and "preIMS_to_postIMS" in config["QC_steps"]
         ),
-        IMC_to_postIMC_error=lambda wildcards: return_file_or_generic(
+        IMC_to_preIMC_error=lambda wildcards: return_file_or_generic(
             expand(
             "results/{{project_name}}/data/registration_metric/{sample}_error_metrics_IMC_to_preIMC.json",
+            sample=get_column_entry_from_metadata(
+                wildcards.project_name,
+                "sample_name",
+                "project_name",
+                read_sample_metadata(config["sample_metadata"]),
+                return_all=True,
+            ),
+        ),
+        "IMC_to_postIMC" in config["QC_steps"]
+        ),
+        IMC_to_postIMC_error=lambda wildcards: return_file_or_generic(
+            expand(
+            "results/{{project_name}}/data/registration_metric/{sample}_error_metrics_IMC_to_postIMC.json",
             sample=get_column_entry_from_metadata(
                 wildcards.project_name,
                 "sample_name",
