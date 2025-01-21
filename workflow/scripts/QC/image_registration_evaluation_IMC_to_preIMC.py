@@ -1,6 +1,5 @@
 import sys,os
 sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0], "..","..","workflow","scripts","utils")))
-# sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0],"workflow","scripts","utils")))
 import numpy as np
 import json
 import skimage
@@ -37,7 +36,6 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     if bool(getattr(sys, 'ps1', sys.flags.interactive)):
         raise Exception("Running in interactive mode!!")
 # logging setup
-# logging_utils.logging_setup(None)
 logging_utils.logging_setup(snakemake.log['stdout'])
 logging_utils.log_snakemake_info(snakemake)
 setNThreads(snakemake.threads)
@@ -153,7 +151,6 @@ masks, _, _ = predictor.predict_torch(
     boxes=transformed_boxes
 )
 mask = (np.array(torch.sum(masks,axis=(0,1)))>0).astype(np.uint8)
-preIMC_image = mask*255
 
 logging.info("Read preIMC contours")
 data = json.load(open(contours_file_in, "r"))
@@ -162,7 +159,6 @@ regions = [np.array(reg,dtype=np.uint64) for reg in regionsls]
 bboxes = data['bboxes']
 regions_scaled = [(reg.astype(int)-pixel_expansion)/input_spacing_preIMC for reg in regions]
 regions_scaled = [np.clip(reg,0,np.array(preIMC_image.shape)-1).astype(np.uint64) for reg in regions_scaled]
-cv2.imwrite("mask1.png", (mask>0)*255)
 for k,reg in enumerate(regions_scaled):
     mask = cv2.drawContours(
         mask, 
@@ -171,7 +167,7 @@ for k,reg in enumerate(regions_scaled):
         255,
         -1)
 
-cv2.imwrite("mask2.png", (mask>0)*255)
+preIMC_image = mask*255
 
 prop_area_non_tissue = np.sum(preIMC_image>0)/np.prod(preIMC_image.shape)
 logging.info(f"Non tissue area proportion: {prop_area_non_tissue}")
@@ -208,15 +204,6 @@ preIMC_image = cv2.bitwise_not(preIMC_image)
 logging.info("IMC image")
 IMC_image = readimage_crop(IMC_file, bb2)
 
-logging.info("rescale images to micron resolution for registration")
-wn = int(IMC_image.shape[0]*input_spacing_preIMC)
-hn = int(IMC_image.shape[1]*input_spacing_preIMC)
-IMC_image = cv2.resize(IMC_image, (hn,wn), interpolation=cv2.INTER_NEAREST)
-wn = int(preIMC_image.shape[0]*input_spacing_preIMC)
-hn = int(preIMC_image.shape[1]*input_spacing_preIMC)
-preIMC_image = cv2.resize(preIMC_image, (hn,wn), interpolation=cv2.INTER_NEAREST)
-
-
 npw = np.sum(np.logical_and(preIMC_image==0,IMC_image>0))
 pnpw = npw/np.sum(preIMC_image==0)
 logging.info(f"Proportion of area with no tissue in preIMC and cell mask in IMC: {pnpw}")
@@ -234,9 +221,9 @@ def prepare_register(init_transform_inp):
     R = sitk.ImageRegistrationMethod()
     R.SetMetricAsMattesMutualInformation()
     R.SetMetricSamplingStrategy(R.REGULAR)
-    R.SetMetricSamplingPercentage(0.5, seed=1234)
+    R.SetMetricSamplingPercentage(0.2, seed=1234)    
     R.SetInterpolator(sitk.sitkLinear)
-    R.SetOptimizerAsGradientDescentLineSearch(learningRate=1e-3, numberOfIterations=100, convergenceMinimumValue=1e-6, convergenceWindowSize=10, estimateLearningRate = sitk.ImageRegistrationMethod.Once)
+    R.SetOptimizerAsGradientDescentLineSearch(learningRate=1, numberOfIterations=100, convergenceMinimumValue=1e-6, convergenceWindowSize=10, estimateLearningRate = sitk.ImageRegistrationMethod.Once)
     R.SetOptimizerScalesFromPhysicalShift()
     R.SetInitialTransform(init_transform_inp)
     R.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration(R))
@@ -256,10 +243,50 @@ preIMCimg = cv2.distanceTransform(preIMCimg, cv2.DIST_L2, maskSize=cv2.DIST_MASK
 preIMCimg = 1/(preIMCimg+1)
 preIMCimg[preIMCimg==1]=0
 IMCimg = sitk.GetImageFromArray(IMCimg)
+IMCimg.SetSpacing([input_spacing_preIMC,input_spacing_preIMC])
 preIMCimg = sitk.GetImageFromArray(preIMCimg)
+preIMCimg.SetSpacing([input_spacing_preIMC,input_spacing_preIMC])
 init_transform_euler1 = sitk.Euler2DTransform()
 init_transform_euler1.SetCenter([IMC_image.shape[0]//2,IMC_image.shape[1]//2])
+init_transform_euler1.SetParameters([0,0,0])
 R = prepare_register(init_transform_euler1)
+R.SetOptimizerAsExhaustive([0, 15, 15])
+R.SetOptimizerScales([0, 0.2, 0.2])
+R.SetMetricSamplingPercentage(0.01, seed=1234)    
+logging.info("initial registration")
+try:
+    init_transform = R.Execute(preIMCimg, IMCimg)
+    logging.info(f"Transform parameters: {init_transform.GetParameters()}")
+except Exception as e:
+    logging.info(f"Registration failed: {e}")
+    logging.info("write metrics")
+    metric_dict = {
+        "IMC_to_preIMC_mean_error": np.nan,
+        "IMC_to_preIMC_quantile05_error": np.nan,
+        "IMC_to_preIMC_quantile25_error": np.nan,
+        "IMC_to_preIMC_quantile50_error": np.nan,
+        "IMC_to_preIMC_quantile75_error": np.nan,
+        "IMC_to_preIMC_quantile95_error": np.nan,
+        "IMC_to_preIMC_n_points": np.nan,
+        "proportion_area_no_tissue_preIMC_IMC_beforereg": pnpw,
+        "proportion_area_no_tissue_preIMC_IMC_afterreg": np.nan,
+        "preIMC_proportion_area_no_tissue": prop_area_non_tissue,
+        "IMC_proportion_area_no_tissue": np.sum(IMC_image==0)/np.prod(IMC_image.shape),
+        "IMCmask_distance_tissue_to_nearest_cell_quantile05": IMCmask_distqs[0],
+        "IMCmask_distance_tissue_to_nearest_cell_quantile25": IMCmask_distqs[1],
+        "IMCmask_distance_tissue_to_nearest_cell_quantile50": IMCmask_distqs[2],
+        "IMCmask_distance_tissue_to_nearest_cell_quantile75": IMCmask_distqs[3],
+        "IMCmask_distance_tissue_to_nearest_cell_quantile95": IMCmask_distqs[4],
+        "IMCmask_distance_tissue_to_nearest_cell_quantile100": IMCmask_distqs[5]
+    }
+    json.dump(metric_dict, open(IMC_to_preIMC_error_output,"w"))
+    from pathlib import Path
+    Path(IMC_to_preIMC_error_plot).touch()
+    sys.exit(0)
+
+
+
+R = prepare_register(init_transform)
 try:
     transform = R.Execute(preIMCimg, IMCimg)
 except Exception as e:
@@ -321,7 +348,7 @@ def create_grid(shape):
     grid = grid.reshape(-1,2)
     return grid
 
-grid = create_grid(IMC_image.shape)
+grid = create_grid(IMC_image.shape)*input_spacing_preIMC
 grid_trans = np.stack([transform.GetInverse().TransformPoint(pt) for pt in grid])
 
 # distance between points

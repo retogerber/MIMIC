@@ -123,17 +123,9 @@ tmpshift = int((expand_microns/input_spacing_postIMC))
 IMC_image[tmpshift:(IMC_image.shape[0]-tmpshift),tmpshift:(IMC_image.shape[1]-tmpshift)] = 255
 
 
-logging.info("rescale images to micron resolution for registration")
-wn = int(IMC_image.shape[0]*input_spacing_postIMC)
-hn = int(IMC_image.shape[1]*input_spacing_postIMC)
-IMC_image = cv2.resize(IMC_image, (hn,wn), interpolation=cv2.INTER_NEAREST)
-wn = int(postIMC_image.shape[0]*input_spacing_postIMC)
-hn = int(postIMC_image.shape[1]*input_spacing_postIMC)
-blurbins = cv2.resize(blurbin, (hn,wn), interpolation=cv2.INTER_NEAREST)
-
 logging.info("Calculate Dice score before registration")
-union = np.logical_and(IMC_image>0,blurbins>0)
-dice_score_before = (2*np.sum(union))/(np.sum(IMC_image>0)+np.sum(blurbins>0))
+union = np.logical_and(IMC_image>0,blurbin>0)
+dice_score_before = (2*np.sum(union))/(np.sum(IMC_image>0)+np.sum(blurbin>0))
 logging.info(f"Dice score before registration: {dice_score_before}")
 
 def command_iteration(method):
@@ -141,15 +133,16 @@ def command_iteration(method):
         f"{method.GetOptimizerIteration():3} "
         + f"= {method.GetMetricValue():10.8f} "
         + f": {method.GetOptimizerPosition()}"
+        + f"; {method.GetOptimizerLearningRate():10.8f} "
     )
 
 def prepare_register(init_transform_inp):
     R = sitk.ImageRegistrationMethod()
     R.SetMetricAsMattesMutualInformation()
     R.SetMetricSamplingStrategy(R.REGULAR)
-    R.SetMetricSamplingPercentage(0.5, seed=1234)
+    R.SetMetricSamplingPercentage(0.2, seed=1234)    
     R.SetInterpolator(sitk.sitkLinear)
-    R.SetOptimizerAsGradientDescentLineSearch(learningRate=1e-3, numberOfIterations=100, convergenceMinimumValue=1e-6, convergenceWindowSize=10, estimateLearningRate = sitk.ImageRegistrationMethod.Once)
+    R.SetOptimizerAsGradientDescentLineSearch(learningRate=1, numberOfIterations=100, convergenceMinimumValue=1e-6, convergenceWindowSize=10, estimateLearningRate = sitk.ImageRegistrationMethod.Once)
     R.SetOptimizerScalesFromPhysicalShift()
     R.SetInitialTransform(init_transform_inp)
     R.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration(R))
@@ -159,7 +152,7 @@ logging.info("register IMC to preIMC")
 IMCimg = (IMC_image>0).astype(np.uint8)
 # distance to zero
 IMCimg = cv2.distanceTransform(IMCimg, cv2.DIST_L2, maskSize=cv2.DIST_MASK_PRECISE)
-IMCmask_distqs = np.nanquantile(IMCimg[IMCimg>0],[0.05, 0.25, 0.5, 0.75, 0.95, 1])
+IMCimg = IMCimg.astype(np.float32)
 
 # invert
 IMCimg = 1/(IMCimg+1)
@@ -168,18 +161,51 @@ tmpshift = expand_microns+20
 IMCmask = np.ones(IMCimg.shape, dtype=np.uint8)*255
 IMCmask[tmpshift:(IMCmask.shape[0]-tmpshift),tmpshift:(IMCmask.shape[1]-tmpshift)] = 0
 
-postIMCimg = (blurbins>0).astype(np.uint8)
+postIMCimg = (blurbin>0).astype(np.uint8)
+cv2.medianBlur(postIMCimg, 3, postIMCimg)
 postIMCimg = cv2.distanceTransform(postIMCimg, cv2.DIST_L2, maskSize=cv2.DIST_MASK_PRECISE) 
 postIMCimg = 1/(postIMCimg+1)
 postIMCimg[postIMCimg==1]=0
+postIMCimg = postIMCimg.astype(np.float32)
 
 IMCimg = sitk.GetImageFromArray(IMCimg)
+IMCimg.SetSpacing([input_spacing_postIMC,input_spacing_postIMC])
 postIMCimg = sitk.GetImageFromArray(postIMCimg)
+postIMCimg.SetSpacing([input_spacing_postIMC,input_spacing_postIMC])
 init_transform_euler1 = sitk.Euler2DTransform()
 init_transform_euler1.SetCenter([IMC_image.shape[0]//2,IMC_image.shape[1]//2])
+init_transform_euler1.SetParameters([0,0,0])
 R = prepare_register(init_transform_euler1)
 R.SetMetricMovingMask(sitk.GetImageFromArray(IMCmask))
-R.SetMetricFixedMask(sitk.GetImageFromArray(IMCmask))
+R.SetOptimizerAsExhaustive([0, 15, 15])
+R.SetOptimizerScales([0, 0.2, 0.2])
+R.SetMetricSamplingPercentage(0.01, seed=1234)    
+logging.info("initial registration")
+try:
+    init_transform = R.Execute(postIMCimg, IMCimg)
+    logging.info(f"Transform parameters: {init_transform.GetParameters()}")
+except Exception as e:
+    logging.info(f"Registration failed: {e}")
+    logging.info("write metrics")
+    metric_dict = {
+        "IMC_to_postIMC_mean_error": np.nan,
+        "IMC_to_postIMC_quantile05_error": np.nan,
+        "IMC_to_postIMC_quantile25_error": np.nan,
+        "IMC_to_postIMC_quantile50_error": np.nan,
+        "IMC_to_postIMC_quantile75_error": np.nan,
+        "IMC_to_postIMC_quantile95_error": np.nan,
+        "IMC_to_postIMC_n_points": np.nan,
+        "IMC_to_postIMC_DICE_score_before_registration": dice_score_before,
+        "IMC_to_postIMC_DICE_score_after_registration": np.nan,
+    }
+    json.dump(metric_dict, open(IMC_to_postIMC_error_output,"w"))
+    from pathlib import Path
+    Path(IMC_to_postIMC_error_plot).touch()
+    sys.exit(0)
+
+logging.info("fine registration")
+R = prepare_register(init_transform)
+R.SetMetricMovingMask(sitk.GetImageFromArray(IMCmask))
 try:
     transform = R.Execute(postIMCimg, IMCimg)
 except Exception as e:
@@ -217,8 +243,8 @@ logging.info("resample IMC mask")
 IMCimgmov = resample_image(transform, postIMCimg, IMCimg, 0)
 
 logging.info("Calculate Dice score after registration")
-union = np.logical_and(IMCimgmov>0,blurbins>0)
-dice_score_after = (2*np.sum(union))/(np.sum(IMCimgmov>0)+np.sum(blurbins>0))
+union = np.logical_and(IMCimgmov>0,blurbin>0)
+dice_score_after = (2*np.sum(union))/(np.sum(IMCimgmov>0)+np.sum(blurbin>0))
 logging.info(f"Dice score after registration: {dice_score_after}")
 
 logging.info("evaluate registration")
@@ -233,7 +259,7 @@ def create_grid(shape):
     grid = grid.reshape(-1,2)
     return grid
 
-grid = create_grid(IMC_image.shape)
+grid = create_grid(IMC_image.shape)*input_spacing_postIMC
 grid_trans = np.stack([transform.GetInverse().TransformPoint(pt) for pt in grid])
 
 # distance between points
@@ -256,18 +282,18 @@ json.dump(metric_dict, open(IMC_to_postIMC_error_output,"w"))
 
 logging.info("plotting")
 fig, ax = plt.subplots(2,3, figsize=(15,10))
-ax[0,0].imshow(blurbins>0)
+ax[0,0].imshow(blurbin>0)
 ax[0,0].set_title("postIMC tissue mask")
 ax[0,1].imshow(IMC_image>0)
 ax[0,1].set_title("IMC mask")
-ax[0,2].imshow(((IMC_image>0)*127+(blurbins>0)*127)/4+np.logical_and(IMC_image>0,blurbins>0)*192)
+ax[0,2].imshow(((IMC_image>0)*127+(blurbin>0)*127)/4+np.logical_and(IMC_image>0,blurbin>0)*192)
 ax[0,2].set_title(f"Dice score: {dice_score_before:.4f}")
 ax[1,0].hist(distances, bins=100)
 ax[1,0].set_title("distances of grid points before and after registration")
 ax[1,0].set_xlabel("distance in microns")
 ax[1,1].imshow(IMCimgmov>0)
 ax[1,1].set_title("IMC mask after registration")
-ax[1,2].imshow(((IMCimgmov>0)*127+(blurbins>0)*127)/4+np.logical_and(IMCimgmov>0,blurbins>0)*192)
+ax[1,2].imshow(((IMCimgmov>0)*127+(blurbin>0)*127)/4+np.logical_and(IMCimgmov>0,blurbin>0)*192)
 ax[1,2].set_title(f"Dice score: {dice_score_after:.4f}")
 plt.savefig(IMC_to_postIMC_error_plot)
 
