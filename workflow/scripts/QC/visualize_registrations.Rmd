@@ -82,6 +82,8 @@ basedir <- "/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_
 # project_name <- "test_combined"
 # sample_names <- c("Cirrhosis-TMA-5_New_Detector_001", "Cirrhosis-TMA-5_New_Detector_002")
 input_csv_files <- "results/cirrhosis_TMA/data/registration_metric/cirrhosis_TMA_reg_metrics_combined.csv"
+input_csv_files <- "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/cirrhosis_TMA/data/registration_metric/cirrhosis_TMA_reg_metrics_combined.csv"
+input_csv_files <- "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA_reg_metrics_combined.csv"
 input_csv_files <- "/home/retger/Downloads/cirrhosis_TMA_reg_metrics_combined.csv"
 input_csv_files <- c("/home/retger/Nextcloud/Projects/test_imc_to_ims_workflow/imc_to_ims_workflow/results/test_combined/data/registration_metric/test_combined_reg_metrics_combined.csv")
 input_csv_files <- "/home/retger/IMC/data/complete_analysis_imc_workflow/imc_to_ims_workflow/results/NASH_HCC_TMA/data/registration_metric/NASH_HCC_TMA_reg_metrics_combined.csv"
@@ -715,7 +717,8 @@ minsc <- c(0, 0)
 maxsc <- c(10, 100)
 
 df <- read.csv(input_csv_files[1])
-pot_columns1 <- c("sample", "IMS_to_postIMS_quantile50_error", "postIMC_to_preIMC_quantile50_error", "preIMC_to_preIMS_quantile50_error", "preIMS_to_postIMS_quantile50_error", "postIMC_to_postIMS_quantile50_error", "postIMC_to_preIMC_regions_quantile50_error", "postIMC_to_preIMC_regions_quantile50_dice", "preIMC_to_preIMS_regions_quantile50_error", "preIMC_to_preIMS_regions_quantile50_dice", "preIMS_to_postIMS_regions_quantile50_error", "preIMS_to_postIMS_regions_quantile50_dice", "postIMC_to_postIMS_regions_quantile50_error", "postIMC_to_postIMS_regions_quantile50_dice")
+pot_columns1 <- c("sample", "IMS_to_postIMS_quantile50_error", "postIMC_to_preIMC_quantile50_error", "preIMC_to_preIMS_quantile50_error", "preIMS_to_postIMS_quantile50_error", "postIMC_to_postIMS_quantile50_error", "IMC_to_postIMC_quantile50_error", "postIMC_to_preIMC_regions_quantile50_error", "postIMC_to_preIMC_regions_quantile50_dice", "preIMC_to_preIMS_regions_quantile50_error", "preIMC_to_preIMS_regions_quantile50_dice", "preIMS_to_postIMS_regions_quantile50_error", "preIMS_to_postIMS_regions_quantile50_dice", "postIMC_to_postIMS_regions_quantile50_error", "postIMC_to_postIMS_regions_quantile50_dice"
+)
 pot_columns <- pot_columns1[pot_columns1 %in% colnames(df)]
 df1 <- df[, pot_columns, drop = FALSE]
 
@@ -726,6 +729,7 @@ lookupdf <- data.frame(
     "preIMC_to_preIMS_quantile50_error",
     "preIMS_to_postIMS_quantile50_error",
     "postIMC_to_postIMS_quantile50_error",
+    "IMC_to_postIMC_quantile50_error",
     "postIMC_to_preIMC_regions_quantile50_error",
     "postIMC_to_preIMC_regions_quantile50_dice",
     "preIMC_to_preIMS_regions_quantile50_error",
@@ -741,6 +745,7 @@ lookupdf <- data.frame(
     "preIMC_to_preIMS_n_points_total",
     "preIMS_to_postIMS_n_points_total",
     "postIMC_to_postIMS_n_points_total",
+    "IMC_to_postIMC_n_points",
     "postIMC_to_preIMC_regions_n_points_total",
     "postIMC_to_preIMC_regions_n_points_total",
     "preIMC_to_preIMS_regions_n_points_total",
@@ -752,7 +757,7 @@ lookupdf <- data.frame(
   )
 )
 
-pot_columns2 <- c("sample", "IMS_to_postIMS_n_landmarks", "postIMC_to_preIMC_n_points_total", "preIMC_to_preIMS_n_points_total", "preIMS_to_postIMS_n_points_total", "postIMC_to_postIMS_n_points_total", "postIMC_to_preIMC_regions_n_points_total", "preIMC_to_preIMS_regions_n_points_total", "preIMS_to_postIMS_regions_n_points_total", "postIMC_to_postIMS_regions_n_points_total")
+pot_columns2 <- c("sample", "IMS_to_postIMS_n_landmarks", "postIMC_to_preIMC_n_points_total", "preIMC_to_preIMS_n_points_total", "preIMS_to_postIMS_n_points_total", "postIMC_to_postIMS_n_points_total", "IMC_to_postIMC_n_points", "postIMC_to_preIMC_regions_n_points_total", "preIMC_to_preIMS_regions_n_points_total", "preIMS_to_postIMS_regions_n_points_total", "postIMC_to_postIMS_regions_n_points_total")
 pot_columns <- pot_columns2[pot_columns2 %in% colnames(df)]
 df2 <- df[, pot_columns, drop = FALSE]
 
@@ -785,7 +790,7 @@ dfc$confidence_value_scaled[dfc$metric_type == "dice"][dfc$confidence_value_scal
 dfc$confidence_value_scaled[dfc$metric_type == "distance"] <- (dfc$confidence_value[dfc$metric_type == "distance"] - minsc[2]) / (maxsc[2] - minsc[2])
 dfc$confidence_value_scaled[dfc$metric_type == "distance"][dfc$confidence_value_scaled[dfc$metric_type == "distance"] > 1] <- 1
 
-dfc$type <- factor(dfc$type, levels = c("IMS\nto\npostIMS", "preIMS\nto\npostIMS", "preIMC\nto\npreIMS", "postIMC\nto\npreIMC", "postIMC\nto\npostIMS"))
+dfc$type <- factor(dfc$type, levels = c("IMS\nto\npostIMS", "preIMS\nto\npostIMS", "preIMC\nto\npreIMS", "postIMC\nto\npreIMC","IMC\nto\npostIMC", "postIMC\nto\npostIMS"))
 dfc$evaluation_type <- ifelse(stringr::str_detect(dfc$metric, "region"), "region", "landmark")
 ```
 
@@ -803,26 +808,32 @@ xlabels <- stringr::str_extract(unique(dfc$metric), "(regions_quantile50_error|r
   stringr::str_replace("^error$", "landmark_error")
 names(xlabels) <- unique(dfc$metric)
 
+dist_limit <- 10
+dice_limit <- 0.5
+tmpdfc <- dfc
+tmpdfc$value[tmpdfc$metric_type=="distance"][tmpdfc$value[tmpdfc$metric_type=="distance"]>dist_limit] <- dist_limit
+tmpdfc$value[tmpdfc$metric_type=="dice"][tmpdfc$value[tmpdfc$metric_type=="dice"]<dice_limit] <- dice_limit
+
 ggplot() +
-  geom_tile(data = dfc, aes(metric, sample, fill = evaluation_type)) +
+  geom_tile(data = tmpdfc, aes(metric, sample, fill = evaluation_type)) +
   scale_fill_manual(values = c(region = "gray92", landmark = "white")) +
   new_scale_color() +
   geom_point(
-    data = dplyr::filter(dfc, metric_type == "distance"),
+    data = dplyr::filter(tmpdfc, metric_type == "distance"),
     aes(metric, sample, color = value, size = confidence_value_scaled)
   ) +
-  scale_color_viridis_c(option = "mako", limits = c(0, 16), na.value = "gray95", direction = -1) +
+  scale_color_viridis_c(option = "mako", limits = c(0, 10), na.value = "gray95", direction = -1, breaks=c(seq(0,dist_limit,2)), labels=c(seq(0,dist_limit-2,2),paste0(">",dist_limit))) +
   new_scale_color() +
   geom_point(
-    data = dplyr::filter(dfc, metric_type == "dice"),
+    data = dplyr::filter(tmpdfc, metric_type == "dice"),
     aes(metric, sample, color = value, size = confidence_value_scaled)
   ) +
-  scale_color_viridis_c(option = "viridis", limits = c(0, 1), na.value = "gray90") +
+  scale_color_viridis_c(option = "viridis", limits = c(dice_limit, 1), na.value = "gray90", breaks=seq(dice_limit,1,0.1), labels=c(paste0("<",dice_limit),seq(dice_limit+0.1,1,0.1))) +
   facet_grid(cols = vars(type), scales = "free_x", space = "free_x") +
   scale_x_discrete(labels = xlabels) +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(colour = "Dice\ncoefficient", size = "Confidence\nguess", colour_new = "Distance", x = "", y = "", fill = "Evaluation\nType")
+  labs(colour = "Dice\ncoefficient", size = "Confidence\nguess", colour_new = "Distance", x = "", y = "", fill = "Evaluation\nType", title = paste0("Summary of registration metrics for ", project_name)) 
 ```
 
 
@@ -1556,7 +1567,23 @@ img_height <- 500
 ```{r plot_images_IMC_to_preIMS, ref.label='plot_images', results='asis', include=to_include_images}
 ```
 
+### Plot
 
+```{r, eval=FALSE}
+ggplot(df) +
+  geom_point(aes(x=IMC_to_preIMC_quantile50_error, y=proportion_area_no_tissue_preIMC_IMC_beforereg/proportion_area_no_tissue_preIMC_IMC_afterreg, color=proportion_area_no_tissue_preIMC_IMC_beforereg)) +
+  scale_color_viridis_c(option = "mako", na.value = "gray95")
+
+df |>
+  dplyr::filter(IMC_to_preIMC_quantile50_error > 15) |>
+  dplyr::select(sample, proportion_area_no_tissue_preIMC_IMC_beforereg)
+
+df |>
+  tidyr::pivot_longer(cols = c("proportion_area_no_tissue_preIMC_IMC_beforereg", "proportion_area_no_tissue_preIMC_IMC_afterreg")) |>
+ggplot() +
+  geom_point(aes(x=name, y=value)) +
+  geom_line(aes(x=name, y=value, group=sample)) 
+```
 
 ### images {.tabset}
 
