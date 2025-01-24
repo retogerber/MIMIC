@@ -1,6 +1,8 @@
 
 # container 
 container: "docker://ghcr.io/retogerber/imc_to_ims_workflow:analysis_1.0"
+container_matching: "docker://ghcr.io/retogerber/imc_to_ims_workflow:matching_1.0"
+        
 
 # name of csv file containing sample information
 sample_metadata: "config/sample_metadata.csv"
@@ -23,6 +25,14 @@ stages: ["regIMC", "IMS", "regIMS", "Microscopy", "QC", "overlap"]
 #IMC_channels_for_aggr: []
 IMC_channels_for_aggr: ["ST6GAL1","HepPar1"]
 
+
+# QC landmark detection and matching
+# one of:
+# - RoMa: robust matching, https://github.com/Parskatt/RoMa
+#         Needs different environment: container_matching
+# - KAZE: KAZE feature matching, https://docs.opencv.org/4.11.0/d3/d61/classcv_1_1KAZE.html
+#         Needs same environment as rest of workflow, set 'container_matching' to the same as 'container'
+matching_method: "RoMa"
 
 # QC metrics to calculate
 # possible metrics are:

@@ -19,7 +19,7 @@ def setNThreads(n: int) -> None:
     if "SimpleITK" in sys.modules or "wsireg" in sys.modules:
         import SimpleITK as sitk
         sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(n)
-    if "segment_anything" in sys.modules:
+    if "segment_anything" in sys.modules or "torch" in sys.modules or "romatch" in sys.modules:
         import torch
         torch.set_num_threads(n)
 

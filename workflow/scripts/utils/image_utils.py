@@ -2,12 +2,9 @@ import cv2
 import tifffile
 import zarr
 import numpy as np
-import wsireg
 import os
 import skimage
 from sklearn.neighbors import KDTree
-import rembg
-import segment_anything
 
 
 def get_pyr_levels(image: str) -> list:
@@ -129,6 +126,7 @@ def saveimage_tile(image: np.ndarray, filename: str, resolution: float, dtype= n
     Returns:
     None. The function writes the image to disk and does not return any value.
     '''
+    import wsireg
     empty_transform = wsireg.parameter_maps.transformations.BASE_RIG_TFORM
     empty_transform['Spacing'] = (str(resolution),str(resolution))
     if not is_rgb is None and not is_rgb:
@@ -267,6 +265,7 @@ def extract_mask(file: str, bb: list, session = None, rescale: int = 1, is_postI
     Returns:
     masks (np.ndarray): The extracted mask. It's a 3D binary array.
     '''
+    import rembg
     if session == None and sam == None:
         session = rembg.new_session("isnet-general-use")
     w = readimage_crop(file, bb, pyr_level=pyr_level)
@@ -316,6 +315,7 @@ def sam_core(img: np.ndarray, sam, pts: np.ndarray = None) -> (np.ndarray, np.nd
     masks (np.ndarray): The segmentation masks produced by the SAM predictor. Each mask is a binary image that represents a different segment of the input image.
     scores (np.ndarray): The scores assigned by the SAM predictor to each mask. Higher scores indicate more confident predictions.
     '''
+    import segment_anything
     predictor = segment_anything.SamPredictor(sam)
     predictor.set_image(img)
 
