@@ -115,8 +115,8 @@ if [ -z "$postIMC_to_postIMS_transform_out" ]; then
 fi
 
 
-ln -sr -T $preIMS_to_postIMS_image $preIMS_image
-ln -sr -T $postIMC_to_postIMS_image $postIMC_image
+ln -T $preIMS_to_postIMS_image $preIMS_image
+ln -T $postIMC_to_postIMS_image $postIMC_image
 
 
 # if preIMC and preIMS are the same, do linear registration only 
@@ -125,9 +125,9 @@ md5preIMS=($(md5sum ${preIMS} ))
 
 # set nonlinear registration between preIMC and preIMS if the two files are the same
 if [ "${md5preIMC[0]}" == "${md5preIMS[0]}" ]; then
-    ln -sr -T $preIMS_to_postIMS_image $preIMC_image
+    ln -T $preIMS_to_postIMS_image $preIMC_image
 else 
-    ln -sr -T $preIMC_to_postIMS_image $preIMC_image
+    ln -T $preIMC_to_postIMS_image $preIMC_image
 fi
 
 # set nonlinear registration between preIMC and preIMS if the two files are the same
@@ -145,6 +145,6 @@ if [ "${md5preIMC[0]}" == "${md5preIMS[0]}" ]; then
         results/Misc/yq '.001-to-preIMS[0].TransformParameters = ["0","0","0"]' "$postIMC_to_postIMS_transform" > "$postIMC_to_postIMS_transform_out"
     fi
 else 
-    ln -sr -T $preIMC_to_postIMS_transform $preIMC_to_postIMS_transform_out
-    ln -sr -T $postIMC_to_postIMS_transform $postIMC_to_postIMS_transform_out
+    ln -T $preIMC_to_postIMS_transform $preIMC_to_postIMS_transform_out
+    ln -T $postIMC_to_postIMS_transform $postIMC_to_postIMS_transform_out
 fi

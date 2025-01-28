@@ -1446,7 +1446,7 @@ rule symlink_IMS_to_postIMS_svg:
     container:
         config["container"]
     shell:
-        "ln -sr -T {input.input_image} {output.output_image} > {log.stdout} 2> {log.stdout}"
+        "ln -T {input.input_image} {output.output_image} > {log.stdout} 2> {log.stdout}"
 
 use rule symlink_IMS_to_postIMS_svg as symlink_postIMC_to_preIMC_region_mask with:
     input:
@@ -1500,7 +1500,7 @@ rule symlink_IMC_to_preIMC_plot:
     container:
         config["container"]
     shell:
-        "ln -sr -T {input.input_image} {output.output_image} > {log.stdout} 2> {log.stdout}"
+        "ln -T {input.input_image} {output.output_image} > {log.stdout} 2> {log.stdout}"
 
 
 
