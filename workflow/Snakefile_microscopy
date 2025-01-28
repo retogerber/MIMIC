@@ -17,19 +17,19 @@ for uq_project_name in unique_project_names:
                 uq_project_name,
                 "microscopy_pixel_size",
                 "project_name",
-                read_sample_metadata(config["sample_metadata"]),
+                sample_metadata_df,
             ),
             IMC_location_pixelsize=get_column_entry_from_metadata(
                 uq_project_name,
                 "microscopy_pixel_size",
                 "project_name",
-                read_sample_metadata(config["sample_metadata"]),
+                sample_metadata_df,
             ),
             max_TMA_diameter = 2500,
         threads: 16
         input:
             postIMC=expand("results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff", project_name=uq_project_name),
-            IMC_location=expand('results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC_{core}.geojson', project_name=uq_project_name, core=get_column_entry_from_metadata(uq_project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)),
+            IMC_location=expand('results/{project_name}/data/IMC_location/{project_name}_IMC_mask_on_postIMC_{core}.geojson', project_name=uq_project_name, core=get_column_entry_from_metadata(uq_project_name, "core_name", "project_name", sample_metadata_df, return_all=True)),
         output:
             postIMC_mask=expand("results/{project_name}/data/postIMC/{project_name}_postIMC_mask.ome.tiff", project_name=uq_project_name),
             TMA_location= expand('results/{project_name}/data/TMA_location/{project_name}_TMA_location_on_postIMC_{core}.geojson', core = core_names_per_project[uq_project_name], project_name=uq_project_name),
@@ -52,13 +52,13 @@ rule extract_microscopy_mask_from_registration_postIMS_nogeojson:
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         mask_type=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "postIMSpreIMSmask",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
     threads: 16
     input:
@@ -136,13 +136,13 @@ rule prepare_register_postIMC_to_postIMS:
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         postIMSpreIMSmask=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "postIMSpreIMSmask",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
     threads: 1
     input:
@@ -237,7 +237,7 @@ rule split_preIMC_location_geojson:
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
     threads: 1
     input:
@@ -261,7 +261,7 @@ rule split_preIMS_location_geojson:
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
     threads: 1
     input:
@@ -301,7 +301,7 @@ rule prepare_register_preIMC_to_preIMS:
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
     threads: 1
     input:
@@ -394,13 +394,13 @@ rule transform_TMA_location_to_preIMC:
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         output_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         transform_target="preIMC",
         use_nonlinear=False, # don't use the nonlinear transform, since if preIMC to preIMS have separate non-linear transforms the TMA locations are outside the fitted regions and potentially very wrong
@@ -408,8 +408,8 @@ rule transform_TMA_location_to_preIMC:
     resources:
         mem_mb=lambda wc, input: 10000 if is_linear_transform(input.postIMC_to_postIMS_transform) else 100000,
     input:
-        IMC_location_on_postIMC=lambda wildcards: [f"results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMC_{core}.geojson" for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
-        postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_ls(wildcards.project_name, get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True), "preIMC"),
+        IMC_location_on_postIMC=lambda wildcards: [f"results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMC_{core}.geojson" for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", sample_metadata_df, return_all=True)],
+        postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_ls(wildcards.project_name, get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", sample_metadata_df, return_all=True), "preIMC"),
         matching=return_file_or_generic("results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv", "preIMC" != "preIMC"),
     output:
         IMC_location_transformed="results/{project_name}/data/TMA_location/{project_name}_TMA_location_on_preIMC_combined.geojson",
@@ -428,13 +428,13 @@ use rule transform_TMA_location_to_preIMC as transform_TMA_location_to_preIMS wi
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         output_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         transform_target="preIMS",
         use_nonlinear=False,
@@ -442,8 +442,8 @@ use rule transform_TMA_location_to_preIMC as transform_TMA_location_to_preIMS wi
     resources:
         mem_mb=lambda wc, input: 10000 if is_linear_transform(input.postIMC_to_postIMS_transform) else 100000,
     input:
-        IMC_location_on_postIMC=lambda wildcards: [f"results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMC_{core}.geojson" for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
-        postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_ls(wildcards.project_name, get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True), "preIMS"),
+        IMC_location_on_postIMC=lambda wildcards: [f"results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMC_{core}.geojson" for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", sample_metadata_df, return_all=True)],
+        postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_ls(wildcards.project_name, get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", sample_metadata_df, return_all=True), "preIMS"),
         matching=return_file_or_generic("results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv", "preIMS" != "preIMC"),
     output:
         IMC_location_transformed="results/{project_name}/data/TMA_location/{project_name}_TMA_location_on_preIMS_combined.geojson",
@@ -458,13 +458,13 @@ use rule transform_TMA_location_to_preIMC as transform_TMA_location_to_postIMS w
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         output_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         transform_target="postIMS",
         use_nonlinear=False,
@@ -472,8 +472,8 @@ use rule transform_TMA_location_to_preIMC as transform_TMA_location_to_postIMS w
     resources:
         mem_mb=lambda wc, input: 10000 if is_linear_transform(input.postIMC_to_postIMS_transform) else 100000,
     input:
-        IMC_location_on_postIMC=lambda wildcards: [f"results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMC_{core}.geojson" for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
-        postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_ls(wildcards.project_name, get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True), "postIMS"),
+        IMC_location_on_postIMC=lambda wildcards: [f"results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMC_{core}.geojson" for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", sample_metadata_df, return_all=True)],
+        postIMC_to_postIMS_transform=lambda wildcards: choose_postIMC_to_postIMS_transform_ls(wildcards.project_name, get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", sample_metadata_df, return_all=True), "postIMS"),
         matching=return_file_or_generic("results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv", "postIMS" != "preIMC"),
     output:
         IMC_location_transformed="results/{project_name}/data/TMA_location/{project_name}_TMA_location_on_postIMS_combined.geojson",
@@ -526,19 +526,19 @@ rule transform_postIMC_to_postIMS:
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         TMA_location_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         output_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         transform_source="postIMC",
         transform_target="postIMS",
@@ -547,8 +547,8 @@ rule transform_postIMC_to_postIMS:
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
         matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         postIMC="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff",
-        TMA_location_source=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMC_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
-        TMA_location_target=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMS_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
+        TMA_location_source=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMC_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", sample_metadata_df, return_all=True)],
+        TMA_location_target=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMS_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", sample_metadata_df, return_all=True)],
     output:
         postIMC_transformed="results/{project_name}/data/postIMC/{project_name}_postIMC_transformed_on_postIMS.ome.tiff",
     log:
@@ -570,19 +570,19 @@ rule transform_postIMC_to_preIMC:
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         TMA_location_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         output_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         transform_source="postIMC",
         transform_target="preIMC",
@@ -591,8 +591,8 @@ rule transform_postIMC_to_preIMC:
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
         matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         postIMC="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff",
-        TMA_location_source=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMC_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
-        TMA_location_target=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_preIMC_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
+        TMA_location_source=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMC_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", sample_metadata_df, return_all=True)],
+        TMA_location_target=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_preIMC_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", sample_metadata_df, return_all=True)],
     output:
         postIMC_transformed="results/{project_name}/data/postIMC/{project_name}_postIMC_transformed_on_preIMC.ome.tiff",
     log:
@@ -614,19 +614,19 @@ rule transform_preIMC_to_preIMS:
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         TMA_location_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         output_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         transform_source="preIMC",
         transform_target="preIMS",
@@ -635,8 +635,8 @@ rule transform_preIMC_to_preIMS:
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
         matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         postIMC="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
-        TMA_location_source=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_preIMC_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
-        TMA_location_target=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_preIMS_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
+        TMA_location_source=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_preIMC_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", sample_metadata_df, return_all=True)],
+        TMA_location_target=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_preIMS_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", sample_metadata_df, return_all=True)],
     output:
         postIMC_transformed="results/{project_name}/data/preIMC/{project_name}_preIMC_transformed_on_preIMS.ome.tiff",
     log:
@@ -658,19 +658,19 @@ rule transform_preIMS_to_postIMS:
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         TMA_location_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         output_spacing=lambda wildcards: get_column_entry_from_metadata(
             wildcards.project_name,
             "microscopy_pixel_size",
             "project_name",
-            read_sample_metadata(config["sample_metadata"]),
+            sample_metadata_df,
         ),
         transform_source="preIMS",
         transform_target="postIMS",
@@ -679,8 +679,8 @@ rule transform_preIMS_to_postIMS:
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
         matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         postIMC="results/{project_name}/data/preIMS/{project_name}_preIMS.ome.tiff",
-        TMA_location_source=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_preIMS_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
-        TMA_location_target=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMS_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all=True)],
+        TMA_location_source=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_preIMS_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", sample_metadata_df, return_all=True)],
+        TMA_location_target=lambda wildcards: [f'results/{wildcards.project_name}/data/TMA_location/{wildcards.project_name}_TMA_location_on_postIMS_{core}.geojson' for core in get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", sample_metadata_df, return_all=True)],
  
     output:
         postIMC_transformed="results/{project_name}/data/preIMS/{project_name}_preIMS_transformed_on_postIMS.ome.tiff",
