@@ -178,6 +178,7 @@ rule image_registration_evaluation_postIMC_to_preIMC:
         microscopy_image_1="results/{project_name}/data/postIMC/{project_name}_postIMC_transformed_on_preIMC.ome.tiff",
         microscopy_image_2="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
         IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"preIMC"),
+        TMA_location=lambda wildcards: TMA_location_from_project_name_and_sample_name(wildcards,"preIMC"),
     output:
         microscopy_image_out_1="results/{project_name}/data/postIMC/{sample}_transformed_on_preIMC_registration_comparison.ome.tiff",
         microscopy_image_out_2="results/{project_name}/data/preIMC/{sample}_preIMC_registration_comparison.ome.tiff",
@@ -199,6 +200,7 @@ use rule image_registration_evaluation_postIMC_to_preIMC as image_registration_e
         microscopy_image_1="results/{project_name}/data/preIMC/{project_name}_preIMC_transformed_on_preIMS.ome.tiff",
         microscopy_image_2="results/{project_name}/data/preIMS/{project_name}_preIMS.ome.tiff",
         IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"preIMS"),
+        TMA_location=lambda wildcards: TMA_location_from_project_name_and_sample_name(wildcards,"preIMS"),
     output:
         microscopy_image_out_1="results/{project_name}/data/preIMC/{sample}_transformed_on_preIMS_registration_comparison.ome.tiff",
         microscopy_image_out_2="results/{project_name}/data/preIMS/{sample}_preIMS_registration_comparison.ome.tiff",
@@ -245,6 +247,7 @@ use rule image_registration_evaluation_postIMC_to_preIMC as image_registration_e
         microscopy_image_1="results/{project_name}/data/preIMS/{project_name}_preIMS_transformed_on_postIMS.ome.tiff",
         microscopy_image_2="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
         IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"postIMS"),
+        TMA_location=lambda wildcards: TMA_location_from_project_name_and_sample_name(wildcards,"postIMS"),
     output:
         microscopy_image_out_1="results/{project_name}/data/preIMS/{sample}_transformed_on_postIMS_registration_comparison.ome.tiff",
         microscopy_image_out_2="results/{project_name}/data/postIMS/{sample}_postIMS_registration_comparison.ome.tiff",
@@ -290,6 +293,7 @@ use rule image_registration_evaluation_postIMC_to_preIMC as image_registration_e
         microscopy_image_1="results/{project_name}/data/postIMC/{project_name}_postIMC_transformed_on_postIMS.ome.tiff",
         microscopy_image_2="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
         IMC_location=lambda wildcards: IMC_location_from_project_name_and_sample_name(wildcards,"postIMS"),
+        TMA_location=lambda wildcards: TMA_location_from_project_name_and_sample_name(wildcards,"postIMS"),
     output:
         microscopy_image_out_1="results/{project_name}/data/postIMC/{sample}_transformed_on_postIMS_registration_comparison.ome.tiff",
         microscopy_image_out_2="results/{project_name}/data/postIMS/{sample}_postIMS_to_postIMC_registration_comparison.ome.tiff",

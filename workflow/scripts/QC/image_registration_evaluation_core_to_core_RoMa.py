@@ -8,6 +8,7 @@ import numpy as np
 import cv2
 from PIL import Image
 from image_utils import readimage_crop, get_image_shape, subtract_postIMS_grid
+from registration_utils import get_angle
 from utils import setNThreads, snakeMakeMock
 import logging, traceback
 import logging_utils
@@ -21,10 +22,11 @@ if bool(getattr(sys, 'ps1', sys.flags.interactive)):
     snakemake.params["output_spacing"] = 1
     snakemake.params["max_distance"] = 50
     snakemake.params["min_distance"] = 10
-    snakemake.params["remove_postIMS_grid"] = True
-    snakemake.input["microscopy_image_1"] = "results/cirrhosis_TMA/data/preIMS/cirrhosis_TMA_preIMS_transformed_on_postIMS.ome.tiff"
-    snakemake.input["microscopy_image_2"] = "results/cirrhosis_TMA/data/postIMS/cirrhosis_TMA_postIMS.ome.tiff"
-    snakemake.input["IMC_location"] = "results/cirrhosis_TMA/data/IMC_location/cirrhosis_TMA_IMC_mask_on_postIMS_E2.geojson"
+    snakemake.params["remove_postIMS_grid"] = False
+    snakemake.input["microscopy_image_1"] = "results/NASH_HCC_TMA/data/preIMC/NASH_HCC_TMA_preIMC_transformed_on_preIMS.ome.tiff"
+    snakemake.input["microscopy_image_2"] = "results/NASH_HCC_TMA/data/preIMS/NASH_HCC_TMA_preIMS.ome.tiff"
+    snakemake.input["IMC_location"] = "results/NASH_HCC_TMA/data/IMC_location/NASH_HCC_TMA_IMC_mask_on_preIMS_E8.geojson"
+    snakemake.input["TMA_location"] = "results/NASH_HCC_TMA/data/TMA_location/NASH_HCC_TMA_TMA_location_on_preIMS_E8.geojson"
     snakemake.input["sam_weights"] = "results/Misc/sam_vit_h_4b8939.pth"
     if bool(getattr(sys, 'ps1', sys.flags.interactive)):
         raise Exception("Running in interactive mode!!")
@@ -45,7 +47,7 @@ output_spacing = snakemake.params["output_spacing"]
 dmax = snakemake.params["max_distance"]/output_spacing
 # minimum distance between points on the same image 
 dmin = snakemake.params["min_distance"]/output_spacing
-max_landmarks=3000
+max_landmarks=12000
 
 # inputs
 microscopy_file_1 = snakemake.input['microscopy_image_1']
@@ -53,6 +55,10 @@ microscopy_file_2 = snakemake.input['microscopy_image_2']
 IMC_location=snakemake.input["IMC_location"]
 if isinstance(IMC_location, list):
     IMC_location = IMC_location[0]
+
+TMA_location=snakemake.input["TMA_location"]
+if isinstance(TMA_location, list):
+    TMA_location = TMA_location[0]
 
 m = re.search("[a-zA-Z]*(?=.ome.tiff$)",os.path.basename(microscopy_file_1))
 comparison_to = m.group(0)
@@ -75,49 +81,36 @@ xmax=np.max(boundary_points[:,1])
 ymin=np.min(boundary_points[:,0])
 ymax=np.max(boundary_points[:,0])
 
-s1f = input_spacing_1/input_spacing_IMC_location
-bb1 = [int(xmin/s1f-201/input_spacing_1),int(ymin/s1f-201/input_spacing_1),int(xmax/s1f+201/input_spacing_1),int(ymax/s1f+201/input_spacing_1)]
-logging.info(f"bounding box whole image 1: {bb1}")
+TMA_geojson = json.load(open(TMA_location, "r"))
+if isinstance(TMA_geojson,list):
+    TMA_geojson=TMA_geojson[0]
+boundary_points_TMA = np.array(TMA_geojson['geometry']['coordinates'])[0,:,:]
+xmin_TMA=np.min(boundary_points_TMA[:,1])
+xmax_TMA=np.max(boundary_points_TMA[:,1])
+ymin_TMA=np.min(boundary_points_TMA[:,0])
+ymax_TMA=np.max(boundary_points_TMA[:,0])
 
+s1f = input_spacing_1/input_spacing_IMC_location
 s2f = input_spacing_2/input_spacing_IMC_location
-bb2 = [int(xmin/s2f-201/input_spacing_2),int(ymin/s2f-201/input_spacing_2),int(xmax/s2f+201/input_spacing_2),int(ymax/s2f+201/input_spacing_2)]
-logging.info(f"bounding box whole image 2: {bb2}")
+assert(s1f==s2f)
+bb1 = [int(xmin_TMA/s1f),int(ymin_TMA/s1f),int(xmax_TMA/s1f),int(ymax_TMA/s1f)]
+bb2 = bb1
 
 logging.info("load microscopy image 1")
 microscopy_image_1 = readimage_crop(microscopy_file_1, bb1)
-microscopy_image_1 = microscopy_image_1.astype("uint8")
-wn = int(microscopy_image_1.shape[0]*(input_spacing_1/output_spacing))
-hn = int(microscopy_image_1.shape[1]*(input_spacing_1/output_spacing))
-microscopy_image_1 = cv2.resize(microscopy_image_1, (hn,wn), interpolation=cv2.INTER_AREA)
 logging.info(f"microscopy image 1 shape: {microscopy_image_1.shape}")
 
 logging.info("load microscopy image 2")
-
-print(f"snakemake params remove_postIMS_grid: {snakemake.params['remove_postIMS_grid']}")
-if snakemake.params["remove_postIMS_grid"]:
-    m2full_shape = get_image_shape(microscopy_file_2)
-    m2_expansion = 50
-    bb3 = [int(bb2[0]-m2_expansion/input_spacing_1),int(bb2[1]-m2_expansion/input_spacing_1),int(bb2[2]+m2_expansion/input_spacing_1),int(bb2[3]+m2_expansion/input_spacing_1)]
-    bb3[0] = bb3[0] if bb3[0]>=0 else 0
-    bb3[1] = bb3[1] if bb3[1]>=0 else 0
-    bb3[2] = bb3[2] if bb3[2]<=m2full_shape[0] else m2full_shape[0]
-    bb3[3] = bb3[3] if bb3[3]<=m2full_shape[1] else m2full_shape[1]
-    logging.info(f"bounding box mask whole image 2: {bb3}")
-    microscopy_image_2 = readimage_crop(microscopy_file_2, bb3)
-else:
-    microscopy_image_2 = readimage_crop(microscopy_file_2, bb2)
-microscopy_image_2 = microscopy_image_2.astype("uint8")
+microscopy_image_2 = readimage_crop(microscopy_file_2, bb2)
 scale_factor_2 = input_spacing_2/output_spacing
-wn = int(microscopy_image_2.shape[0]*scale_factor_2)
-hn = int(microscopy_image_2.shape[1]*scale_factor_2)
-microscopy_image_2 = cv2.resize(microscopy_image_2, (hn,wn), interpolation=cv2.INTER_AREA)
 logging.info(f"microscopy image 2 shape: {microscopy_image_2.shape}")
+
+logging.info(f"snakemake params remove_postIMS_grid: {snakemake.params['remove_postIMS_grid']}")
 if snakemake.params["remove_postIMS_grid"]:
     logging.info("remove postIMS grid")
     microscopy_image_2_proc = cv2.cvtColor(microscopy_image_2, cv2.COLOR_RGB2GRAY) 
     microscopy_image_2_proc = subtract_postIMS_grid(microscopy_image_2_proc)
     microscopy_image_2 = cv2.cvtColor(microscopy_image_2_proc, cv2.COLOR_GRAY2RGB)
-    microscopy_image_2 = microscopy_image_2[m2_expansion:-m2_expansion,m2_expansion:-m2_expansion,:]
 
 
 logging.info("to PIL")
@@ -126,19 +119,16 @@ img2 = Image.fromarray(microscopy_image_2)
 W_A, H_A = img1.size
 W_B, H_B = img2.size
 
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 logging.info(f"device: {device}")
 logging.info(f"setup RoMa model")
 torch.manual_seed(1234)
-roma_model = roma_outdoor(device=device, amp_dtype=torch.float32, coarse_res=(700,700))
-roma_model.upsample_res = (1400,1400)
+roma_model = roma_outdoor(device=device, amp_dtype=torch.float32)
 
 logging.info(f"match images")
 # Match
-warp, certainty = roma_model.match(img1, img2, device=device)
+warp, certainty_raw = roma_model.match(img1, img2, device=device)
 # Sample matches for estimation
-
 logging.info(f"sample matches")
 # function sample from: https://github.com/Parskatt/RoMa/blob/64f20c7ee67e7ea5bd1448c3e9468a8c5f2f06b9/romatch/models/matcher.py#L468
 # fix error of using hardcoded half (which is not available on CPU)
@@ -146,7 +136,7 @@ logging.info(f"sample matches")
 logging.info(f"Max number of matches: {max_landmarks}")
 if "threshold" in roma_model.sample_mode:
     upper_thresh = roma_model.sample_thresh
-    certainty = certainty.clone()
+    certainty = certainty_raw.clone()
     certainty[certainty > upper_thresh] = 1
 
 matches, certainty = (
@@ -174,9 +164,28 @@ logging.info(f"convert to physical coordinates")
 # Convert to pixel coordinates (RoMa produces matches in [-1,1]x[-1,1])
 kptsA, kptsB = roma_model.to_pixel_coordinates(matches, H_A, W_A, H_B, W_B)
 
-logging.info(f"estimate affine transformation")
+logging.info(f"restrict points to IMC location")
 src_pts = kptsA.cpu().numpy()
 dst_pts = kptsB.cpu().numpy()
+logging.info(f"number of matches before: {len(src_pts)}")
+logging.info(f"number of matches before: {len(dst_pts)}")
+xoffset_left = int((xmin - xmin_TMA))
+xoffset_right = H_A+int((xmax - xmax_TMA))
+yoffset_top = int((ymin - ymin_TMA))
+yoffset_bottom = W_A+int((ymax - ymax_TMA))
+
+to_keep_src = (src_pts[:,1]>=xoffset_left) & (src_pts[:,1]<=xoffset_right) & (src_pts[:,0]>=yoffset_top) & (src_pts[:,0]<=yoffset_bottom)
+to_keep_dst = (dst_pts[:,1]>=xoffset_left) & (dst_pts[:,1]<=xoffset_right) & (dst_pts[:,0]>=yoffset_top) & (dst_pts[:,0]<=yoffset_bottom)
+to_keep = to_keep_src & to_keep_dst
+src_pts_inIMC = src_pts[to_keep,:]
+dst_pts_inIMC = dst_pts[to_keep,:]
+src_pts_inIMC_phys = src_pts_inIMC.copy()*(input_spacing_1/output_spacing)
+dst_pts_inIMC_phys = dst_pts_inIMC.copy()*(input_spacing_1/output_spacing)
+src_pts_phys = src_pts.copy()*(input_spacing_1/output_spacing)
+dst_pts_phys = dst_pts.copy()*(input_spacing_1/output_spacing)
+logging.info(f"number of matches in IMC: {len(src_pts_inIMC)}")
+
+logging.info(f"estimate affine transformation")
 # based on: https://docs.opencv.org/4.x/dc/dc3/tutorial_py_matcher.html
 # and https://docs.opencv.org/4.x/d0/d74/md__build_4_x-contrib_docs-lin64_opencv_doc_tutorials_calib3d_usac.html
 # Sampling: PROSAC
@@ -202,31 +211,51 @@ else:
 params.loMethod = cv2.LOCAL_OPTIM_GC
 params.loIterations = 100
 # params.loSampleSize = 20 
-M, mask = cv2.estimateAffine2D(src_pts, dst_pts, params)
+M, mask = cv2.estimateAffine2D(src_pts_inIMC_phys, dst_pts_inIMC_phys, params)
 
-
+logging.info(f"Affine transformation matrix: {M}")
 logging.info(f"filter matches")
-dists_real_all = np.sqrt(np.sum((src_pts-dst_pts)**2,axis=1))
-src_pts_filt = src_pts[mask.ravel()==1]
-dst_pts_filt = dst_pts[mask.ravel()==1]
+dists_real_all = np.sqrt(np.sum((src_pts_inIMC_phys-dst_pts_inIMC_phys)**2,axis=1))
+src_pts_filt = src_pts_inIMC[mask.ravel()==1]
+dst_pts_filt = dst_pts_inIMC[mask.ravel()==1]
 dists_real = dists_real_all[mask.ravel()==1]
 logging.info(f"number of matches: {len(src_pts_filt)}")
 
-combined_output = np.hstack([src_pts,dst_pts,mask.ravel().reshape(-1,1),dists_real_all.reshape(-1,1)])
-np.savetxt(matching_points_filename_out,combined_output,header=f"p1x,p1y,p2x,p2y,homography_mask,distance_physical",delimiter=',')
+angles = np.array([get_angle([-10000,src_pts_inIMC[k,1]],src_pts_inIMC[k,:],dst_pts_inIMC[k,:]) for k in range(src_pts_inIMC.shape[0])])
+combined_output = np.hstack([src_pts_inIMC,dst_pts_inIMC,mask.ravel().reshape(-1,1),dists_real_all.reshape(-1,1),angles.reshape(-1,1)])
+np.savetxt(matching_points_filename_out,combined_output,header=f"p1x,p1y,p2x,p2y,homography_mask,distance_physical,angle",delimiter=',')
 
+
+# get global bounding box of src and dst points
+xmin_tmp = np.min(np.hstack([src_pts[:,0],dst_pts[:,0],xoffset_left])).astype(int)
+xmax_tmp = np.max(np.hstack([src_pts[:,0],dst_pts[:,0],xoffset_right])).astype(int)
+ymin_tmp = np.min(np.hstack([src_pts[:,1],dst_pts[:,1],yoffset_bottom])).astype(int)
+ymax_tmp = np.max(np.hstack([src_pts[:,1],dst_pts[:,1],yoffset_top])).astype(int)
 logging.info(f"save matching points")
 arrowed_microscopy_image_1 = microscopy_image_1.copy()
+for k in range(len(dst_pts)):
+    arrowed_microscopy_image_1 = cv2.arrowedLine(arrowed_microscopy_image_1, pt1=dst_pts[k,:].astype(int), pt2=src_pts[k,:].astype(int), color=(255,255,255), thickness=int(4/input_spacing_1), tipLength=0.3, line_type=cv2.LINE_AA)
+    arrowed_microscopy_image_1 = cv2.arrowedLine(arrowed_microscopy_image_1, pt1=dst_pts[k,:].astype(int), pt2=src_pts[k,:].astype(int), color=(64,128,64), thickness=int(2/input_spacing_1), tipLength=0.3, line_type=cv2.LINE_AA)
 for k in range(len(src_pts_filt)):
-    arrowed_microscopy_image_1 = cv2.arrowedLine(arrowed_microscopy_image_1, pt1=src_pts_filt[k,:].astype(int), pt2=dst_pts_filt[k,:].astype(int), color=(255,255,255), thickness=int(4), tipLength=0.3, line_type=cv2.LINE_AA)
-    arrowed_microscopy_image_1 = cv2.arrowedLine(arrowed_microscopy_image_1, pt1=src_pts_filt[k,:].astype(int), pt2=dst_pts_filt[k,:].astype(int), color=(0,0,255), thickness=int(2), tipLength=0.3, line_type=cv2.LINE_AA)
+    arrowed_microscopy_image_1 = cv2.arrowedLine(arrowed_microscopy_image_1, pt1=src_pts_filt[k,:].astype(int), pt2=dst_pts_filt[k,:].astype(int), color=(255,255,255), thickness=int(4/input_spacing_1), tipLength=0.3, line_type=cv2.LINE_AA)
+    arrowed_microscopy_image_1 = cv2.arrowedLine(arrowed_microscopy_image_1, pt1=src_pts_filt[k,:].astype(int), pt2=dst_pts_filt[k,:].astype(int), color=(0,0,255), thickness=int(2/input_spacing_1), tipLength=0.3, line_type=cv2.LINE_AA)
+arrowed_microscopy_image_1 = cv2.rectangle(arrowed_microscopy_image_1, (yoffset_top,xoffset_left), (yoffset_bottom,xoffset_right), (255,0,0), thickness=2)
+arrowed_microscopy_image_1 = arrowed_microscopy_image_1[ymin_tmp:ymax_tmp,xmin_tmp:xmax_tmp]
+wn = int(arrowed_microscopy_image_1.shape[0]*input_spacing_1//2)
+hn = int(arrowed_microscopy_image_1.shape[1]*input_spacing_1//2)
+arrowed_microscopy_image_1 = cv2.resize(arrowed_microscopy_image_1, (hn,wn), interpolation=cv2.INTER_AREA)
 tifffile.imwrite(microscopy_file_out_1,arrowed_microscopy_image_1)
 
 arrowed_microscopy_image_2 = microscopy_image_2.copy()
+for k in range(len(dst_pts)):
+    arrowed_microscopy_image_2 = cv2.arrowedLine(arrowed_microscopy_image_2, pt1=dst_pts[k,:].astype(int), pt2=src_pts[k,:].astype(int), color=(255,255,255), thickness=int(4/input_spacing_1), tipLength=0.3, line_type=cv2.LINE_AA)
+    arrowed_microscopy_image_2 = cv2.arrowedLine(arrowed_microscopy_image_2, pt1=dst_pts[k,:].astype(int), pt2=src_pts[k,:].astype(int), color=(64,128,64), thickness=int(2/input_spacing_1), tipLength=0.3, line_type=cv2.LINE_AA)
 for k in range(len(dst_pts_filt)):
-    arrowed_microscopy_image_2 = cv2.arrowedLine(arrowed_microscopy_image_2, pt1=dst_pts_filt[k,:].astype(int), pt2=src_pts_filt[k,:].astype(int), color=(255,255,255), thickness=int(4), tipLength=0.3, line_type=cv2.LINE_AA)
-    arrowed_microscopy_image_2 = cv2.arrowedLine(arrowed_microscopy_image_2, pt1=dst_pts_filt[k,:].astype(int), pt2=src_pts_filt[k,:].astype(int), color=(0,0,255), thickness=int(2), tipLength=0.3, line_type=cv2.LINE_AA)
-
+    arrowed_microscopy_image_2 = cv2.arrowedLine(arrowed_microscopy_image_2, pt1=dst_pts_filt[k,:].astype(int), pt2=src_pts_filt[k,:].astype(int), color=(255,255,255), thickness=int(4/input_spacing_1), tipLength=0.3, line_type=cv2.LINE_AA)
+    arrowed_microscopy_image_2 = cv2.arrowedLine(arrowed_microscopy_image_2, pt1=dst_pts_filt[k,:].astype(int), pt2=src_pts_filt[k,:].astype(int), color=(0,0,255), thickness=int(2/input_spacing_1), tipLength=0.3, line_type=cv2.LINE_AA)
+arrowed_microscopy_image_2 = cv2.rectangle(arrowed_microscopy_image_2, (yoffset_top,xoffset_left), (yoffset_bottom,xoffset_right), (255,0,0), thickness=2)
+arrowed_microscopy_image_2 = arrowed_microscopy_image_2[ymin_tmp:ymax_tmp,xmin_tmp:xmax_tmp]
+arrowed_microscopy_image_2 = cv2.resize(arrowed_microscopy_image_2, (hn,wn), interpolation=cv2.INTER_AREA)
 tifffile.imwrite(microscopy_file_out_2,arrowed_microscopy_image_2)
 
 

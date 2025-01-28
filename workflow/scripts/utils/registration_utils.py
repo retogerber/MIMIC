@@ -2,7 +2,6 @@ import numpy as np
 from typing import Union
 import cv2
 import skimage
-import SimpleITK as sitk
 import shapely
 import sklearn
 
@@ -72,6 +71,7 @@ def composite2affine(composite_transform, result_center=None):
         SimpleITK.AffineTransform: Affine transformation that has the same effect as the input composite_transform.
     """
     # Flatten the copy of the composite transform, so no nested composites.
+    import SimpleITK as sitk
     flattened_composite_transform = sitk.CompositeTransform(composite_transform)
     flattened_composite_transform.FlattenTransform()
     tx_dim = flattened_composite_transform.GetDimension()
