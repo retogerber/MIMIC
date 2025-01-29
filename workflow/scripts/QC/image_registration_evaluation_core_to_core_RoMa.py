@@ -185,33 +185,37 @@ src_pts_phys = src_pts.copy()*(input_spacing_1/output_spacing)
 dst_pts_phys = dst_pts.copy()*(input_spacing_1/output_spacing)
 logging.info(f"number of matches in IMC: {len(src_pts_inIMC)}")
 
-logging.info(f"estimate affine transformation")
-# based on: https://docs.opencv.org/4.x/dc/dc3/tutorial_py_matcher.html
-# and https://docs.opencv.org/4.x/d0/d74/md__build_4_x-contrib_docs-lin64_opencv_doc_tutorials_calib3d_usac.html
-# Sampling: PROSAC
-# Scoring: MAGSAC with low threshold
-# Error metric: Sampson distance
-# Degeneracy: DEGENSAC
-# Local optimization: Graph-cut RANSAC
-# Solver: Affine2D
-# Graph creation: NEIGH_FLANN_RADIUS
-params = cv2.UsacParams()
-params.confidence = 0.99999
-params.sampler = cv2.SAMPLING_PROSAC
-params.score = cv2.SCORE_METHOD_MAGSAC
-# params.score = cv2.SCORE_METHOD_RANSAC
-params.maxIterations = 1000000
-params.neighborsSearch = cv2.NEIGH_FLANN_RADIUS
-if comparison_from == "preIMC" and comparison_to == "preIMS":
-    # non-linear
-    params.threshold = 25
+if len(src_pts_inIMC)>5:
+    logging.info(f"estimate affine transformation")
+    # based on: https://docs.opencv.org/4.x/dc/dc3/tutorial_py_matcher.html
+    # and https://docs.opencv.org/4.x/d0/d74/md__build_4_x-contrib_docs-lin64_opencv_doc_tutorials_calib3d_usac.html
+    # Sampling: PROSAC
+    # Scoring: MAGSAC with low threshold
+    # Error metric: Sampson distance
+    # Degeneracy: DEGENSAC
+    # Local optimization: Graph-cut RANSAC
+    # Solver: Affine2D
+    # Graph creation: NEIGH_FLANN_RADIUS
+    params = cv2.UsacParams()
+    params.confidence = 0.99999
+    params.sampler = cv2.SAMPLING_PROSAC
+    params.score = cv2.SCORE_METHOD_MAGSAC
+    # params.score = cv2.SCORE_METHOD_RANSAC
+    params.maxIterations = 1000000
+    params.neighborsSearch = cv2.NEIGH_FLANN_RADIUS
+    if comparison_from == "preIMC" and comparison_to == "preIMS":
+        # non-linear
+        params.threshold = 25
+    else:
+        # linear
+        params.threshold = 10
+    params.loMethod = cv2.LOCAL_OPTIM_GC
+    params.loIterations = 100
+    # params.loSampleSize = 20 
+    M, mask = cv2.estimateAffine2D(src_pts_inIMC_phys, dst_pts_inIMC_phys, params)
 else:
-    # linear
-    params.threshold = 10
-params.loMethod = cv2.LOCAL_OPTIM_GC
-params.loIterations = 100
-# params.loSampleSize = 20 
-M, mask = cv2.estimateAffine2D(src_pts_inIMC_phys, dst_pts_inIMC_phys, params)
+    M = np.eye(2,3)
+    mask = np.zeros((src_pts_inIMC_phys.shape[0],1))
 
 logging.info(f"Affine transformation matrix: {M}")
 logging.info(f"filter matches")
