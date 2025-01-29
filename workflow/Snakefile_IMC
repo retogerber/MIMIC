@@ -417,7 +417,7 @@ rule transform_IMCaggr_to_postIMS:
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
         matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         TMA_location_target=lambda wildcards: expand('results/{{project_name}}/data/TMA_location/{{project_name}}_TMA_location_on_postIMS_{core}.geojson', core = get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", sample_metadata_df, return_all=True)),
-        microscopy_target_image="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff",
+        microscopy_target_image="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
     output:
         IMC_transformed="results/{project_name}/data/IMC/{project_name}_IMC_aggr_transformed.ome.tiff",
     log:
@@ -464,7 +464,7 @@ rule transform_IMCmask_to_postIMC:
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
         matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         TMA_location_target=lambda wildcards: expand('results/{{project_name}}/data/TMA_location/{{project_name}}_TMA_location_on_postIMC_{core}.geojson', core = get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", sample_metadata_df, return_all=True)),
-        microscopy_target_image=expand("results/{{project_name}}/data/postIMC/{{project_name}}_postIMC.ome.tiff", transform_target="postIMC"),
+        microscopy_target_image="results/{project_name}/data/postIMC/{project_name}_postIMC.ome.tiff",
     output:
         IMC_transformed="results/{project_name}/data/IMC_mask/{project_name}_IMC_transformed_on_postIMC.ome.tiff",
     log:
@@ -506,7 +506,7 @@ use rule transform_IMCmask_to_postIMC as transform_IMCmask_to_preIMC with:
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
         matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         TMA_location_target=lambda wildcards: expand('results/{{project_name}}/data/TMA_location/{{project_name}}_TMA_location_on_preIMC_{core}.geojson', core = get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", sample_metadata_df, return_all=True)),
-        microscopy_target_image=expand("results/{{project_name}}/data/preIMC/{{project_name}}_preIMC.ome.tiff", transform_target="preIMC"),
+        microscopy_target_image="results/{project_name}/data/preIMC/{project_name}_preIMC.ome.tiff",
     output:
         IMC_transformed="results/{project_name}/data/IMC_mask/{project_name}_IMC_transformed_on_preIMC.ome.tiff",
     log:
@@ -545,7 +545,7 @@ use rule transform_IMCmask_to_postIMC as transform_IMCmask_to_postIMS with:
         table_file="results/{project_name}/data/preIMS_location/available_masks.csv",
         matching="results/{project_name}/data/preIMC_location/matching_preIMC_location_with_IMC_location.csv",
         TMA_location_target=lambda wildcards: expand('results/{{project_name}}/data/TMA_location/{{project_name}}_TMA_location_on_postIMS_{core}.geojson', core = get_column_entry_from_metadata(wildcards.project_name, "core_name", "project_name", sample_metadata_df, return_all=True)),
-        microscopy_target_image=expand("results/{{project_name}}/data/postIMS/{{project_name}}_postIMS.ome.tiff", transform_target="postIMS"),
+        microscopy_target_image="results/{project_name}/data/postIMS/{project_name}_postIMS.ome.tiff",
     output:
         IMC_transformed="results/{project_name}/data/IMC_mask/{project_name}_IMC_transformed_on_postIMS.ome.tiff",
     log:
