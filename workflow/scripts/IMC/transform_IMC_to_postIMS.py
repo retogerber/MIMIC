@@ -66,6 +66,9 @@ img_dirname = os.path.dirname(img_filename_out)
 # get info of IMC location
 logging.info("Create bounding box")
 max_shape = get_image_shape(microscopy_target_image)
+logging.info(f"microscopy image size: {max_shape}")
+max_shape = [int(np.ceil(x/(output_spacing/TMA_location_spacing))) for x in max_shape]
+logging.info(f"microscopy image size scaled: {max_shape}")
 bb_target_ls = list()
 for single_TMA_geojson_file in TMA_target_geojson_file:
     TMA_geojson = json.load(open(single_TMA_geojson_file, "r"))
@@ -176,12 +179,15 @@ img_dtype = readimage_crop(imc_file[0], [0,0,1,1]).dtype
 # get output shape
 try:
     output_shape = get_image_shape(microscopy_target_image)
-    output_shape = [n_channels, int(output_shape[0]/(output_spacing/TMA_location_spacing)),int(output_shape[1]/(output_spacing/TMA_location_spacing))]
+    output_shape = [n_channels, int(np.ceil(output_shape[0]/(output_spacing/TMA_location_spacing))),int(np.ceil(output_shape[1]/(output_spacing/TMA_location_spacing)))]
+    logging.info("Size from microscopy image")
 except:
     if rtlsls[0].composite_transform is None:
         output_shape = [n_channels, np.max([bb[2] for bb in bb_target_ls]), np.max([bb[3] for bb in bb_target_ls])]
+        logging.info("Size from max bb_target_ls")
     else:
         output_shape = [n_channels, rtsn.output_size[0], rtsn.output_size[1]]
+        logging.info("Size from composite transform")
 
 # init output image
 out_image = np.zeros(output_shape, dtype=img_dtype)    
