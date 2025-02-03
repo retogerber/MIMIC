@@ -246,7 +246,7 @@ logging.info(f"Affine transformation matrix: {M}")
 logging.info(f"filter matches")
 dists_real_all = np.sqrt(np.sum((src_pts_inIMC_phys-dst_pts_inIMC_phys)**2,axis=1))
 src_pts_inIMC_filt = src_pts_inIMC[mask.ravel()==1]
-dst_pts_filt = dst_pts_inIMC[mask.ravel()==1]
+dst_pts_inIMC_filt = dst_pts_inIMC[mask.ravel()==1]
 dists_real = dists_real_all[mask.ravel()==1]
 logging.info(f"number of matches: {len(src_pts_inIMC_filt)}")
 
@@ -266,7 +266,7 @@ src_pts_not_inIMC_filt = src_pts[~to_keep,:][is_inlier_not_inIMC,:]
 dst_pts_not_inIMC_filt = dst_pts[~to_keep,:][is_inlier_not_inIMC,:]
 
 src_pts_comb_filt = np.vstack([src_pts_inIMC_filt,src_pts_not_inIMC_filt])
-dst_pts_comb_filt = np.vstack([dst_pts_filt,dst_pts_not_inIMC_filt])
+dst_pts_comb_filt = np.vstack([dst_pts_inIMC_filt,dst_pts_not_inIMC_filt])
 
 xmin_tmp = np.min(np.hstack([src_pts_comb_filt[:,0],dst_pts_comb_filt[:,0],xoffset_left])).astype(int)
 xmax_tmp = np.max(np.hstack([src_pts_comb_filt[:,0],dst_pts_comb_filt[:,0],xoffset_right])).astype(int)
@@ -283,8 +283,11 @@ for k in range(len(src_pts_comb_filt)):
     arrowed_microscopy_image_1 = cv2.arrowedLine(arrowed_microscopy_image_1, pt1=src_pts_comb_filt[k,:].astype(int), pt2=dst_pts_comb_filt[k,:].astype(int), color=(255,255,255), thickness=int(4/input_spacing_1), tipLength=tmp_tiplength_px, line_type=cv2.LINE_AA)
     arrowed_microscopy_image_1 = cv2.arrowedLine(arrowed_microscopy_image_1, pt1=src_pts_comb_filt[k,:].astype(int), pt2=dst_pts_comb_filt[k,:].astype(int), color=(64,128,64), thickness=int(2/input_spacing_1), tipLength=tmp_tiplength_px, line_type=cv2.LINE_AA)
 for k in range(len(src_pts_inIMC_filt)):
-    arrowed_microscopy_image_1 = cv2.arrowedLine(arrowed_microscopy_image_1, pt1=src_pts_inIMC_filt[k,:].astype(int), pt2=dst_pts_filt[k,:].astype(int), color=(255,255,255), thickness=int(4/input_spacing_1), tipLength=tmp_tiplength_px, line_type=cv2.LINE_AA)
-    arrowed_microscopy_image_1 = cv2.arrowedLine(arrowed_microscopy_image_1, pt1=src_pts_inIMC_filt[k,:].astype(int), pt2=dst_pts_filt[k,:].astype(int), color=(0,0,255), thickness=int(2/input_spacing_1), tipLength=tmp_tiplength_px, line_type=cv2.LINE_AA)
+    tmpdist = np.sqrt(np.sum((src_pts_inIMC_filt[k,:]-dst_pts_inIMC_filt[k,:])**2))
+    tmp_tiplength_px = tiplength_px/tmpdist
+    tmp_tiplength_px = 1 if tmp_tiplength_px>1 else tmp_tiplength_px
+    arrowed_microscopy_image_1 = cv2.arrowedLine(arrowed_microscopy_image_1, pt1=src_pts_inIMC_filt[k,:].astype(int), pt2=dst_pts_inIMC_filt[k,:].astype(int), color=(255,255,255), thickness=int(4/input_spacing_1), tipLength=tmp_tiplength_px, line_type=cv2.LINE_AA)
+    arrowed_microscopy_image_1 = cv2.arrowedLine(arrowed_microscopy_image_1, pt1=src_pts_inIMC_filt[k,:].astype(int), pt2=dst_pts_inIMC_filt[k,:].astype(int), color=(0,0,255), thickness=int(2/input_spacing_1), tipLength=tmp_tiplength_px, line_type=cv2.LINE_AA)
 arrowed_microscopy_image_1 = cv2.rectangle(arrowed_microscopy_image_1, (yoffset_top,xoffset_left), (yoffset_bottom,xoffset_right), (255,0,0), thickness=2)
 wn = int(arrowed_microscopy_image_1.shape[0]*input_spacing_1)
 hn = int(arrowed_microscopy_image_1.shape[1]*input_spacing_1)
@@ -298,9 +301,12 @@ for k in range(len(dst_pts_comb_filt)):
     tmp_tiplength_px = 1 if tmp_tiplength_px>1 else tmp_tiplength_px
     arrowed_microscopy_image_2 = cv2.arrowedLine(arrowed_microscopy_image_2, pt1=dst_pts_comb_filt[k,:].astype(int), pt2=src_pts_comb_filt[k,:].astype(int), color=(255,255,255), thickness=int(4/input_spacing_1), tipLength=tmp_tiplength_px, line_type=cv2.LINE_AA)
     arrowed_microscopy_image_2 = cv2.arrowedLine(arrowed_microscopy_image_2, pt1=dst_pts_comb_filt[k,:].astype(int), pt2=src_pts_comb_filt[k,:].astype(int), color=(64,128,64), thickness=int(2/input_spacing_1), tipLength=tmp_tiplength_px, line_type=cv2.LINE_AA)
-for k in range(len(dst_pts_filt)):
-    arrowed_microscopy_image_2 = cv2.arrowedLine(arrowed_microscopy_image_2, pt1=dst_pts_filt[k,:].astype(int), pt2=src_pts_inIMC_filt[k,:].astype(int), color=(255,255,255), thickness=int(4/input_spacing_1), tipLength=tmp_tiplength_px, line_type=cv2.LINE_AA)
-    arrowed_microscopy_image_2 = cv2.arrowedLine(arrowed_microscopy_image_2, pt1=dst_pts_filt[k,:].astype(int), pt2=src_pts_inIMC_filt[k,:].astype(int), color=(0,0,255), thickness=int(2/input_spacing_1), tipLength=tmp_tiplength_px, line_type=cv2.LINE_AA)
+for k in range(len(dst_pts_inIMC_filt)):
+    tmpdist = np.sqrt(np.sum((src_pts_inIMC_filt[k,:]-dst_pts_inIMC_filt[k,:])**2))
+    tmp_tiplength_px = tiplength_px/tmpdist
+    tmp_tiplength_px = 1 if tmp_tiplength_px>1 else tmp_tiplength_px
+    arrowed_microscopy_image_2 = cv2.arrowedLine(arrowed_microscopy_image_2, pt1=dst_pts_inIMC_filt[k,:].astype(int), pt2=src_pts_inIMC_filt[k,:].astype(int), color=(255,255,255), thickness=int(4/input_spacing_1), tipLength=tmp_tiplength_px, line_type=cv2.LINE_AA)
+    arrowed_microscopy_image_2 = cv2.arrowedLine(arrowed_microscopy_image_2, pt1=dst_pts_inIMC_filt[k,:].astype(int), pt2=src_pts_inIMC_filt[k,:].astype(int), color=(0,0,255), thickness=int(2/input_spacing_1), tipLength=tmp_tiplength_px, line_type=cv2.LINE_AA)
 arrowed_microscopy_image_2 = cv2.rectangle(arrowed_microscopy_image_2, (yoffset_top,xoffset_left), (yoffset_bottom,xoffset_right), (255,0,0), thickness=2)
 arrowed_microscopy_image_2 = cv2.resize(arrowed_microscopy_image_2, (hn,wn), interpolation=cv2.INTER_AREA)
 tifffile.imwrite(microscopy_file_out_2,arrowed_microscopy_image_2)
