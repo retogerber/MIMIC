@@ -1,6 +1,12 @@
 
 # Software requirements
 
+Requirements:
+ - This repo, clone with:
+```
+git clone https://github.com/retogerber/imc_to_ims_workflow.git && cd imc_to_ims_workflow
+```
+Additional requirements:
 - conda and snakemake [Install instructions here](https://snakemake.readthedocs.io/en/stable/getting_started/installation.html#installation)
 - singularity/apptainer [Install instructions here](http://apptainer.org/docs/admin/1.1/installation.html#installing-apptainer)
 - QuPath [Install instructions here](https://github.com/qupath/qupath/wiki/Installing-QuPath)
@@ -73,6 +79,7 @@ The following steps to setup your own projects are required: (as guidance you ca
 - IMC summary panels (as csv files)
     - to `results/{PROJECT_NAME}/data/IMC_summary_panel`
     - expected name is `{IMC_NAME}_summary.csv` (replace `{IMC_NAME}` with the corresponding IMC file basename (no extension), e.g. Cirrhosis-TMA-5_New_Detector_001_summary.csv)
+    - the structure follows the [steinbock Panel file](https://bodenmillergroup.github.io/steinbock/latest/file-types/) naming scheme: Two columns are required: `channel` (Unique channel ID) and `name` (Unique channel name)
 
 
 ## Linking IMS pixels to postIMS 
@@ -82,15 +89,15 @@ Two options are possible, automatically or manually:
 ### Automatically
 
 Requirements: 
-- Stepsize higher than pixelsize so that individual pixels are clearly separate.
+- Stepsize higher than pixelsize so that individual pixels are clearly separate (depends on experimental setup).
 - (Maybe: More than 2 layers of IMS pixels outside of tissue around the whole tissue.)
 
 Adapt file `config/sample_metadata.csv`: (see also section [add metadata](#add-metadata))
 - `coords_filename`: empty ()
-- `IMS_rotation_angle`: initial rotation angle in degrees of IMS relative to postIMS, should be one of {-270,-180.-90,0,90,180,270}
-- `IMS_to_postIMS_n_splits`: number of combinations of weights to detect ablation marks, should be one of {3,5,7,9,11,13,15,17,19}. Higher number means longer runtime but potentially better detection
-- `IMS_to_postIMS_init_gridsearch`: number of rounds of inital grid search, should be one of {0,1,2,3}. 0 Means no additiional grid search.
-- `within_IMC_fine_registration`: should final fine registration be performed where points in IMC location are upweigthed? Should be one of {True, False}.
+- `IMS_rotation_angle`: initial rotation angle in degrees of IMS relative to postIMS, should be one of {-270,-180.-90,0,90,180,270}. Default: 0
+- `IMS_to_postIMS_n_splits`: number of combinations of weights to detect ablation marks, should be one of {3,5,7,9,11,13,15,17,19}. Higher number means longer runtime but potentially better detection. Default: 19
+- `IMS_to_postIMS_init_gridsearch`: number of rounds of inital grid search, should be one of {0,1,2,3}. 0 Means no additiional grid search. Default: 3
+- `within_IMC_fine_registration`: should final fine registration be performed where points in IMC location are upweigthed? Should be one of {True, False}. Default: True
 
 
 ### Manually using napari-imsmicrolink
@@ -113,23 +120,22 @@ Two possibilities for registration are possible: IMS to postIMS or postIMS to IM
 
 ## Register IMC to postIMC (QuPath)
 
-
 In QuPath: 
 - open postIMC microscopy image
-- draw quadrangles around ablation marks from IMC, if automatic registration should be done this can be very approximate and just has to include the whole IMC (see parameter `do_register_IMC_location` in section [add metadata](#add-metadata)). If manual registration is required draw the quadrangles as precicely as possible.
+- draw quadrangles around ablation marks from IMC, if automatic registration should be done this can be very approximate and just has to include the whole IMC (see parameter `do_register_IMC_location` in section [add metadata](#add-metadata), essentially set to True if automatic registration should be done). If manual registration is required draw the quadrangles as precicely as possible.
 - name each quadrangle by right click -> `Annotations` -> `Set properties` -> `Name`. Keep this name in mind since you will need to fill it into file `config/sample_metadata.csv` (see [below](#add-metadata)). 
 - Do this for all IMC ablated areas. 
 - Then go to `File` -> `Export objects as GeoJSON`, **Unselect** `Export as FeatureCollection`, then confirm.  Save as `results/{PROJECT_NAME}/data/IMC_location/{PROJECT_NAME}_IMC_mask_on_postIMC.geojson`
 
-
+The names of annotations are important for correctly matching IMC images to locations.
 
 ## Add metadata
 
 Adapt file `config/sample_metadata.csv`:
 - `sample_name`: name of sample (i.e. name of IMC image without file ending)
 - `project_name`: name of project (above: `{PROJECT_NAME}`)
-- `core_name`: name of GeoJSON object from step above
-- (optional) `reg_type`: one of "precise" (default, i.e. manual registration of IMC to postIMC as described above) or "register" (experimental, not robust. Tries to register an aggregated version of the IMC file to the postIMC (set used channels with parameter `IMC_channels_for_aggr` in file config/config.yaml), a GeoJSON as described above is still needed but only to specify the general location of the IMC ablation mask.)
+- `core_name`: name of GeoJSON object from step above, e.g. A1
+- (optional) `reg_type`: one of "precise" (default, i.e. manual registration of IMC to postIMC as described above) or "register" (experimental, not robust. Currently only "precise" is suppported.
 - (optional) `do_register_IMC_location`: bool, default=True, should automatic IMC to postIMC be performed? This setting means that the manually drawn IMC location mask doesn't need to be precise.
 - (optional) `register_IMC_location_with_pycpd`: bool, default=True, in case `do_register_IMC_location` is True, should an additional registration step using CPD be performed. Might or might not improve precision.
 - `IMS_pixel_size`: size of IMS pixel in micrometer (stepsize)
@@ -147,6 +153,13 @@ Adapt file `config/sample_metadata.csv`:
 - (optional) `min_index_length`: int, default=10, minimum number of neighbors to take into account for matching IMS ablation marks with IMS pixels.
 - (optional) `max_index_length`: int, default=30, maximum number of neighbors to take into account for matching IMS ablation marks with IMS pixels.
 
+## Update config
+
+Adapt file `config/config.yaml`:
+- `IMC_channels_for_aggr`: specify which IMC channels should be used. Names should match values in column `name` in IMC summary panel files.
+- (optional) `QC_metrics`: specify which QC metrics should be calculated. Default: all
+- (optional) `QC_steps`: specify for which registration step QC metrics should be calculated. Default: all
+
 ## Register preIMC to preIMS (case 3. only)
 
 For case 3. additionally the regions that should be independently registered have to be selected.  
@@ -154,7 +167,7 @@ In QuPath:
 - open preIMC microscopy image
 - draw quadrangles around regions to be registered independently. Should contain at least one full core.
 - name each quadrangle by right click -> `Annotations` -> `Set properties` -> `Name`. Keep this name in mind since the corresponding core on the preIMS microscopy image has to have the same name. 
-- Do this for all cores where the registration didn't work properly. 
+- Do this for all regions/cores where the registration didn't work properly. 
 - Then go to `File` -> `Export objects as GeoJSON`, **Unselect** `Export as FeatureCollection`, then confirm.  Save as `results/{PROJECT_NAME}/data/preIMC_location_combined/{PROJECT_NAME}_reg_mask_on_preIMC.geojson`
 
 - Do the same for the preIMS microscopy image
@@ -163,7 +176,7 @@ In QuPath:
 
 ## Data obtained from the same slide
 
-In the case that the data was generated from the same slide the preIMS and preIMC microscopy images are effectively the same (or only one of the two exists). In this scenario add one of the two images (preIMS or preIMC) to its respective location and then create a symlink (or a copy) for the other image. The workflow will check if the preIMS and the preIMC images are the same, and if they are drop the registration step between the two.
+In the case that the data was generated from the same slide the preIMS and preIMC microscopy images are effectively the same (or only one of the two exists). In this scenario add one of the two images (preIMS or preIMC) to its respective location and then create a symlink (or a copy) for the other image. The workflow will check if the preIMS and the preIMC images are the same, and if they are, the registration step between the two is dropped.
 
 ## Run workflow
 
@@ -171,11 +184,11 @@ To run the workflow:
 ```
 snakemake --use-conda --use-singularity -c 1
 ```
-
 If there are links to files outside of the project directory adding the flag ` --singularity-args "--bind $HOME"` might be needed:
 ```
 snakemake --use-conda --use-singularity -c 1  --singularity-args "--bind $HOME"
 ```
+For all snakemake cli options see [here](https://snakemake.readthedocs.io/en/stable/executing/cli.html).
 
 ### Run individual parts of the workflow
 
@@ -195,7 +208,7 @@ In the file `config/config.yaml` adapt the variables `QC_metrics` and `QC_steps`
 
 ## Check output
 
-A registration report can be found at `results/{PROJECT_NAME}/data/registration_metric/report/{PROJECT_NAME}_registration_evaluation.html`.
+After successful execution of the workflow, a registration report can be found at `results/{PROJECT_NAME}/data/registration_metric/report/{PROJECT_NAME}_registration_evaluation.html`. It contains all the registration steps and should provide a quick overview if registration was succesfull for individual TMA cores.
 
 Additionally the following sections might be helpful.
 
@@ -213,4 +226,12 @@ The file `results/{PROJECT_NAME}/data/registration_metric/{PROJECT_NAME}_reg_met
 Additionally the columns starting with `dice_score_` show the dice coefficient between the tissue samples (values should be close to 1). Since those comparisons rely on automatic detection of the tissue the calculated values should be considered to be more of an lower bound of the precision instead of the actual true measure. 
 To get a better view of the precision visual inspection needs to be done. For that load images with napari (e.g. run `conda run -n napari_imsmicrolink napari`) or QuPath. The relevant images are: `results/{PROJECT_NAME}/data/postIMS/{PROJECT_NAME}_postIMS.ome.tiff`, `results/{PROJECT_NAME}/data/preIMS/{PROJECT_NAME}_preIMS.ome.tiff`, `results/{PROJECT_NAME}/data/preIMC/{PROJECT_NAME}_preIMC.ome.tiff` and `results/{PROJECT_NAME}/data/postIMC/{PROJECT_NAME}_postIMC.ome.tiff`.
 
+## Workflow output
 
+The main output of the workflow is for each input imzml file the per IMS pixel and IMC cell aggregated results: `results/{PROJECT_NAME}/data/cell_overlap/{PROJECT_NAME}_{imzml_filename}_peak_cell_overlap.csv`
+
+Additionally the following ouput images are created:
+- the directory `results/{PROJECT_NAME}/data/IMS/{PROJECT_NAME}_IMS_on_postIMS` contains one image for each m/z value.
+- `results/{PROJECT_NAME}/data/IMC_mask/{PROJECT_NAME}_IMC_transformed_on_postIMC.ome.tiff` contains the transformed IMC masks
+- `results/{PROJECT_NAME}/data/IMC/{PROJECT_NAME}_IMC_aggr_transformed.ome.tiff` contains the transformed (on postIMS) IMC image
+- `results/{PROJECT_NAME}/data/postIMC/{PROJECT_NAME}_postIMC_transformed_on_postIMS.ome.tiff` contains the transformed postIMC microscopy image
