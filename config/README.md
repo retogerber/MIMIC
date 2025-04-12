@@ -244,4 +244,4 @@ Additionally the following ouput images are created:
 
 # Downstream analysis
 
-Example downstream analysis (R markdown) scripts can be found in [workflow/scripts/Downstream_Analysis](workflow/scripts/Downstream_Analysis). Those show how to test for associations between cell types and m/z analytes. The ordering in which the scripts have to be run follow from the naming. In-script adaption are necessary for this to work. 
+Example downstream analysis (R markdown) scripts can be found in [workflow/scripts/Downstream_Analysis](../workflow/scripts/Downstream_Analysis). Those show how to test for associations between cell types and m/z analytes. The ordering in which the scripts have to be run follow from the naming. In-script adaption are necessary for this to work. 
