@@ -1,0 +1,168 @@
+---
+title: "Glycans prepare data"
+author: "Reto Gerber"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    self_contained: TRUE
+    code_folding: "hide"
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+toc_depth: 3
+number_sections: true
+theme: lumen
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, dpi = 144, dev = "png")
+all_times <- list() # store the time for each chunk
+knitr::knit_hooks$set(time_it = local({
+  now <- NULL
+  function(before, options) {
+    if (before) {
+      now <<- Sys.time()
+    } else {
+      res <- difftime(Sys.time(), now)
+      all_times[[options$label]] <<- round(lubridate::as.duration(res))
+    }
+  }
+}))
+knitr::opts_chunk$set(time_it = TRUE)
+```
+
+```{r, warning=FALSE, message=FALSE}
+suppressPackageStartupMessages(suppressWarnings({
+  library(tidyverse)
+  library(SpatialExperiment)
+}))
+n_worker <- 10
+RhpcBLASctl::blas_set_num_threads(n_worker)
+data_dir_overlap <- "../../../results"
+data_dir_IMC <- "../../../../imc_workflow/results/spe/filt"
+analysis_dir <- "."
+output_dir <- "./output"
+source(file.path(analysis_dir,"load_IMS.R"))
+```
+
+
+```{r read_spe}
+spe_compl <- readRDS(file.path(data_dir_IMC,"SPE_combined_03.rds"))
+```
+
+```{r}
+imcims_df_ls <- list()
+```
+
+
+# test_combined
+
+```{r}
+filein <- file.path(data_dir_overlap,"test_combined/data/cell_overlap/test_combined_IMS_test_combined_peak_cell_overlap.csv")
+imcims_df <- data.table::fread(filein)
+
+
+imcims_df <- imcims_df %>%
+  dplyr::mutate(TMA_type = project_name) %>%
+  dplyr::left_join(as.data.frame(colData(spe_compl)), by = c("cell_idx" = "ObjectNumber", "sample_id" = "sample_id", "project_name" = "project_name")) |>
+  # remove rows where celltype is NA but cell_idx is not NA -> cells that were filtered in spe_compl
+  dplyr::filter(!(!is.na(cell_idx) & is.na(celltype)))
+imcims_df_ls[[1]] <- imcims_df
+```
+
+# test_split_pre
+
+```{r}
+filein <- file.path(data_dir_overlap,"test_split_pre/data/cell_overlap/test_split_pre_IMS_test_split_pre_peak_cell_overlap.csv")
+imcims_df <- data.table::fread(filein)
+
+
+imcims_df <- imcims_df %>%
+  dplyr::mutate(TMA_type = project_name) %>%
+  dplyr::left_join(as.data.frame(colData(spe_compl)), by = c("cell_idx" = "ObjectNumber", "sample_id" = "sample_id", "project_name" = "project_name")) |>
+  # remove rows where celltype is NA but cell_idx is not NA -> cells that were filtered in spe_compl
+  dplyr::filter(!(!is.na(cell_idx) & is.na(celltype)))
+imcims_df_ls[[1]] <- imcims_df
+```
+
+
+## combine
+
+
+
+```{r combine_data}
+imcims_df <- do.call(rbind, imcims_df_ls)
+
+cat("\n Dimension:\n")
+dim(imcims_df)
+cat("\nstructure:\n")
+str(imcims_df)
+```
+
+
+## Fill missing metadata
+
+```{r}
+# find columns that are the same within one sample
+tmp_imcims_df <- imcims_df[!is.na(imcims_df$sample_id), ]
+nsdf <- tidyr::nest(tmp_imcims_df, .by = sample_id) %>%
+  dplyr::mutate(data = lapply(data, function(df) dplyr::summarise(df, dplyr::across(dplyr::everything(), \(x) length(unique(x[!is.na(x)])))))) %>%
+  tidyr::unnest(cols = c(data))
+max_n_unique <- colMaxs(as.matrix(nsdf[, 2:ncol(nsdf)]))
+
+# expand unique values to fill NA's
+sample_spec_cols <- c(colnames(nsdf)[1], colnames(nsdf)[2:ncol(nsdf)][max_n_unique == 1])
+match_vars <- c("TMA_type")
+sample_spec_cols <- sample_spec_cols[!(sample_spec_cols %in% match_vars)]
+imcims_df <- tidyr::nest(imcims_df, .by = dplyr::all_of(match_vars)) %>%
+  dplyr::mutate(data = lapply(data, function(df) tidyr::fill(df, dplyr::all_of(sample_spec_cols), .direction = "updown"))) %>%
+  tidyr::unnest(cols = c(data))
+```
+
+
+## Filter
+
+add filter if registration was of insufficient quality
+
+```{r}
+#df1 <- read.csv(file.path(data_dir,"cirrhosis_TMA_decision_to_keep.csv"))
+#df1$to_keep_reg <- stringr::str_detect(df1$keep,"(Y|y)es")
+#df1$project_name <- "test_combined"
+#
+#df2 <- read.csv(file.path(data_dir,"NASH_HCC_TMA_decision_to_keep.csv"))
+#df2$to_keep_reg <- stringr::str_detect(df2$keep,"(Y|y)es")
+#df2$project_name <- "test_split_pre"
+#
+#df <- rbind(df1, df2)
+#
+#imcims_df <- imcims_df |>
+#  dplyr::left_join(df[,c("sample","project_name","to_keep_reg")], by = c("sample_id" = "sample", "project_name" = "project_name"))
+#imcims_df$to_keep_reg[is.na(imcims_df$to_keep_reg)] <- TRUE
+
+imcims_df$to_keep_reg <- TRUE
+```
+
+
+# Save
+
+save file to: `r file.path(output_dir, "imc_to_ims_workflow_imcims_full_combined.csv")`
+```{r save_data}
+data.table::fwrite(imcims_df,file.path(output_dir, "imc_to_ims_workflow_imcims_full_combined.csv"))
+```
+
+
+
+# Session Info
+
+```{r sessioninfo}
+cat(paste0("Total Run time: ", purrr::reduce(all_times, `+`)))
+
+print("Run times of chunks:")
+print(all_times)
+
+sessionInfo()
+```
+
+

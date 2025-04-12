@@ -1,0 +1,363 @@
+---
+title: "Glycans visualize associations"
+author: "Reto Gerber"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    self_contained: TRUE
+    code_folding: "hide"
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+toc_depth: 3
+number_sections: true
+theme: lumen
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, dpi = 144, dev = "png")
+all_times <- list() # store the time for each chunk
+knitr::knit_hooks$set(time_it = local({
+  now <- NULL
+  function(before, options) {
+    if (before) {
+      now <<- Sys.time()
+    } else {
+      res <- difftime(Sys.time(), now)
+      all_times[[options$label]] <<- round(lubridate::as.duration(res))
+    }
+  }
+}))
+knitr::opts_chunk$set(time_it = TRUE)
+```
+
+```{r load_packages, warning=FALSE, message=FALSE}
+suppressPackageStartupMessages(suppressWarnings({
+  library(ggplot2)
+  library(ComplexHeatmap)
+  library(SpatialExperiment)
+}))
+n_workers <- 10
+RhpcBLASctl::blas_set_num_threads(n_workers)
+data_dir_IMC <- "../../../../imc_workflow/results/spe/filt"
+analysis_dir <- "."
+output_dir <- "./output"
+source(file.path(analysis_dir, "load_IMS.R"))
+```
+
+```{r}
+colors_tma_type <- c("NASH_HCC_TMA" = "#BD9931FF", "cirrhosis_TMA" = "#EEE436FF")
+colors_ims_pixelsize <- c(`10` = "#673821FF", `20` = "#BD9931FF", `30` = "#EEE436FF")
+common_theme <- function(){
+  theme_minimal() +
+  theme(text=element_text(size=14))
+}
+```
+
+
+# load data
+```{r}
+spe_compl <- readRDS(file.path(data_dir_IMC,"SPE_combined_03.rds"))
+```
+```{r}
+fit2ls <- readRDS(file.path(output_dir, "imc_to_ims_workflow_fit2ls_all_mz_type.rds"))
+```
+```{r}
+imcims_df_full <- data.table::fread(file.path(output_dir, "imc_to_ims_workflow_imcims_combined_full.csv"))
+```
+```{r}
+mzvals <- stringr::str_split(names(fit2ls), "_", simplify = TRUE)[, 1]
+regtype <- stringr::str_split(names(fit2ls), "_", simplify = TRUE)[, 2]
+
+fit2ls <- fit2ls[regtype == "simple"]
+mzvals <- stringr::str_split(names(fit2ls), "_", simplify = TRUE)[, 1]
+names(fit2ls) <- mzvals
+
+tmpls <- lapply(names(fit2ls), function(mz) {
+  tmpdf <- fit2ls[[mz]]$fitdf
+  tmpdf$mz <- mz
+  tmpdf
+  # dplyr::filter(tmpdf, effect == "fixed") |>
+  #   dplyr::select(-effect, -group)
+})
+fitdf <- do.call(rbind, tmpls)
+```
+
+```{r}
+celltype_proportions <- as.data.frame(colData(spe_compl)[,c("sample_id","celltype","project_name")]) |>
+  dplyr::group_by(sample_id, celltype,project_name) |>
+  dplyr::summarise(n = dplyr::n()) |>
+  dplyr::group_by(sample_id) |>
+  dplyr::mutate(p=n/sum(n)) 
+
+celltype_proportions_filt <- celltype_proportions |>
+  dplyr::left_join(unique(imcims_df_full[,c("to_keep_reg","sample_id")]), by = "sample_id") |>
+  dplyr::filter(project_name %in% c("cirrhosis_TMA","NASH_HCC_TMA") & to_keep_reg) 
+
+celltype_proportions_filt_mat <- tidyr::pivot_wider(celltype_proportions_filt, id_cols="sample_id",names_from="celltype", values_from = "p") |>
+dplyr::ungroup() |>
+dplyr::select(-sample_id) |>
+as.matrix() 
+```
+
+
+```{r}
+imcims_df_full <- imcims_df_full[imcims_df_full$to_keep_reg & imcims_df_full$in_IMC,]
+is_mz_col <- stringr::str_detect(colnames(imcims_df_full), "[:digit:]{4}")
+mzcol_names <- colnames(imcims_df_full)[is_mz_col]
+mzcol_names <- mzcol_names[!mzcol_names %in% internal_standard_mz]
+mzcol_names <- mzcol_names[mzcol_names %in% unique(fitdf$mz)]
+imcims_df_full_px <- imcims_df_full |>
+  dplyr::select(ims_idx, sample_id, dplyr::all_of(mzcol_names),region_type) |>
+  dplyr::group_by(ims_idx, sample_id) |>
+  unique()
+
+imcims_prop_na <- imcims_df_full_px[,c("sample_id", mzcol_names)] |>
+  dplyr::group_by(sample_id) |>
+  dplyr::summarise(across(mzcol_names, ~sum(is.na(.x))/length(.x))) |>
+  dplyr::select(-sample_id) |>
+  as.matrix()
+
+imcims_prop_na_region <- imcims_df_full_px[,c("sample_id", mzcol_names,"region_type")] |>
+  dplyr::group_by(sample_id,region_type) |>
+  dplyr::summarise(across(mzcol_names, ~sum(is.na(.x))/length(.x)), .groups = "drop") |>
+  tidyr::complete(sample_id, region_type, fill = list(n = 0)) |>
+  dplyr::select(-sample_id, -region_type) |>
+  as.matrix()
+
+
+imcims_intensity <- imcims_df_full_px[,c("sample_id", mzcol_names)] |>
+  dplyr::group_by(sample_id) |>
+  dplyr::summarise(across(mzcol_names, ~mean(na.omit(.x)))) |>
+  dplyr::select(-sample_id) |>
+  as.matrix()
+```
+
+
+# Results
+
+
+The following table shows the results of the statistical testing. Column `reponse` is the celltype considered, `term` is either '(Intercept)' for average association, 'TMA_typeNASH_HCC_TMA' for condition specific association (i.e. Cirrhosis vs. NASH_HCC slides), 'sample_typeAdj' for difference in association between No Tumor (baseline) and Adjacent to Tumor samples, or 'sample_typeTumor' for differences in association between No Tumor (baseline) and Tumor samples, `mz` is the m/z value, `Estimate` is the strength of association (interpretation: if the IMS pixel is completely filled with this celltype, compared to absent, this is the expected change in glycan intensity), `FDR` is the p-value corrected for multiple testing.
+
+```{r}
+tmpdf <- fitdf
+tmpdf$FDR <- signif(p.adjust(tmpdf$p.value, "fdr"), 2)
+tmpdf$P.value <- signif(tmpdf$p.value, 2)
+tmpdf$Std.error <- signif(tmpdf$std.error, 2)
+tmpdf$Estimate <- signif(tmpdf$estimate, 2)
+DT::datatable(tmpdf[, c("response", "term", "mz", "Estimate", "Std.error", "P.value", "FDR")],
+  filter = "top",
+  extensions = "Buttons",
+  options = list(
+    dom = "Blfrtip", pageLength = 30,
+    buttons = c("copy", "csv", "excel", "pdf", "print")
+  )
+)
+```
+
+# Missingness
+
+Proportion of missing IMS values per channel.
+
+```{r}
+imcims_df_full <- data.table::fread(file.path(output_dir, "imc_to_ims_workflow_imcims_combined_full.csv"))
+imcims_df_full <- imcims_df_full[imcims_df_full$to_keep_reg,]
+imcims_df_full$celltype[imcims_df_full$celltype==""] <- NA
+is_mz_col <- stringr::str_detect(colnames(imcims_df_full), "[:digit:]{4}")
+mzcol_names <- colnames(imcims_df_full)[is_mz_col]
+mzcol_names <- mzcol_names[mzcol_names %in% unique(fitdf$mz)]
+tdf <- is.na(imcims_df_full[,..mzcol_names])
+pm <- colSums(tdf)/nrow(tdf)
+round(pm*100,3)
+
+tdf <- fitdf |>
+  dplyr::mutate(FDR = p.adjust(p.value, "fdr")) |>
+  dplyr::filter(term == "(Intercept)", response!="rho") |>
+  dplyr::select(term, estimate, response, mz) |>
+  tidyr::pivot_wider(names_from = "response", values_from = "estimate") |>
+  dplyr::select(-term) |>
+  tibble::column_to_rownames(var = "mz")
+
+tdf <- cbind(data.frame(p_missing=pm),tdf)
+
+celltypes <- unique(imcims_df_full$celltype)
+celltypes <- celltypes[!is.na(celltypes)]
+celltypes <- sort(celltypes)
+```
+
+## Missingness per celltype - estimates {.tabset}
+
+Proportion of missing IMS values per channel vs the estimated association with the celltype.
+
+```{r, results='asis'}
+for(ct in celltypes){
+cat(paste0("\n\n### ",ct,"\n\n"))
+print(ggplot(tdf) +
+  geom_point(aes(!!dplyr::sym(ct), p_missing), alpha = 0.75)) +
+  labs(x = "Estimate", y = "Proportion missing")
+}
+```
+
+## {-}
+
+```{r}
+tdf2 <- fitdf |>
+  dplyr::mutate(logFDR = -log10(p.adjust(p.value, "fdr"))) |>
+  dplyr::filter(term == "(Intercept)", response!="rho") |>
+  dplyr::select(term, logFDR, response, mz) |>
+  tidyr::pivot_wider(names_from = "response", values_from = "logFDR") |>
+  dplyr::select(-term) |>
+  tibble::column_to_rownames(var = "mz") 
+tdf2 <- cbind(data.frame(p_missing=pm),tdf2)
+```
+
+
+## Missingness per celltype - -log10(FDR) {.tabset}
+
+Proportion of missing IMS values per channel vs the log10 FDR corrected p-value for the association with the celltype.
+
+```{r, results='asis'}
+for(ct in celltypes){
+cat(paste0("\n\n### ",ct,"\n\n"))
+print(ggplot(tdf2) +
+  geom_point(aes(!!dplyr::sym(ct), p_missing), alpha = 0.75)) +
+  labs(x = "-log10(FDR)", y = "Proportion missing")
+}
+```
+
+## Correlations between Missingness and Estimates/pvalues
+
+Correlation of the proportion of missing IMS values per channel with the estimated association with the celltype and the log10 FDR corrected p-value for the association with the celltype.
+
+```{r}
+ec <- sapply(celltypes, function(ct) cor(tdf[[ct]], tdf$p_missing))
+fc <- sapply(celltypes, function(ct) cor(tdf2[[ct]], tdf$p_missing))
+
+cor_df <- data.frame(CellType = rep(celltypes, 2),
+                     Estimate = c(ec, fc),
+                     Metric = rep(c("Estimate", "-log10(FDR)"), each = length(celltypes)))
+limit <- ceiling(max(abs(cor_df$Estimate))*10)/10
+plt <- ggplot(cor_df, aes(x = Metric, y = CellType, fill = Estimate)) +
+  geom_tile() +
+  geom_text(aes(label = round(Estimate, 2))) +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0, limits=c(-limit, limit)) +
+  labs(x = "", y = "", fill="Correlation") +
+  theme_minimal()
+
+plt
+ggsave(file.path(data_dir,"paper","figures","Sfig_missingness_fitting.png"), plt,  width=5,height=6)
+```
+
+
+```{r}
+tdf <- cbind(is.na(imcims_df_full[,..mzcol_names]),data.frame(sample_id = imcims_df_full$sample_id))
+mismat <- dplyr::group_by(tdf, sample_id) |>
+dplyr::summarise(dplyr::across(dplyr::all_of(mzcol_names), ~sum(.x)/dplyr::n())) |>
+tibble::column_to_rownames(var = "sample_id") |>
+as.matrix()
+
+```
+
+# Intercept {.tabset}
+
+Estimated association of the average glycan intensity with the celltype. 'Estimate' is the strength of association (interpretation: if the IMS pixel is completely filled with this celltype, compared to absent/background, this is the expected change in glycan intensity), 'FDR' is the p-value corrected for multiple testing.
+
+
+## Estimate
+
+```{r, fig.width=8, fig.height=12}
+mat <- fitdf |>
+  dplyr::mutate(FDR = p.adjust(p.value, "fdr")) |>
+  dplyr::filter(term == "(Intercept)", response!="rho") |>
+  dplyr::select(term, estimate, response, mz) |>
+  tidyr::pivot_wider(names_from = "response", values_from = "estimate") |>
+  dplyr::select(-term) |>
+  tibble::column_to_rownames(var = "mz") |>
+  as.matrix()
+
+c1 <- colorRampPalette(rev(RColorBrewer::brewer.pal(n = 9, name = "Blues")))(round(abs(min(na.omit(mat)))/diff(range(na.omit(mat)))*100))
+c2 <- rev(colorRampPalette(rev(RColorBrewer::brewer.pal(n = 9, name = "Reds")))(round(abs(max(na.omit(mat)))/diff(range(na.omit(mat)))*100)))
+co <- c(c1,c2)
+tree_row <- pheatmap:::cluster_mat(mat, distance = "euclidean", method = "complete")
+tree_col <- pheatmap:::cluster_mat(t(mat), distance = "euclidean", method = "complete")
+
+hal = HeatmapAnnotation(
+  `proportion\nmissing\nvalues` = anno_boxplot(t(imcims_prop_na), width = unit(0.75, "in"), outline=FALSE),
+  `per sample\nmean\nintensity` = anno_boxplot(t(imcims_intensity), width = unit(0.75, "in"), outline=FALSE),
+  which="row",
+  gap = unit(0.1, "in")
+  )
+hat = HeatmapAnnotation(`celltype\nproportion` = anno_boxplot(celltype_proportions_filt_mat, height = unit(0.75, "in"), outline=FALSE), show_annotation_name = FALSE)
+ht_opt$ROW_ANNO_PADDING = unit(0.1, "in")
+phc1 <- ComplexHeatmap::Heatmap(mat, name="Estimate", col = co, cluster_rows = tree_row, cluster_columns = tree_col, column_names_rot = 90, column_title = "Estimate", top_annotation = hat, left_annotation = hal)
+phc1
+```
+
+## -log10(FDR)
+
+```{r, fig.width=8, fig.height=12}
+mat2 <- fitdf |>
+  dplyr::mutate(logFDR = -log10(p.adjust(p.value, "fdr"))) |>
+  dplyr::filter(term == "(Intercept)", response!="rho") |>
+  dplyr::select(term, logFDR, response, mz) |>
+  tidyr::pivot_wider(names_from = "response", values_from = "logFDR") |>
+  dplyr::select(-term) |>
+  tibble::column_to_rownames(var = "mz") |>
+  as.matrix()
+c1 <- rep("#FFFFFF", round(100*((-log10(0.05))/max(na.omit(mat2)))))
+c2 <- rev(colorRampPalette(rev(RColorBrewer::brewer.pal(n = 9, name = "Reds")))(round(100*(1-(-log10(0.05))/max(na.omit(mat2))))))
+co2 <- c(c1,c2)
+br <- seq(0,max(na.omit(mat2)),length.out=length(co)+1)
+
+phc2 <- ComplexHeatmap::Heatmap(mat2, name="-log10(FDR)", col = co2, cluster_rows = tree_row, cluster_columns = tree_col, row_names_gp = gpar(fontsize = 8), column_names_rot = 90, column_title = "-log10(FDR)", top_annotation = hat)
+phc2
+```
+
+## side by side
+
+```{r, fig.width=14, fig.height=12}
+plc <- phc1 + phc2
+```
+
+## Vulcano
+
+```{r}
+vulcano_plot <- function(df, filt_term, title){ 
+df |>
+dplyr::filter(term == filt_term) |>
+dplyr::mutate(FDR = -log10(p.adjust(p.value, method = "fdr"))) |>
+dplyr::mutate(is_sig = FDR > -log10(0.05)) |>
+dplyr::mutate(name = paste0(mz, "\n", response)) |>
+  ggplot() +
+  geom_point(aes(estimate, FDR, color=response)) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
+  ggrepel::geom_label_repel(aes(estimate, FDR, label = name), size=2) +
+  guides(colour = guide_legend(override.aes = list(size = 3))) +
+  theme_minimal()
+}
+```
+
+```{r, fig.width=10, fig.height=10}
+fitdf |>
+  dplyr::filter(term == "(Intercept)", response!="rho") |>
+vulcano_plot("(Intercept)", "Association between celltypes and glycans")
+```
+
+## Missingness
+
+```{r, fig.width=8, fig.height=12}
+pheatmap::pheatmap(t(mismat),cluster_rows = tree_row)
+```
+
+# Session Info
+
+```{r sessioninfo}
+cat(paste0("Total Run time: ", purrr::reduce(all_times, `+`)))
+
+print("Run times of chunks:")
+print(all_times)
+
+sessionInfo()
+```

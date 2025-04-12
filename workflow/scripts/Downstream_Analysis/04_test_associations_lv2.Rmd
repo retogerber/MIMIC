@@ -1,0 +1,108 @@
+---
+title: "Glycans test assocations"
+author: "Reto Gerber"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    self_contained: TRUE
+    code_folding: "hide"
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+toc_depth: 3
+number_sections: true
+theme: lumen
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, dpi = 144, dev = "png")
+all_times <- list() # store the time for each chunk
+knitr::knit_hooks$set(time_it = local({
+  now <- NULL
+  function(before, options) {
+    if (before) {
+      now <<- Sys.time()
+    } else {
+      res <- difftime(Sys.time(), now)
+      all_times[[options$label]] <<- round(lubridate::as.duration(res))
+    }
+  }
+}))
+knitr::opts_chunk$set(time_it = TRUE)
+```
+
+```{r load_packages, warning=FALSE, message=FALSE}
+# suppressPackageStartupMessages(suppressWarnings({
+# library(tidyverse)
+# }))
+n_workers <- 28
+RhpcBLASctl::blas_set_num_threads(n_workers)
+analysis_dir <- "."
+output_dir <- "./output"
+source(file.path(analysis_dir,"imcims_model.R"))
+```
+
+
+
+# Prepare Data
+
+```{r load_data}
+fit1ls <- readRDS(file.path(output_dir, "imc_to_ims_workflow_fit1ls_all_mz.rds"))
+celltypes <- unique(unlist(lapply(fit1ls, function(ft) unique(ft$fitdf$term))))
+celltypes <- celltypes[celltypes != "(Intercept)"]
+celltypes <- celltypes[celltypes != "lambda"]
+sample_types <- c("No_Tumor", "Adj", "Tumor")
+# imcims_wide <- data.table::fread(here::here("output", "imc_to_ims_workflow_imcims_combined_full_wide.csv"))
+```
+
+## Second level - TMA_type
+
+```{r second_level_fit}
+# level 2
+column_names_fit2_simple <- list(
+  celltypes = celltypes,
+  sample_covariates = c("TMA_type")
+)
+
+column_names_fit2_raneff <- list(
+  celltypes = celltypes,
+  sample_covariates = c("TMA_type"),
+  random_effects = c("Identifier")
+)
+
+
+fit2_common_args <- list(type = "lm")
+fit2_args_ls <- list(
+  simple = c(fit2_common_args, list(column_names = column_names_fit2_simple)),
+  raneff = c(fit2_common_args, list(column_names = column_names_fit2_raneff))
+)
+
+combdf2 <- expand.grid(first = names(fit1ls), second = names(fit2_args_ls))
+
+fit2filtls <- lapply(seq_len(dim(combdf2)[1]), function(i) {
+  tmpargs <- fit2_args_ls[[combdf2[["second"]][i]]]
+  tmpargs$coefdf <- dplyr::filter(fit1ls[[combdf2[["first"]][i]]]$coefdf, to_keep_reg)
+  tmpargs$fitdf <- dplyr::filter(fit1ls[[combdf2[["first"]][i]]]$fitdf, sample_name %in% tmpargs$coefdf$sample_name)
+  do.call(fit_second_layer, tmpargs)
+})
+names(fit2filtls) <- paste0(combdf2$first, "_", combdf2$second)
+```
+
+### Save Data
+
+```{r save_data2}
+saveRDS(fit2filtls, file.path(output_dir, "imc_to_ims_workflow_fit2ls_all_mz.rds"))
+```
+
+# Session Info
+
+```{r sessioninfo}
+cat(paste0("Total Run time: ", purrr::reduce(all_times, `+`)))
+
+print("Run times of chunks:")
+print(all_times)
+
+sessionInfo()
+```

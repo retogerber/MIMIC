@@ -241,3 +241,7 @@ Additionally the following ouput images are created:
 - `results/{PROJECT_NAME}/data/IMC_mask/{PROJECT_NAME}_IMC_transformed_on_postIMC.ome.tiff` contains the transformed IMC masks
 - `results/{PROJECT_NAME}/data/IMC/{PROJECT_NAME}_IMC_aggr_transformed.ome.tiff` contains the transformed (on postIMS) IMC image
 - `results/{PROJECT_NAME}/data/postIMC/{PROJECT_NAME}_postIMC_transformed_on_postIMS.ome.tiff` contains the transformed postIMC microscopy image
+
+# Downstream analysis
+
+Example downstream analysis (R markdown) scripts can be found in [workflow/scripts/Downstream_Analysis](workflow/scripts/Downstream_Analysis). Those show how to test for associations between cell types and m/z analytes. The ordering in which the scripts have to be run follow from the naming. In-script adaption are necessary for this to work. 

@@ -1,0 +1,231 @@
+---
+title: "Glycans test assocations"
+author: "Reto Gerber"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    self_contained: TRUE
+    code_folding: "hide"
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+toc_depth: 3
+number_sections: true
+theme: lumen
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, dpi = 144, dev = "png")
+all_times <- list() # store the time for each chunk
+knitr::knit_hooks$set(time_it = local({
+  now <- NULL
+  function(before, options) {
+    if (before) {
+      now <<- Sys.time()
+    } else {
+      res <- difftime(Sys.time(), now)
+      all_times[[options$label]] <<- round(lubridate::as.duration(res))
+    }
+  }
+}))
+knitr::opts_chunk$set(time_it = TRUE)
+```
+
+```{r load_packages, warning=FALSE, message=FALSE}
+# suppressPackageStartupMessages(suppressWarnings({
+# library(tidyverse)
+# }))
+n_workers <- 28
+RhpcBLASctl::blas_set_num_threads(n_workers)
+analysis_dir <- "."
+output_dir <- "./output"
+source(file.path(analysis_dir, "imcims_model.R"))
+```
+
+
+
+# Prepare Data
+
+```{r load_data}
+imcims_df_full <- data.table::fread(file.path(output_dir, "imc_to_ims_workflow_imcims_combined_full.csv"))
+imcims_df_full$celltype[imcims_df_full$celltype==""] <- NA
+```
+
+```{r}
+is_mz_col <- stringr::str_detect(colnames(imcims_df_full), "[:digit:]{4}")
+mzcol_names <- colnames(imcims_df_full)[is_mz_col]
+mzcol <- as.numeric(mzcol_names)
+```
+
+
+```{r}
+celltypes <- unique(imcims_df_full$celltype)
+celltypes <- celltypes[!is.na(celltypes)]
+celltypes <- sort(celltypes)
+```
+
+
+
+
+## to wide
+
+```{r to_wide}
+imcims_df_full <- imcims_df_full |>
+  dplyr::group_by(sample_id, ims_idx) |>
+  dplyr::mutate(n_cells_per_pixel = length(cell_idx[!is.na(cell_idx)])) |>
+  dplyr::ungroup()
+imcims_wide <- to_wide(
+  imcims_df_full,
+  column_names = list(
+    sample_name = "sample_id",
+    celltype = "celltype",
+    value = "prop_maldi_area_filled",
+    imsid = "ims_idx",
+    coords = c("ims_x", "ims_y"),
+    responses = mzcol_names,
+    covariates = c("TMA_type", "Identifier","sample_type","to_keep_reg")
+  )
+)
+
+if ("NA" %in% colnames(imcims_wide)) {
+  imcims_wide[["NA"]] <- NULL
+}
+```
+
+```{r}
+imcims_wide <- data.table::as.data.table(imcims_wide)
+imcims_wide$ims_idx <- as.character(imcims_wide$ims_idx)
+data.table::setkey(imcims_wide, sample_id)
+data.table::setindex(imcims_wide, sample_id)
+data.table::setindex(imcims_wide, ims_idx)
+data.table::setindex(imcims_wide, sample_id, ims_idx)
+```
+
+
+
+
+### neighborhoods
+
+
+```{r create_neighborhood_lists}
+xl <- split(imcims_wide$ims_x, imcims_wide$sample_id)
+yl <- split(imcims_wide$ims_y, imcims_wide$sample_id)
+rnl <- split(paste0(imcims_wide$sample_id, ".", imcims_wide$ims_idx), imcims_wide$sample_id)
+dat_ls <- lapply(seq_along(xl), \(k){
+  list(
+    x = xl[[k]],
+    y = yl[[k]],
+    rownam = rnl[[k]]
+  )
+})
+names(dat_ls) <- names(xl)
+wmls_ls <- all_neighborhoods(dat_ls, max_dist = 1)
+names(wmls_ls) <- names(xl)
+```
+
+
+
+
+
+
+
+# Run models
+
+
+
+## First level: Spatial lag model
+
+For one specific glycan fit the following model:
+$$
+y=ρWy+Xβ+ε
+$$
+with $y$ the response (normalized glycan value), $ρ$ parameter for strength of spatial dependency, $W$ the spatial weight matrix (=1 if neighbor, =0 else), $X$ additional covariates, $β$ parameters for strength of covariates, $ε$ error ($~N(0,\sigma^2I_n)$). $X$ includes the area per celltype in a pixel.
+The parameters $\beta$ will then be used in the second stage of fitting.
+
+
+```{r first_level_fit}
+# level 1
+column_names_fit1_template <- list(
+  sample_name = "sample_id",
+  celltypes = celltypes,
+  value = "prop_maldi_area_filled",
+  imsid = "ims_idx",
+  coords = c("ims_x", "ims_y"),
+  response = "mzval",
+  covariate = NULL,
+  sample_covariates = c("TMA_type", "Identifier", "sample_type","to_keep_reg")
+)
+
+fit1_common_args <- list(
+  imcims_wide = data.table::copy(imcims_wide),
+  n_workers = n_workers,
+  column_names = column_names_fit1_template,
+  method = "SAR",
+  wmls_ls = wmls_ls,
+  remove_na=TRUE,
+  compress_fit  = TRUE,
+  intercept = TRUE
+)
+
+fl <- create_formula("mz", column_names_fit1_template$celltypes, column_names_fit1_template$covariate, FALSE, intercept = fit1_common_args$intercept)
+print("Formula:")
+print(fl)
+
+fit1ls <- lapply(mzcol_names, function(mzval) {
+  cat(paste0("\n",mzval,"\n"))
+  tmp_args <- fit1_common_args
+  tmp_args$imcims_wide <- data.table::copy(imcims_wide)
+  tmp_args$column_names$response <- mzval
+  for (mztorm in mzcol_names[mzcol_names != mzval]){
+    tmp_args$imcims_wide[,(mztorm) := NULL]
+  }
+
+  coef_mean <- mean(tmp_args$imcims_wide[[mzval]], na.rm = TRUE)
+  coef_std <- sqrt(var(tmp_args$imcims_wide[[mzval]], na.rm=TRUE))
+  tmp_args$imcims_wide[[mzval]] <- (tmp_args$imcims_wide[[mzval]]-coef_mean)/coef_std
+
+  cat("\tfit: ")
+  t1 <- Sys.time()
+  out <- do.call(fit_first_layer, tmp_args)
+  t2 <- Sys.time()
+  out$coef_mean <- coef_mean
+  out$coef_std <- coef_std
+  cat(paste0(t2-t1, "\n"))
+  tmpfitls <- list()
+  tmpfitls[[mzval]][["fitls"]] <- out$fitls
+  cat("\tpredict: ")
+  t1 <- Sys.time()
+  dfls <- get_predictions(tmpfitls, tmp_args$imcims_wide, wmls_ls, compress_fit = fit1_common_args$compress_fit)
+  t2 <- Sys.time()
+  cat(paste0(t2-t1, "\n"))
+  dfdf <- data.table::as.data.table(do.call(rbind, dfls[[1]]))
+  imcims_wide <- imcims_wide[dfdf, on = c("sample_id"="sample_id", "ims_idx"="ims_idx"), ] 
+  out$fitls <- NULL
+  out
+})
+
+names(fit1ls) <- mzcol_names
+```
+
+
+
+```{r save_data1}
+tmpfit1ls <- fit1ls
+tmpfit1ls$fitls <- NULL
+saveRDS(tmpfit1ls, file.path(output_dir, "imc_to_ims_workflow_fit1ls_all_mz.rds"))
+data.table::fwrite(imcims_wide, file.path(output_dir, "imc_to_ims_workflow_imcims_combined_full_wide.csv"))
+```
+
+
+# Session Info
+
+```{r sessioninfo}
+cat(paste0("Total Run time: ", purrr::reduce(all_times, `+`)))
+
+print("Run times of chunks:")
+print(all_times)
+
+sessionInfo()
+```

@@ -1,0 +1,232 @@
+---
+title: "Glycans visualize data"
+author: "Reto Gerber"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    self_contained: TRUE
+    code_folding: "hide"
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+toc_depth: 3
+number_sections: true
+theme: lumen
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, dpi = 144, dev = "png")
+all_times <- list() # store the time for each chunk
+knitr::knit_hooks$set(time_it = local({
+  now <- NULL
+  function(before, options) {
+    if (before) {
+      now <<- Sys.time()
+    } else {
+      res <- difftime(Sys.time(), now)
+      all_times[[options$label]] <<- round(lubridate::as.duration(res))
+    }
+  }
+}))
+knitr::opts_chunk$set(time_it = TRUE)
+```
+
+```{r, warning=FALSE, message=FALSE}
+suppressPackageStartupMessages(suppressWarnings({
+  library(tidyverse)
+  library(SpatialExperiment)
+}))
+RhpcBLASctl::blas_set_num_threads(10)
+output_dir <- "./output"
+```
+# Read data
+
+```{r read_and_combine}
+imcims_df <- data.table::fread(file.path(output_dir, "imc_to_ims_workflow_imcims_full_combined.csv"), na.strings = "")
+imcims_df <- imcims_df[imcims_df$in_IMC,]
+```
+
+
+
+# Prepare
+
+```{r}
+is_mz_col <- stringr::str_detect(colnames(imcims_df), "[:digit:]{4}")
+mzcol_names <- colnames(imcims_df)[is_mz_col]
+mzcol <- as.numeric(mzcol_names)
+mzval <- mzcol_names[1]
+```
+
+```{r unique_ims_pixels}
+imcims_df_px <- imcims_df %>%
+  dplyr::select(!!dplyr::all_of(mzcol_names), TMA_type, sample_id, ims_idx, Identifier, maldi_step_size, to_keep_reg) %>%
+  data.table::as.data.table() %>%
+  unique() %>%
+  as.data.frame()
+is_mz_col_px <- stringr::str_detect(colnames(imcims_df_px), "[:digit:]{4}")
+```
+
+
+
+
+# Distribution of total sum of intensities (per pixel)
+
+
+```{r}
+data.frame(
+  total = apply(imcims_df_px[, is_mz_col_px],1,function(x) sum(na.omit(x))),
+  TMA_type = imcims_df_px$TMA_type,
+  maldi_step_size = as.character(imcims_df_px$maldi_step_size),
+  Identifier = imcims_df_px$Identifier,
+  sample_id = imcims_df_px$sample_id,
+  to_keep_reg = imcims_df_px$to_keep_reg
+) %>%
+  ggplot() +
+  geom_density(aes(total, color = to_keep_reg, group = sample_id), linewidth = 0.3, alpha = 0.1) +
+  geom_density(aes(total), linewidth = 1, color = "black") +
+  theme_bw() +
+  facet_wrap(~TMA_type) +
+  scale_color_viridis_d()
+```
+
+# Distribution of cell overlap
+
+the cell overlap is the proportion of area a cell overlaps with a IMS pixel. I.e. a value of 1 means the cell is completely inside a IMS pixel.
+
+```{r,fig.width=10}
+mc <- imcims_df %>%
+  dplyr::group_by(cell_idx, sample_id) %>%
+  dplyr::tally() %>%
+  dplyr::filter(n > 1) %>%
+  dplyr::pull(cell_idx)
+
+imcims_df %>%
+  dplyr::filter(cell_idx %in% mc) %>%
+  ggplot() +
+  geom_density(aes(overlap, color = to_keep_reg, group = sample_id), linewidth = 0.15, alpha = 0.1) +
+  geom_density(aes(overlap), linewidth = 1, color = "black") +
+  theme_bw() +
+  facet_wrap(~TMA_type) +
+  scale_color_viridis_d()
+```
+
+
+# IMS stats
+
+## Number of IMS pixels:
+
+```{r}
+imcims_df_px %>%
+  dplyr::group_by(TMA_type) %>%
+  dplyr::select(TMA_type, ims_idx) %>%
+  unique() %>%
+  dplyr::tally() %>%
+  as.data.frame()
+```
+
+## Number of cells:
+
+```{r}
+imcims_df %>%
+  dplyr::group_by(TMA_type) %>%
+  dplyr::select(TMA_type, ims_idx, cell_idx) %>%
+  unique() %>%
+  dplyr::tally() %>%
+  as.data.frame()
+```
+
+Distribution of number of cells.
+
+```{r}
+imcims_df %>%
+  dplyr::group_by(TMA_type, ims_idx,sample_id) %>%
+  dplyr::select(TMA_type, ims_idx, cell_idx,sample_id) %>%
+  dplyr::summarise(ncells = length(cell_idx[!is.na(cell_idx)])) %>%
+  ggplot() +
+  geom_histogram(aes(x = ncells, fill = TMA_type), position = "dodge", binwidth = 0.5)
+```
+
+summary
+
+```{r}
+ncells_per_ims <- imcims_df %>%
+  dplyr::group_by(TMA_type, ims_idx,sample_id) %>%
+  dplyr::select(TMA_type, ims_idx, cell_idx,sample_id) %>%
+  dplyr::summarise(ncells = length(cell_idx[!is.na(cell_idx)])) %>%
+  dplyr::group_by(TMA_type) %>%
+  dplyr::summarise(
+    sd_ncells = sd(ncells),
+    mean_ncells = mean(ncells),
+    median_ncells = median(ncells)
+  ) %>%
+  as.data.frame() %>%
+  dplyr::arrange(TMA_type)
+ncells_per_ims
+```
+
+# Pixel level statistics
+
+
+```{r}
+imcims_df_full <- imcims_df %>%
+  dplyr::mutate(cell_area=ifelse(is.na(cell_area),0,cell_area)) %>%
+  dplyr::mutate(overlap=ifelse(is.na(overlap),0,overlap)) %>%
+  dplyr::mutate(
+    maldi_area_filled = overlap * cell_area,
+    prop_maldi_area_filled = maldi_area_filled / (maldi_pixel_size**2)
+  ) %>%
+  dplyr::group_by(ims_idx, sample_id) %>%
+  dplyr::mutate(total_cell_area_in_maldi = sum(maldi_area_filled)) %>%
+  dplyr::ungroup() %>%
+  dplyr::group_by(cell_idx, sample_id) %>%
+  dplyr::mutate(
+    overlap_weight = maldi_area_filled / total_cell_area_in_maldi,
+    cell_scaling_factor = cell_area / total_cell_area_in_maldi
+  ) %>%
+  dplyr::mutate(overlap_weight=ifelse(is.nan(overlap_weight),1,overlap_weight)) %>%
+  dplyr::ungroup() %>%
+  dplyr::group_by(celltype) %>%
+  dplyr::mutate(ncells_celltype = dplyr::n()) %>%
+  dplyr::ungroup() %>%
+  # remove celltypes with too few cells
+  dplyr::filter(ncells_celltype > 2) 
+```
+
+save the data
+
+```{r save_rds}
+data.table::fwrite(imcims_df_full,file.path(output_dir, "imc_to_ims_workflow_imcims_combined_full.csv"))
+```
+
+
+```{r, fig.width=10,fig.height=6}
+imcims_df_full_px <- imcims_df_full %>%
+  dplyr::select(ims_idx, TMA_type, sample_id, maldi_area_filled, prop_maldi_area_filled) %>%
+  dplyr::group_by(ims_idx, TMA_type, sample_id) %>%
+  dplyr::summarise(
+    maldi_area_filled = sum(maldi_area_filled),
+    prop_maldi_area_filled = sum(prop_maldi_area_filled)
+  ) %>%
+  unique()
+
+imcims_df_full_px %>%
+  tidyr::pivot_longer(cols = c("maldi_area_filled", "prop_maldi_area_filled")) %>%
+  ggplot() +
+  geom_density(aes(group = sample_id, x = value, color = TMA_type), linewidth = 0.15, alpha = 0.1) +
+  geom_density(aes(group = TMA_type, x = value, color = TMA_type), linewidth = 1) +
+  facet_wrap(~name, scales = "free")
+```
+
+
+# Session Info
+
+```{r sessioninfo}
+cat(paste0("Total Run time: ", purrr::reduce(all_times, `+`)))
+
+print("Run times of chunks:")
+print(all_times)
+
+sessionInfo()
+```
