@@ -253,6 +253,19 @@ def imzml_peaks_from_project(wildcards):
     peak_files = [f"results/{wildcards.project_name}/data/IMS/{imzml_base}_peaks.h5" for imzml_base in imzml_bases]
     return peak_files
 
+def IMS_to_postIMS_matches_from_project(wildcards):
+    sample_names = get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all = True)
+    imzml_files=[get_column_entry_from_metadata_two_conditions(
+            wildcards.project_name,
+            sample,
+            "imzml_filename",
+            "project_name",
+            "sample_name",
+            read_sample_metadata(config["sample_metadata"])
+        ) for sample in sample_names]
+    imzml_bases = [imzml_file.replace(".imzML","") for imzml_file in imzml_files]
+    IMS_to_postIMS_matches = [f"results/{wildcards.project_name}/data/IMS/{wildcards.project_name}_{imzml_base}_IMS_to_postIMS_matches.csv" for imzml_base in imzml_bases]
+    return IMS_to_postIMS_matches
 
 def choose_IMS_to_postIMS_svg(wildcards):
         sample_names = get_column_entry_from_metadata(wildcards.project_name, "sample_name", "project_name", read_sample_metadata(config["sample_metadata"]), return_all = True)

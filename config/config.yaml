@@ -23,7 +23,7 @@ stages: ["regIMC", "IMS", "regIMS", "Microscopy", "QC", "overlap"]
 # If empty list ( [] ) all channels are used
 # Otherwise selection of channels matching summary panel are used
 #IMC_channels_for_aggr: []
-IMC_channels_for_aggr: ["ST6GAL1","HepPar1"]
+IMC_channels_for_aggr: ["ac16","mel624","huh7","DNA1","DNA2"]
 
 
 # QC landmark detection and matching
@@ -43,7 +43,7 @@ matching_method: "RoMa"
 # - sitk: global translations using sitk 
 # - intensities: intensities based metrics (SSIM, MSE, NMI, NRMSE)
 #QC_metrics: ['landmarks', 'masks', 'images', 'sitk', 'intensities']
-QC_metrics: ['landmarks', 'regions', 'masks', 'images', 'sitk', 'intensities']
+QC_metrics: ['landmarks', 'images']
 
 # QC steps to calculate
 # possible steps are:
@@ -53,7 +53,7 @@ QC_metrics: ['landmarks', 'regions', 'masks', 'images', 'sitk', 'intensities']
 # - preIMC_to_preIMS: registration of preIMC to preIMS
 # - preIMS_to_postIMS: registration of preIMS to postIMS
 # - postIMC_to_postIMS: registration of postIMC to postIMS
-QC_steps: ['IMC_to_postIMC', 'IMS_to_postIMS', 'postIMC_to_preIMC', 'preIMC_to_preIMS', 'preIMS_to_postIMS', 'postIMC_to_postIMS']
+QC_steps: ['IMC_to_postIMC', 'postIMC_to_preIMC', 'preIMC_to_preIMS', 'preIMS_to_postIMS', 'postIMC_to_postIMS']
 
 # generic file as a placeholder for unused input
 generic_input: "workflow/sample_metadata.schema.yaml"

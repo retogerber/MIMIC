@@ -254,7 +254,7 @@ for i in range(len(rtlsls)):
     imc_xmax = moving_np_swap.shape[0]
     imc_ymax = moving_np_swap.shape[1]
     logging.info(f"\tIMC cornerpoints: {[[0,0],[imc_xmax,0],[0,imc_ymax],[imc_xmax,imc_ymax]]}")
-    cornerpoints = np.stack([np.array(composite.TransformPoint([x,y])) for x,y in [[0,0],[imc_xmax,0],[0,imc_ymax],[imc_xmax,imc_ymax]]])
+    cornerpoints = np.stack([np.array(composite.GetInverse().TransformPoint([x,y])) for x,y in [[0,0],[imc_xmax,0],[0,imc_ymax],[imc_xmax,imc_ymax]]])
     logging.info(f"\tIMC transformed cornerpoints: {cornerpoints}")
     assert np.all(cornerpoints>=0)
 

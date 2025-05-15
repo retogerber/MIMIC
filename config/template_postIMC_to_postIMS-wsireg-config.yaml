@@ -14,7 +14,7 @@ modalities:
       - 0
       invert_intensity: true
       use_mask: false
-      downsampling: 2
+      downsampling: 8
     mask: null
     output_res: null
   postIMC:
@@ -29,7 +29,7 @@ modalities:
       - 0
       invert_intensity: true
       use_mask: false
-      downsampling: 2
+      downsampling: 8
     mask: null
     output_res: null
   preIMS:
@@ -44,7 +44,7 @@ modalities:
       - 0
       invert_intensity: true
       use_mask: false
-      downsampling: 2
+      downsampling: 8
     mask: null
     output_res: null
   preIMC:
@@ -59,7 +59,7 @@ modalities:
       - 0
       invert_intensity: true
       use_mask: false
-      downsampling: 2
+      downsampling: 8
     mask: null
     output_res: null
 reg_paths:
