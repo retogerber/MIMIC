@@ -23,7 +23,7 @@ stages: ["regIMC", "IMS", "regIMS", "Microscopy", "QC", "overlap"]
 # If empty list ( [] ) all channels are used
 # Otherwise selection of channels matching summary panel are used
 #IMC_channels_for_aggr: []
-IMC_channels_for_aggr: ["ST6GAL1","HepPar1"]
+IMC_channels_for_aggr: ["aSMA","NKp46","CD31","CD14","CD16","Pan-Keratin","CD11b","CK19","CD56","CD45","OPN","CD38","Siglec9","CD4","E-cadherin","CD68","CD20","CD8","CD57","CD22","ST6GAL1","GranzymeB","Ki-67","Collagen-1","CD3","CD33","Fut8","CD45RO","HLA-DR","HepPar1","190BCKG","DNA1","DNA2","Seg1","Seg2","Seg3"]
 
 
 # QC landmark detection and matching
